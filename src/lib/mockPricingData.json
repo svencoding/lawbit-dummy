@@ -1,0 +1,515 @@
+{
+  "seniorityLevels": {
+    "junior": {
+      "label": "Asociado Junior",
+      "avgHourlyRate": 125,
+      "monthlySalary": 4500,
+      "hourlyCost": 28,
+      "color": "bg-blue-100 text-blue-800"
+    },
+    "associate": {
+      "label": "Asociado",
+      "avgHourlyRate": 250,
+      "monthlySalary": 8000,
+      "hourlyCost": 50,
+      "color": "bg-green-100 text-green-800"
+    },
+    "senior": {
+      "label": "Asociado Senior",
+      "avgHourlyRate": 500,
+      "monthlySalary": 15000,
+      "hourlyCost": 94,
+      "color": "bg-yellow-100 text-yellow-800"
+    },
+    "partner": {
+      "label": "Socio",
+      "avgHourlyRate": 850,
+      "monthlySalary": 25000,
+      "hourlyCost": 156,
+      "color": "bg-orange-100 text-orange-800"
+    }
+  },
+  "areaSpecificData": {
+    "CORPORATIVO": {
+      "avgHourlyRate": 380,
+      "avgTotalBilled": 125000,
+      "avgHoursPerCase": 35,
+      "totalCases": 45,
+      "medianHourlyRate": 350,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Juan Pérez", "María González"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Carlos Rodríguez", "Ana Martínez"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Luis Fernández", "Patricia López"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Roberto Silva"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "DERECHO LABORAL": {
+      "avgHourlyRate": 320,
+      "avgTotalBilled": 110000,
+      "avgHoursPerCase": 32,
+      "totalCases": 38,
+      "medianHourlyRate": 300,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Sofía Ramírez", "Diego Torres"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Carmen Vargas", "Andrés Morales"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Elena Sánchez"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Fernando Castro"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "LITIGIO": {
+      "avgHourlyRate": 420,
+      "avgTotalBilled": 150000,
+      "avgHoursPerCase": 42,
+      "totalCases": 32,
+      "medianHourlyRate": 400,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Gabriel Herrera"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Isabel Jiménez", "Ricardo Díaz"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Mónica Ruiz", "Javier Mendoza"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Alejandro Vega", "Laura Paredes"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "DERECHO TRIBUTARIO": {
+      "avgHourlyRate": 380,
+      "avgTotalBilled": 135000,
+      "avgHoursPerCase": 38,
+      "totalCases": 28,
+      "medianHourlyRate": 360,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Natalia Contreras"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Héctor Guzmán", "Valentina Soto"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Daniela Rojas"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Gonzalo Muñoz"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "DERECHO INMOBILIARIO": {
+      "avgHourlyRate": 300,
+      "avgTotalBilled": 95000,
+      "avgHoursPerCase": 28,
+      "totalCases": 24,
+      "medianHourlyRate": 280,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Camila Espinoza"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Sebastián Fuentes"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Andrea Campos"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Felipe Navarro"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "DERECHO PENAL": {
+      "avgHourlyRate": 480,
+      "avgTotalBilled": 165000,
+      "avgHoursPerCase": 45,
+      "totalCases": 19,
+      "medianHourlyRate": 460,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Tomás Valdés"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Renata Araya"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Ignacio Tapia", "Constanza Sepúlveda"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Rodrigo Peña"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "ENERGÍA": {
+      "avgHourlyRate": 400,
+      "avgTotalBilled": 140000,
+      "avgHoursPerCase": 40,
+      "totalCases": 15,
+      "medianHourlyRate": 380,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Javiera Moreno"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Matías Cáceres"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Francisca Reyes"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Cristóbal Medina"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "COMPLIANCE": {
+      "avgHourlyRate": 360,
+      "avgTotalBilled": 120000,
+      "avgHoursPerCase": 33,
+      "totalCases": 12,
+      "medianHourlyRate": 340,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Pablo Salazar"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Amanda Cortés"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Maximiliano Bravo"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Isidora Núñez"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "DERECHO PÚBLICO Y MERCADOS REGULADOS": {
+      "avgHourlyRate": 380,
+      "avgTotalBilled": 125000,
+      "avgHoursPerCase": 36,
+      "totalCases": 10,
+      "medianHourlyRate": 360,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Benjamín Orellana"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Trinidad Vergara"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Vicente Leiva"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Antonia Garrido"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "MEDIOAMBIENTE": {
+      "avgHourlyRate": 340,
+      "avgTotalBilled": 115000,
+      "avgHoursPerCase": 34,
+      "totalCases": 8,
+      "medianHourlyRate": 320,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Emilia Pizarro"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Agustín Riquelme"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Florencia Bustamante"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Simón Aguilera"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "LIBRE COMPETENCIA": {
+      "avgHourlyRate": 360,
+      "avgTotalBilled": 120000,
+      "avgHoursPerCase": 35,
+      "totalCases": 6,
+      "medianHourlyRate": 340,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Catalina Parra"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Lucas Venegas"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Martina Lagos"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Diego Parada"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "DERECHO MINERO Y RECURSOS MINEROS NATURALES": {
+      "avgHourlyRate": 380,
+      "avgTotalBilled": 125000,
+      "avgHoursPerCase": 37,
+      "totalCases": 5,
+      "medianHourlyRate": 360,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Joaquín Farías"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Antonella Sanhueza"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Felipe Cuevas"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["María José Yáñez"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    },
+    "PI, TECNOLOGÍA Y DATOS": {
+      "avgHourlyRate": 400,
+      "avgTotalBilled": 135000,
+      "avgHoursPerCase": 38,
+      "totalCases": 4,
+      "medianHourlyRate": 380,
+      "seniorityLevels": [
+        {
+          "level": "junior",
+          "label": "Asociado Junior",
+          "avgHourlyRate": 125,
+          "professionals": ["Domingo Acuña"],
+          "color": "bg-blue-100 text-blue-800"
+        },
+        {
+          "level": "associate",
+          "label": "Asociado",
+          "avgHourlyRate": 250,
+          "professionals": ["Bárbara Troncoso"],
+          "color": "bg-green-100 text-green-800"
+        },
+        {
+          "level": "senior",
+          "label": "Asociado Senior",
+          "avgHourlyRate": 500,
+          "professionals": ["Esteban Quezada"],
+          "color": "bg-yellow-100 text-yellow-800"
+        },
+        {
+          "level": "partner",
+          "label": "Socio",
+          "avgHourlyRate": 850,
+          "professionals": ["Daniela Alarcón"],
+          "color": "bg-orange-100 text-orange-800"
+        }
+      ]
+    }
+  }
+}

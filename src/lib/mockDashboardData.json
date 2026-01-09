@@ -1,0 +1,388 @@
+{
+  "clientesUnicos": 127,
+  "totalFacturado": 503000,
+  "metaFacturacion": 556000,
+  "promedioDiasFacturacion": 18,
+  "promedioDiasPago": 32,
+  "areaSpecificData": {
+    "CORPORATIVO": {
+      "clientesUnicos": 28,
+      "totalFacturado": 102000,
+      "metaFacturacion": 94000,
+      "promedioDiasFacturacion": 15,
+      "promedioDiasPago": 28,
+      "statusChart": [
+        { "name": "Pagado", "value": 32 },
+        { "name": "Facturado", "value": 18 },
+        { "name": "En revisión", "value": 8 },
+        { "name": "Pendiente", "value": 5 },
+        { "name": "Vencido", "value": 2 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 46700 },
+        { "name": "Por Hora", "value": 35600 },
+        { "name": "Contingencia", "value": 13300 },
+        { "name": "Mixto", "value": 6700 }
+      ]
+    },
+    "DERECHO LABORAL": {
+      "clientesUnicos": 24,
+      "totalFacturado": 87200,
+      "metaFacturacion": 80000,
+      "promedioDiasFacturacion": 12,
+      "promedioDiasPago": 25,
+      "statusChart": [
+        { "name": "Pagado", "value": 28 },
+        { "name": "Facturado", "value": 15 },
+        { "name": "En revisión", "value": 6 },
+        { "name": "Pendiente", "value": 4 },
+        { "name": "Vencido", "value": 1 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 38900 },
+        { "name": "Por Hora", "value": 31100 },
+        { "name": "Contingencia", "value": 12200 },
+        { "name": "Mixto", "value": 5000 }
+      ]
+    },
+    "LITIGIO": {
+      "clientesUnicos": 22,
+      "totalFacturado": 71700,
+      "metaFacturacion": 75600,
+      "promedioDiasFacturacion": 22,
+      "promedioDiasPago": 38,
+      "statusChart": [
+        { "name": "Pagado", "value": 24 },
+        { "name": "Facturado", "value": 14 },
+        { "name": "En revisión", "value": 5 },
+        { "name": "Pendiente", "value": 3 },
+        { "name": "Vencido", "value": 2 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 31100 },
+        { "name": "Por Hora", "value": 24400 },
+        { "name": "Contingencia", "value": 11100 },
+        { "name": "Mixto", "value": 5000 }
+      ]
+    },
+    "DERECHO TRIBUTARIO": {
+      "clientesUnicos": 18,
+      "totalFacturado": 66400,
+      "metaFacturacion": 68900,
+      "promedioDiasFacturacion": 20,
+      "promedioDiasPago": 35,
+      "statusChart": [
+        { "name": "Pagado", "value": 20 },
+        { "name": "Facturado", "value": 12 },
+        { "name": "En revisión", "value": 4 },
+        { "name": "Pendiente", "value": 3 },
+        { "name": "Vencido", "value": 1 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 28900 },
+        { "name": "Por Hora", "value": 23300 },
+        { "name": "Contingencia", "value": 10000 },
+        { "name": "Mixto", "value": 4200 }
+      ]
+    },
+    "DERECHO INMOBILIARIO": {
+      "clientesUnicos": 15,
+      "totalFacturado": 56900,
+      "metaFacturacion": 61100,
+      "promedioDiasFacturacion": 16,
+      "promedioDiasPago": 30,
+      "statusChart": [
+        { "name": "Pagado", "value": 17 },
+        { "name": "Facturado", "value": 10 },
+        { "name": "En revisión", "value": 3 },
+        { "name": "Pendiente", "value": 2 },
+        { "name": "Vencido", "value": 1 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 24400 },
+        { "name": "Por Hora", "value": 20000 },
+        { "name": "Contingencia", "value": 8900 },
+        { "name": "Mixto", "value": 3600 }
+      ]
+    },
+    "DERECHO PENAL": {
+      "clientesUnicos": 12,
+      "totalFacturado": 47200,
+      "metaFacturacion": 53300,
+      "promedioDiasFacturacion": 25,
+      "promedioDiasPago": 42,
+      "statusChart": [
+        { "name": "Pagado", "value": 14 },
+        { "name": "Facturado", "value": 8 },
+        { "name": "En revisión", "value": 3 },
+        { "name": "Pendiente", "value": 2 },
+        { "name": "Vencido", "value": 1 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 20000 },
+        { "name": "Por Hora", "value": 16700 },
+        { "name": "Contingencia", "value": 7800 },
+        { "name": "Mixto", "value": 2800 }
+      ]
+    },
+    "ENERGÍA": {
+      "clientesUnicos": 10,
+      "totalFacturado": 43200,
+      "metaFacturacion": 46700,
+      "promedioDiasFacturacion": 19,
+      "promedioDiasPago": 33,
+      "statusChart": [
+        { "name": "Pagado", "value": 11 },
+        { "name": "Facturado", "value": 7 },
+        { "name": "En revisión", "value": 2 },
+        { "name": "Pendiente", "value": 2 },
+        { "name": "Vencido", "value": 0 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 18900 },
+        { "name": "Por Hora", "value": 15600 },
+        { "name": "Contingencia", "value": 6700 },
+        { "name": "Mixto", "value": 2100 }
+      ]
+    },
+    "COMPLIANCE": {
+      "clientesUnicos": 8,
+      "totalFacturado": 38300,
+      "metaFacturacion": 42200,
+      "promedioDiasFacturacion": 14,
+      "promedioDiasPago": 27,
+      "statusChart": [
+        { "name": "Pagado", "value": 9 },
+        { "name": "Facturado", "value": 6 },
+        { "name": "En revisión", "value": 2 },
+        { "name": "Pendiente", "value": 1 },
+        { "name": "Vencido", "value": 0 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 16700 },
+        { "name": "Por Hora", "value": 13300 },
+        { "name": "Contingencia", "value": 5600 },
+        { "name": "Mixto", "value": 2800 }
+      ]
+    },
+    "DERECHO PÚBLICO Y MERCADOS REGULADOS": {
+      "clientesUnicos": 7,
+      "totalFacturado": 33100,
+      "metaFacturacion": 35600,
+      "promedioDiasFacturacion": 21,
+      "promedioDiasPago": 36,
+      "statusChart": [
+        { "name": "Pagado", "value": 8 },
+        { "name": "Facturado", "value": 5 },
+        { "name": "En revisión", "value": 2 },
+        { "name": "Pendiente", "value": 1 },
+        { "name": "Vencido", "value": 0 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 14400 },
+        { "name": "Por Hora", "value": 11100 },
+        { "name": "Contingencia", "value": 5000 },
+        { "name": "Mixto", "value": 2600 }
+      ]
+    },
+    "MEDIOAMBIENTE": {
+      "clientesUnicos": 6,
+      "totalFacturado": 27200,
+      "metaFacturacion": 31100,
+      "promedioDiasFacturacion": 17,
+      "promedioDiasPago": 31,
+      "statusChart": [
+        { "name": "Pagado", "value": 6 },
+        { "name": "Facturado", "value": 4 },
+        { "name": "En revisión", "value": 1 },
+        { "name": "Pendiente", "value": 1 },
+        { "name": "Vencido", "value": 0 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 12200 },
+        { "name": "Por Hora", "value": 10000 },
+        { "name": "Contingencia", "value": 3300 },
+        { "name": "Mixto", "value": 1700 }
+      ]
+    },
+    "LIBRE COMPETENCIA": {
+      "clientesUnicos": 5,
+      "totalFacturado": 23600,
+      "metaFacturacion": 26700,
+      "promedioDiasFacturacion": 18,
+      "promedioDiasPago": 32,
+      "statusChart": [
+        { "name": "Pagado", "value": 5 },
+        { "name": "Facturado", "value": 3 },
+        { "name": "En revisión", "value": 1 },
+        { "name": "Pendiente", "value": 1 },
+        { "name": "Vencido", "value": 0 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 10600 },
+        { "name": "Por Hora", "value": 8300 },
+        { "name": "Contingencia", "value": 3100 },
+        { "name": "Mixto", "value": 1600 }
+      ]
+    },
+    "DERECHO MINERO Y RECURSOS MINEROS NATURALES": {
+      "clientesUnicos": 4,
+      "totalFacturado": 20600,
+      "metaFacturacion": 22200,
+      "promedioDiasFacturacion": 20,
+      "promedioDiasPago": 34,
+      "statusChart": [
+        { "name": "Pagado", "value": 4 },
+        { "name": "Facturado", "value": 3 },
+        { "name": "En revisión", "value": 1 },
+        { "name": "Pendiente", "value": 0 },
+        { "name": "Vencido", "value": 0 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 8900 },
+        { "name": "Por Hora", "value": 7200 },
+        { "name": "Contingencia", "value": 2800 },
+        { "name": "Mixto", "value": 1700 }
+      ]
+    },
+    "PI, TECNOLOGÍA Y DATOS": {
+      "clientesUnicos": 4,
+      "totalFacturado": 18000,
+      "metaFacturacion": 20000,
+      "promedioDiasFacturacion": 16,
+      "promedioDiasPago": 29,
+      "statusChart": [
+        { "name": "Pagado", "value": 4 },
+        { "name": "Facturado", "value": 2 },
+        { "name": "En revisión", "value": 1 },
+        { "name": "Pendiente", "value": 1 },
+        { "name": "Vencido", "value": 0 }
+      ],
+      "formaCobroChart": [
+        { "name": "Honorarios Fijos", "value": 7800 },
+        { "name": "Por Hora", "value": 6400 },
+        { "name": "Contingencia", "value": 2400 },
+        { "name": "Mixto", "value": 1300 }
+      ]
+    }
+  },
+  "areasChart": [
+    { "name": "CORPORATIVO", "value": 45 },
+    { "name": "DERECHO LABORAL", "value": 38 },
+    { "name": "LITIGIO", "value": 32 },
+    { "name": "DERECHO TRIBUTARIO", "value": 28 },
+    { "name": "DERECHO INMOBILIARIO", "value": 24 },
+    { "name": "DERECHO PENAL", "value": 19 },
+    { "name": "ENERGÍA", "value": 15 },
+    { "name": "COMPLIANCE", "value": 12 },
+    { "name": "MEDIOAMBIENTE", "value": 8 },
+    { "name": "LIBRE COMPETENCIA", "value": 6 }
+  ],
+  "revenueChart": [
+    { "month": "2024-10", "revenue": 42800 },
+    { "month": "2024-11", "revenue": 45800 },
+    { "month": "2024-12", "revenue": 44200 },
+    { "month": "2025-01", "revenue": 47200 },
+    { "month": "2025-02", "revenue": 43200 },
+    { "month": "2025-03", "revenue": 49400 },
+    { "month": "2025-04", "revenue": 51300 },
+    { "month": "2025-05", "revenue": 53100 },
+    { "month": "2025-06", "revenue": 55000 },
+    { "month": "2025-07", "revenue": 56900 },
+    { "month": "2025-08", "revenue": 58700 },
+    { "month": "2025-09", "revenue": 60500 }
+  ],
+  "statusChart": [
+    { "name": "Pagado", "value": 145 },
+    { "name": "Facturado", "value": 89 },
+    { "name": "En revisión", "value": 34 },
+    { "name": "Pendiente", "value": 22 },
+    { "name": "Vencido", "value": 8 }
+  ],
+  "formaCobroChart": [
+    { "name": "Honorarios Fijos", "value": 206000 },
+    { "name": "Por Hora", "value": 158000 },
+    { "name": "Contingencia", "value": 99500 },
+    { "name": "Mixto", "value": 40000 }
+  ],
+  "facturacionPorArea": [
+    {
+      "area": "CORPORATIVO",
+      "meta": 94000,
+      "facturacion": 102000,
+      "color": "#86626e"
+    },
+    {
+      "area": "DERECHO LABORAL",
+      "meta": 80000,
+      "facturacion": 87200,
+      "color": "#80ffdb"
+    },
+    {
+      "area": "LITIGIO",
+      "meta": 75600,
+      "facturacion": 71700,
+      "color": "#708090"
+    },
+    {
+      "area": "DERECHO TRIBUTARIO",
+      "meta": 68900,
+      "facturacion": 66400,
+      "color": "#e6d6b4"
+    },
+    {
+      "area": "DERECHO INMOBILIARIO",
+      "meta": 61100,
+      "facturacion": 56900,
+      "color": "#2a9d8f"
+    },
+    {
+      "area": "DERECHO PENAL",
+      "meta": 53300,
+      "facturacion": 47200,
+      "color": "#e76f51"
+    },
+    {
+      "area": "ENERGÍA",
+      "meta": 46700,
+      "facturacion": 43200,
+      "color": "#225544"
+    },
+    {
+      "area": "COMPLIANCE",
+      "meta": 42200,
+      "facturacion": 38300,
+      "color": "#00264b"
+    },
+    {
+      "area": "DERECHO PÚBLICO Y MERCADOS REGULADOS",
+      "meta": 35600,
+      "facturacion": 33100,
+      "color": "#c0c0c0"
+    },
+    {
+      "area": "MEDIOAMBIENTE",
+      "meta": 31100,
+      "facturacion": 27200,
+      "color": "#b9b0c6"
+    },
+    {
+      "area": "LIBRE COMPETENCIA",
+      "meta": 26700,
+      "facturacion": 23600,
+      "color": "#fa8072"
+    },
+    {
+      "area": "DERECHO MINERO Y RECURSOS MINEROS NATURALES",
+      "meta": 22200,
+      "facturacion": 20600,
+      "color": "#5fa8d3"
+    },
+    {
+      "area": "PI, TECNOLOGÍA Y DATOS",
+      "meta": 20000,
+      "facturacion": 18000,
+      "color": "#cc9900"
+    }
+  ]
+}

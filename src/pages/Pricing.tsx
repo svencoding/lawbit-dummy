@@ -1,0 +1,2215 @@
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import {
+  Calculator,
+  TrendingUp,
+  Clock,
+  DollarSign,
+  BarChart3,
+  Info,
+  RefreshCw,
+  Users,
+  AlertTriangle,
+  TrendingDown,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { AREAS_PROFESIONALES, getAreaColor } from "@/lib/constants";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import mockPricingData from "@/lib/mockPricingData.json";
+
+// Set to true to use mock data for presentations (no database calls)
+const USE_MOCK_DATA = true;
+
+interface SeniorityLevel {
+  level: string;
+  label: string;
+  avgHourlyRate: number;
+  professionals: string[];
+  color: string;
+}
+
+interface PricingData {
+  avgHourlyRate: number;
+  avgTotalBilled: number;
+  avgHoursPerCase: number;
+  totalCases: number;
+  medianHourlyRate: number;
+  seniorityLevels: SeniorityLevel[];
+}
+
+type SeniorityHours = Record<string, number>;
+
+// Group professionals into seniority levels based on hourly rates
+const groupProfessionalsBySeniority = (professionalAverages: {
+  [key: string]: number;
+}): SeniorityLevel[] => {
+  if (Object.keys(professionalAverages).length === 0) {
+    return [];
+  }
+
+  // Get all rates and sort them
+  const rates = Object.values(professionalAverages).sort((a, b) => a - b);
+  const minRate = rates[0];
+  const maxRate = rates[rates.length - 1];
+  const range = maxRate - minRate;
+
+  // Define seniority levels (standard levels)
+  const levels = [
+    {
+      level: "junior",
+      label: "Asociado Junior",
+      color: "bg-blue-100 text-blue-800",
+    },
+    {
+      level: "associate",
+      label: "Asociado",
+      color: "bg-green-100 text-green-800",
+    },
+    {
+      level: "senior",
+      label: "Asociado Senior",
+      color: "bg-yellow-100 text-yellow-800",
+    },
+    {
+      level: "partner",
+      label: "Socio",
+      color: "bg-orange-100 text-orange-800",
+    },
+  ];
+
+  // If we have very few professionals, use fewer levels
+  const numProfessionals = Object.keys(professionalAverages).length;
+  let activeLevels = levels;
+  if (numProfessionals <= 2) {
+    activeLevels = [levels[0], levels[levels.length - 1]];
+  } else if (numProfessionals <= 4) {
+    activeLevels = [
+      levels[0],
+      levels[Math.floor(levels.length / 2)],
+      levels[levels.length - 1],
+    ];
+  }
+
+  // Group professionals by rate percentiles
+  const result: SeniorityLevel[] = [];
+  const numLevels = activeLevels.length;
+
+  for (let i = 0; i < numLevels; i++) {
+    const percentileStart = i / numLevels;
+    const percentileEnd = (i + 1) / numLevels;
+
+    const rateStart = minRate + range * percentileStart;
+    const rateEnd = minRate + range * percentileEnd;
+
+    const professionals: string[] = [];
+    let totalRate = 0;
+    let count = 0;
+
+    Object.entries(professionalAverages).forEach(([prof, rate]) => {
+      if (
+        rate >= rateStart &&
+        (i === numLevels - 1 ? rate <= rateEnd : rate < rateEnd)
+      ) {
+        professionals.push(prof);
+        totalRate += rate;
+        count++;
+      }
+    });
+
+    if (professionals.length > 0) {
+      result.push({
+        level: activeLevels[i].level,
+        label: activeLevels[i].label,
+        avgHourlyRate: totalRate / count,
+        professionals,
+        color: activeLevels[i].color,
+      });
+    }
+  }
+
+  return result.sort((a, b) => a.avgHourlyRate - b.avgHourlyRate);
+};
+
+const Pricing = () => {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  // State for form inputs
+  const [selectedArea, setSelectedArea] = useState<string>("");
+  const [estimatedHours, setEstimatedHours] = useState<number>(10);
+  const [complexityFactor, setComplexityFactor] = useState<number>(1);
+  const [customHourlyRate, setCustomHourlyRate] = useState<string>("");
+  const [billingMethod, setBillingMethod] = useState<string>("hourly");
+  const [useSeniorityAllocation, setUseSeniorityAllocation] =
+    useState<boolean>(false);
+  const [seniorityHours, setSeniorityHours] = useState<SeniorityHours>({});
+  const [firmName, setFirmName] = useState<string>("");
+  const [exporting, setExporting] = useState<boolean>(false);
+
+  // New states for advanced pricing controls
+  const [targetProfitMargin, setTargetProfitMargin] = useState<number>(30);
+  const [targetTotalPrice, setTargetTotalPrice] = useState<string>("");
+  const [calculationMode, setCalculationMode] = useState<"forward" | "reverse">(
+    "forward"
+  );
+  const [useTargetPrice, setUseTargetPrice] = useState<boolean>(false);
+  const [useTargetMargin, setUseTargetMargin] = useState<boolean>(false);
+  const [showSeniorityCosts, setShowSeniorityCosts] = useState<boolean>(false);
+  const [showCostBreakdown, setShowCostBreakdown] = useState<boolean>(false);
+
+  // State for historical data
+  const [pricingData, setPricingData] = useState<PricingData | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [calculatedPrice, setCalculatedPrice] = useState<number>(0);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+  }, [user, loading, navigate]);
+
+  // Fetch firm profile
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("firm_name")
+        .eq("id", user.id)
+        .single();
+      if (profile?.firm_name) {
+        setFirmName(profile.firm_name);
+      }
+    };
+    if (user) {
+      fetchProfile();
+    }
+  }, [user]);
+
+  const fetchPricingData = useCallback(
+    async (area: string) => {
+      const currentEstimatedHours = estimatedHours;
+      setDataLoading(true);
+      try {
+        // Use mock data if flag is enabled
+        if (USE_MOCK_DATA) {
+          console.log("🎭 Using mock pricing data for presentation");
+          // Simulate a small delay for realistic loading
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
+          // Get area-specific data
+          const areaData = (mockPricingData as any).areaSpecificData?.[area];
+
+          if (areaData) {
+            setPricingData({
+              avgHourlyRate: areaData.avgHourlyRate,
+              avgTotalBilled: areaData.avgTotalBilled,
+              avgHoursPerCase: areaData.avgHoursPerCase,
+              totalCases: areaData.totalCases,
+              medianHourlyRate: areaData.medianHourlyRate,
+              seniorityLevels: areaData.seniorityLevels,
+            });
+
+            // Initialize seniority hours distribution
+            if (areaData.seniorityLevels.length > 0) {
+              const initialHours: SeniorityHours = {};
+              areaData.seniorityLevels.forEach((level: any) => {
+                initialHours[level.level] = Math.floor(
+                  currentEstimatedHours / areaData.seniorityLevels.length
+                );
+              });
+              // Distribute remaining hours to the first level
+              const totalDistributed = Object.values(initialHours).reduce(
+                (sum, h) => sum + h,
+                0
+              );
+              if (totalDistributed < currentEstimatedHours) {
+                initialHours[areaData.seniorityLevels[0].level] +=
+                  currentEstimatedHours - totalDistributed;
+              }
+              setSeniorityHours(initialHours);
+            }
+          } else {
+            // Fallback: use generic data with all seniority levels from mock data
+            const seniorityLevelsData =
+              (mockPricingData as any).seniorityLevels || {};
+            const seniorityLevels = Object.entries(seniorityLevelsData).map(
+              ([levelKey, levelData]: [string, any]) => ({
+                level: levelKey,
+                label: levelData.label,
+                avgHourlyRate: levelData.avgHourlyRate,
+                professionals: ["Profesional 1", "Profesional 2"],
+                color: levelData.color,
+              })
+            );
+
+            setPricingData({
+              avgHourlyRate: 90000,
+              avgTotalBilled: 3000000,
+              avgHoursPerCase: 35,
+              totalCases: 10,
+              medianHourlyRate: 85000,
+              seniorityLevels: seniorityLevels as any,
+            });
+
+            // Initialize seniority hours distribution
+            if (seniorityLevels.length > 0) {
+              const initialHours: SeniorityHours = {};
+              seniorityLevels.forEach((level: any) => {
+                initialHours[level.level] = Math.floor(
+                  currentEstimatedHours / seniorityLevels.length
+                );
+              });
+              const totalDistributed = Object.values(initialHours).reduce(
+                (sum, h) => sum + h,
+                0
+              );
+              if (totalDistributed < currentEstimatedHours) {
+                initialHours[seniorityLevels[0].level] +=
+                  currentEstimatedHours - totalDistributed;
+              }
+              setSeniorityHours(initialHours);
+            }
+          }
+
+          setDataLoading(false);
+          return;
+        }
+
+        // Get all cases for this practice area
+        const { data: asuntosData } = await supabase
+          .from("asuntos")
+          .select("Código, Cliente")
+          .eq('"Area de Práctica"', area);
+
+        if (!asuntosData || asuntosData.length === 0) {
+          setPricingData({
+            avgHourlyRate: 0,
+            avgTotalBilled: 0,
+            avgHoursPerCase: 0,
+            totalCases: 0,
+            medianHourlyRate: 0,
+            seniorityLevels: [],
+          });
+          setDataLoading(false);
+          return;
+        }
+
+        const caseCodes = (
+          asuntosData as unknown as Array<{ Código: string | null }>
+        )
+          .map((a) => a.Código)
+          .filter((code): code is string => Boolean(code));
+
+        // Get hours and billing data for these cases, including Profesional
+        const { data: horasData } = await supabase
+          .from("horas_valor_cobrado")
+          .select(
+            '"Código Asunto", "Horas Trabajadas", "Valor Cobrado Final", Profesional'
+          )
+          .in("Código Asunto", caseCodes.length > 0 ? caseCodes : ["NONE"]);
+
+        if (!horasData || horasData.length === 0) {
+          setPricingData({
+            avgHourlyRate: 0,
+            avgTotalBilled: 0,
+            avgHoursPerCase: 0,
+            totalCases: asuntosData.length,
+            medianHourlyRate: 0,
+            seniorityLevels: [],
+          });
+          setDataLoading(false);
+          return;
+        }
+
+        // Calculate statistics
+        const hourlyRates: number[] = [];
+        const totalByCase: {
+          [key: string]: { hours: number; billed: number };
+        } = {};
+        const professionalRates: { [key: string]: number[] } = {};
+
+        horasData.forEach(
+          (h: {
+            "Horas Trabajadas": number | null;
+            "Valor Cobrado Final": string | null;
+            "Código Asunto": string | null;
+            Profesional: string | null;
+          }) => {
+            const hours = parseFloat(String(h["Horas Trabajadas"] || 0)) || 0;
+            const billed =
+              parseFloat(String(h["Valor Cobrado Final"] || 0)) || 0;
+            const caseCode = h["Código Asunto"];
+            const profesional = h.Profesional || "Unknown";
+
+            if (hours > 0 && billed > 0) {
+              const hourlyRate = billed / hours;
+              hourlyRates.push(hourlyRate);
+
+              // Track rates by professional
+              if (!professionalRates[profesional]) {
+                professionalRates[profesional] = [];
+              }
+              professionalRates[profesional].push(hourlyRate);
+            }
+
+            if (!totalByCase[caseCode]) {
+              totalByCase[caseCode] = { hours: 0, billed: 0 };
+            }
+            totalByCase[caseCode].hours += hours;
+            totalByCase[caseCode].billed += billed;
+          }
+        );
+
+        // Calculate average hourly rate per professional
+        const professionalAverages: { [key: string]: number } = {};
+        Object.keys(professionalRates).forEach((prof) => {
+          const rates = professionalRates[prof];
+          if (rates.length > 0) {
+            professionalAverages[prof] =
+              rates.reduce((sum, rate) => sum + rate, 0) / rates.length;
+          }
+        });
+
+        // Group professionals into seniority levels based on their average rates
+        const seniorityLevels =
+          groupProfessionalsBySeniority(professionalAverages);
+
+        // Calculate averages
+        const avgHourlyRate =
+          hourlyRates.length > 0
+            ? hourlyRates.reduce((sum, rate) => sum + rate, 0) /
+              hourlyRates.length
+            : 0;
+
+        // Calculate median hourly rate
+        const sortedRates = [...hourlyRates].sort((a, b) => a - b);
+        const medianHourlyRate =
+          sortedRates.length > 0
+            ? sortedRates.length % 2 === 0
+              ? (sortedRates[sortedRates.length / 2 - 1] +
+                  sortedRates[sortedRates.length / 2]) /
+                2
+              : sortedRates[Math.floor(sortedRates.length / 2)]
+            : 0;
+
+        const caseValues = Object.values(totalByCase);
+        const avgTotalBilled =
+          caseValues.length > 0
+            ? caseValues.reduce((sum, c) => sum + c.billed, 0) /
+              caseValues.length
+            : 0;
+
+        const avgHoursPerCase =
+          caseValues.length > 0
+            ? caseValues.reduce((sum, c) => sum + c.hours, 0) /
+              caseValues.length
+            : 0;
+
+        setPricingData({
+          avgHourlyRate,
+          avgTotalBilled,
+          avgHoursPerCase,
+          totalCases: asuntosData.length,
+          medianHourlyRate,
+          seniorityLevels,
+        });
+
+        // Initialize seniority hours distribution
+        if (seniorityLevels.length > 0) {
+          const initialHours: SeniorityHours = {};
+          seniorityLevels.forEach((level) => {
+            initialHours[level.level] = Math.floor(
+              currentEstimatedHours / seniorityLevels.length
+            );
+          });
+          // Distribute remaining hours to the first level
+          const totalDistributed = Object.values(initialHours).reduce(
+            (sum, h) => sum + h,
+            0
+          );
+          if (totalDistributed < currentEstimatedHours) {
+            initialHours[seniorityLevels[0].level] +=
+              currentEstimatedHours - totalDistributed;
+          }
+          setSeniorityHours(initialHours);
+        }
+      } catch (error) {
+        console.error("Error fetching pricing data:", error);
+      } finally {
+        setDataLoading(false);
+      }
+    },
+    [estimatedHours]
+  );
+
+  // Fetch pricing data when area is selected
+  useEffect(() => {
+    if (selectedArea && selectedArea !== "") {
+      fetchPricingData(selectedArea);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedArea]);
+
+  const calculatePrice = useCallback(() => {
+    if (!selectedArea || !pricingData) {
+      setCalculatedPrice(0);
+      return;
+    }
+
+    let price = 0;
+
+    // If using target price (reverse calculation mode)
+    if (
+      useTargetPrice &&
+      targetTotalPrice &&
+      parseFloat(targetTotalPrice) > 0
+    ) {
+      price = parseFloat(targetTotalPrice);
+      setCalculatedPrice(Math.round(price));
+      return;
+    }
+
+    // If using seniority-based allocation
+    if (useSeniorityAllocation && pricingData.seniorityLevels.length > 0) {
+      let totalPrice = 0;
+      let totalHours = 0;
+
+      pricingData.seniorityLevels.forEach((level) => {
+        const hours = seniorityHours[level.level] || 0;
+        totalHours += hours;
+        totalPrice += level.avgHourlyRate * hours;
+      });
+
+      // Apply complexity factor
+      price = totalPrice * complexityFactor;
+
+      // Adjust for billing method
+      switch (billingMethod) {
+        case "fixed": {
+          const hoursRatio =
+            pricingData.avgHoursPerCase > 0
+              ? totalHours / pricingData.avgHoursPerCase
+              : 1;
+          price = pricingData.avgTotalBilled * hoursRatio * complexityFactor;
+          break;
+        }
+        case "value-based":
+          price = totalPrice * complexityFactor * 1.5;
+          break;
+        default:
+          // hourly - already calculated
+          break;
+      }
+
+      // Apply target profit margin if enabled
+      if (useTargetMargin && targetProfitMargin > 0) {
+        // Calculate total cost first
+        let totalCost = 0;
+        pricingData.seniorityLevels.forEach((level) => {
+          const hours = seniorityHours[level.level] || 0;
+          const seniorityData = (mockPricingData as any).seniorityLevels?.[
+            level.level
+          ];
+          if (seniorityData) {
+            totalCost += seniorityData.hourlyCost * hours;
+          }
+        });
+
+        // Calculate required revenue to achieve target margin
+        // margin = (revenue - cost) / revenue
+        // revenue = cost / (1 - margin/100)
+        const requiredRevenue = totalCost / (1 - targetProfitMargin / 100);
+        price = requiredRevenue * complexityFactor;
+      }
+    } else {
+      // Original calculation method
+      let baseRate = pricingData.avgHourlyRate;
+
+      // Use custom hourly rate if provided
+      if (customHourlyRate && parseFloat(customHourlyRate) > 0) {
+        baseRate = parseFloat(customHourlyRate);
+      }
+
+      switch (billingMethod) {
+        case "hourly":
+          price = baseRate * estimatedHours * complexityFactor;
+          break;
+        case "fixed": {
+          const hoursRatio =
+            pricingData.avgHoursPerCase > 0
+              ? estimatedHours / pricingData.avgHoursPerCase
+              : 1;
+          price = pricingData.avgTotalBilled * hoursRatio * complexityFactor;
+          break;
+        }
+        case "value-based":
+          price = baseRate * estimatedHours * complexityFactor * 1.5;
+          break;
+        default:
+          price = baseRate * estimatedHours * complexityFactor;
+      }
+
+      // Apply target profit margin if enabled (simple mode)
+      if (useTargetMargin && targetProfitMargin > 0) {
+        // Estimate cost based on average hourly cost
+        const avgHourlyCost =
+          (mockPricingData as any).seniorityLevels?.associate?.hourlyCost || 50;
+        const totalCost = avgHourlyCost * estimatedHours;
+        const requiredRevenue = totalCost / (1 - targetProfitMargin / 100);
+        price = requiredRevenue * complexityFactor;
+      }
+    }
+
+    setCalculatedPrice(Math.round(price));
+  }, [
+    selectedArea,
+    pricingData,
+    estimatedHours,
+    complexityFactor,
+    customHourlyRate,
+    billingMethod,
+    useSeniorityAllocation,
+    seniorityHours,
+    useTargetPrice,
+    targetTotalPrice,
+    useTargetMargin,
+    targetProfitMargin,
+  ]);
+
+  // Recalculate price whenever inputs change
+  useEffect(() => {
+    calculatePrice();
+  }, [calculatePrice]);
+
+  // Calculate profitability metrics
+  const calculateProfitability = () => {
+    if (!pricingData) {
+      return null;
+    }
+
+    // Calculate total revenue and costs
+    const totalRevenue = calculatedPrice;
+    let totalCost = 0;
+    let totalHours = 0;
+
+    if (useSeniorityAllocation && pricingData.seniorityLevels.length > 0) {
+      pricingData.seniorityLevels.forEach((level) => {
+        const hours = seniorityHours[level.level] || 0;
+        totalHours += hours;
+
+        // Cost based on fixed hourly cost from mock data
+        const seniorityData = (mockPricingData as any).seniorityLevels?.[
+          level.level
+        ];
+        if (seniorityData) {
+          const cost = seniorityData.hourlyCost * hours;
+          totalCost += cost;
+        }
+      });
+    } else {
+      // Simple mode: estimate cost based on average
+      totalHours = estimatedHours;
+      const avgHourlyCost =
+        (mockPricingData as any).seniorityLevels?.associate?.hourlyCost || 50;
+      totalCost = avgHourlyCost * estimatedHours;
+    }
+
+    // Calculate profit and margin
+    const profit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+    const avgHourlyRevenue = totalHours > 0 ? totalRevenue / totalHours : 0;
+    const avgHourlyCost = totalHours > 0 ? totalCost / totalHours : 0;
+
+    return {
+      totalCost,
+      totalRevenue,
+      profit,
+      profitMargin,
+      avgHourlyCost,
+      avgHourlyRevenue,
+      totalHours,
+    };
+  };
+
+  const getComplexityLabel = (factor: number): string => {
+    if (factor <= 0.7) return "Muy Baja";
+    if (factor <= 0.9) return "Baja";
+    if (factor <= 1.1) return "Media";
+    if (factor <= 1.3) return "Alta";
+    return "Muy Alta";
+  };
+
+  const getComplexityColor = (factor: number): string => {
+    if (factor <= 0.7) return "bg-blue-100 text-blue-800";
+    if (factor <= 0.9) return "bg-green-100 text-green-800";
+    if (factor <= 1.1) return "bg-yellow-100 text-yellow-800";
+    if (factor <= 1.3) return "bg-orange-100 text-orange-800";
+    return "bg-red-100 text-red-800";
+  };
+
+  const exportToPDF = async () => {
+    if (!selectedArea || !pricingData) {
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      let yPosition = margin;
+
+      // Header
+      doc.setFontSize(20);
+      doc.setFont("helvetica", "bold");
+      doc.text("COTIZACIÓN DE SERVICIOS LEGALES", pageWidth / 2, yPosition, {
+        align: "center",
+      });
+      yPosition += 10;
+
+      // Firm name
+      if (firmName) {
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "normal");
+        doc.text(firmName, pageWidth / 2, yPosition, { align: "center" });
+        yPosition += 8;
+      }
+
+      // Date
+      doc.setFontSize(10);
+      const today = new Date();
+      const dateStr = today.toLocaleDateString("es-ES", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      doc.text(`Fecha: ${dateStr}`, pageWidth - margin, yPosition, {
+        align: "right",
+      });
+      yPosition += 15;
+
+      // Separator
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPosition, pageWidth - margin, yPosition);
+      yPosition += 10;
+
+      // Practice Area
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Área de Práctica:", margin, yPosition);
+      doc.setFont("helvetica", "normal");
+      doc.text(selectedArea, margin + 50, yPosition);
+      yPosition += 10;
+
+      // Billing Method
+      const billingMethodLabels: Record<string, string> = {
+        hourly: "Por Hora",
+        fixed: "Precio Fijo",
+        "value-based": "Por Valor",
+      };
+      doc.setFont("helvetica", "bold");
+      doc.text("Método de Facturación:", margin, yPosition);
+      doc.setFont("helvetica", "normal");
+      doc.text(billingMethodLabels[billingMethod], margin + 60, yPosition);
+      yPosition += 10;
+
+      // Complexity
+      doc.setFont("helvetica", "bold");
+      doc.text("Factor de Complejidad:", margin, yPosition);
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        `${getComplexityLabel(complexityFactor)} (${complexityFactor.toFixed(
+          1
+        )}x)`,
+        margin + 60,
+        yPosition
+      );
+      yPosition += 15;
+
+      // Details Section
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("DETALLE DE SERVICIOS", margin, yPosition);
+      yPosition += 8;
+
+      if (useSeniorityAllocation && pricingData.seniorityLevels.length > 0) {
+        // Seniority-based breakdown
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Nivel", margin, yPosition);
+        doc.text("Horas", margin + 50, yPosition);
+        doc.text("Tarifa/Hora", margin + 80, yPosition);
+        doc.text("Subtotal", margin + 130, yPosition);
+        yPosition += 7;
+
+        doc.setLineWidth(0.3);
+        doc.line(margin, yPosition, pageWidth - margin, yPosition);
+        yPosition += 7;
+
+        let totalHours = 0;
+        let subtotal = 0;
+
+        pricingData.seniorityLevels.forEach((level) => {
+          const hours = seniorityHours[level.level] || 0;
+          if (hours > 0) {
+            totalHours += hours;
+            const levelSubtotal =
+              level.avgHourlyRate * hours * complexityFactor;
+            subtotal += levelSubtotal;
+
+            doc.setFont("helvetica", "normal");
+            doc.text(level.label, margin, yPosition);
+            doc.text(hours.toFixed(1) + "h", margin + 50, yPosition);
+            doc.text(
+              "$" + Math.round(level.avgHourlyRate).toLocaleString(),
+              margin + 80,
+              yPosition
+            );
+            doc.text(
+              "$" + Math.round(levelSubtotal).toLocaleString(),
+              margin + 130,
+              yPosition
+            );
+            yPosition += 7;
+
+            // Check if we need a new page
+            if (yPosition > pageHeight - 40) {
+              doc.addPage();
+              yPosition = margin;
+            }
+          }
+        });
+
+        yPosition += 3;
+        doc.setLineWidth(0.3);
+        doc.line(margin, yPosition, pageWidth - margin, yPosition);
+        yPosition += 7;
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Horas:", margin + 80, yPosition);
+        doc.setFont("helvetica", "normal");
+        doc.text(totalHours.toFixed(1) + "h", margin + 130, yPosition);
+        yPosition += 7;
+      } else {
+        // Simple breakdown
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.text("Horas Estimadas:", margin, yPosition);
+        doc.text(`${estimatedHours}h`, margin + 50, yPosition);
+        yPosition += 7;
+
+        const rate = customHourlyRate
+          ? parseFloat(customHourlyRate)
+          : pricingData.avgHourlyRate;
+        doc.text("Tarifa por Hora:", margin, yPosition);
+        doc.text(
+          "$" + Math.round(rate).toLocaleString(),
+          margin + 50,
+          yPosition
+        );
+        yPosition += 7;
+
+        doc.text("Factor de Complejidad:", margin, yPosition);
+        doc.text(complexityFactor.toFixed(1) + "x", margin + 50, yPosition);
+        yPosition += 10;
+      }
+
+      // Total
+      yPosition += 5;
+      doc.setLineWidth(0.5);
+      doc.line(margin, yPosition, pageWidth - margin, yPosition);
+      yPosition += 10;
+
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text("TOTAL ESTIMADO:", margin, yPosition);
+      doc.text(
+        "$" + calculatedPrice.toLocaleString(),
+        pageWidth - margin,
+        yPosition,
+        { align: "right" }
+      );
+      yPosition += 15;
+
+      // Validity
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "italic");
+      doc.text(
+        "Esta cotización es válida por 30 días a partir de la fecha de emisión.",
+        margin,
+        yPosition
+      );
+      yPosition += 10;
+
+      // Historical data note
+      if (pricingData.totalCases > 0) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.text(
+          `* Basado en ${pricingData.totalCases} caso(s) histórico(s) en ${selectedArea}`,
+          margin,
+          yPosition
+        );
+      }
+
+      // Footer
+      const footerY = pageHeight - 15;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(
+        "Esta cotización es una estimación basada en datos históricos y puede variar según las circunstancias específicas del caso.",
+        margin,
+        footerY,
+        {
+          maxWidth: pageWidth - 2 * margin,
+          align: "justify",
+        }
+      );
+
+      // Save PDF
+      const fileName = `Cotizacion_${selectedArea.replace(/\s+/g, "_")}_${
+        today.toISOString().split("T")[0]
+      }.pdf`;
+      doc.save(fileName);
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <Skeleton className="h-12 w-64" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-96" />
+            <Skeleton className="h-96" />
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <Calculator className="h-8 w-8 text-primary" />
+            <h1 className="text-3xl font-bold text-foreground">
+              Calculadora de Precios
+            </h1>
+          </div>
+          <p className="text-muted-foreground">
+            Estima el precio de tus servicios legales basándose en datos
+            históricos y variables personalizables
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Input Form */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  Parámetros de Cotización
+                </CardTitle>
+                <CardDescription>
+                  Configure los parámetros para calcular el precio estimado
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Area Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="area">Área de Práctica</Label>
+                  <Select value={selectedArea} onValueChange={setSelectedArea}>
+                    <SelectTrigger id="area">
+                      <SelectValue placeholder="Selecciona un área de práctica" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AREAS_PROFESIONALES.filter(
+                        (a) => a.area !== "NO USAR"
+                      ).map((area) => (
+                        <SelectItem key={area.area} value={area.area}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: area.color }}
+                            />
+                            {area.area}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Billing Method */}
+                <div className="space-y-2">
+                  <Label htmlFor="billing-method">Método de Facturación</Label>
+                  <Select
+                    value={billingMethod}
+                    onValueChange={setBillingMethod}
+                  >
+                    <SelectTrigger id="billing-method">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hourly">Por Hora</SelectItem>
+                      <SelectItem value="fixed">Precio Fijo</SelectItem>
+                      <SelectItem value="value-based">Por Valor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {billingMethod === "hourly" &&
+                      "Facturación basada en horas trabajadas"}
+                    {billingMethod === "fixed" &&
+                      "Precio fijo basado en promedios históricos"}
+                    {billingMethod === "value-based" &&
+                      "Precio basado en el valor entregado (premium)"}
+                  </p>
+                </div>
+
+                <Separator />
+
+                {/* Seniority-Based Allocation Toggle */}
+                {pricingData && pricingData.seniorityLevels.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label
+                        htmlFor="seniority-allocation"
+                        className="flex items-center gap-2"
+                      >
+                        <Users className="h-4 w-4" />
+                        Asignación por Nivel de Senioridad
+                      </Label>
+                      <Switch
+                        id="seniority-allocation"
+                        checked={useSeniorityAllocation}
+                        onCheckedChange={setUseSeniorityAllocation}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Distribuye las horas entre diferentes niveles de
+                      senioridad para un cálculo más preciso
+                    </p>
+                  </div>
+                )}
+
+                {/* Estimated Hours - Show only if not using seniority allocation and not using target price */}
+                {!useSeniorityAllocation && !useTargetPrice && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label
+                        htmlFor="hours"
+                        className="flex items-center gap-2"
+                      >
+                        <Clock className="h-4 w-4" />
+                        Horas Estimadas
+                      </Label>
+                      <span className="text-sm font-medium">
+                        {estimatedHours}h
+                      </span>
+                    </div>
+                    <Slider
+                      id="hours"
+                      min={1}
+                      max={500}
+                      step={1}
+                      value={[estimatedHours]}
+                      onValueChange={(value) => setEstimatedHours(value[0])}
+                      className="w-full"
+                    />
+                    {pricingData && pricingData.avgHoursPerCase > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Promedio histórico:{" "}
+                        {Math.round(pricingData.avgHoursPerCase)} horas por caso
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Show calculated hours when using target price */}
+                {useTargetPrice &&
+                  targetTotalPrice &&
+                  parseFloat(targetTotalPrice) > 0 &&
+                  pricingData && (
+                    <div className="space-y-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <Label className="text-sm font-semibold text-blue-900">
+                        Horas Calculadas (basadas en precio objetivo)
+                      </Label>
+                      <div className="space-y-1">
+                        {useSeniorityAllocation &&
+                        pricingData.seniorityLevels.length > 0 ? (
+                          pricingData.seniorityLevels.map((level) => {
+                            const hours = seniorityHours[level.level] || 0;
+                            const price =
+                              level.avgHourlyRate * hours * complexityFactor;
+                            return (
+                              <div
+                                key={level.level}
+                                className="flex justify-between text-sm"
+                              >
+                                <span className="text-blue-700">
+                                  {level.label}:
+                                </span>
+                                <span className="font-medium text-blue-900">
+                                  {hours.toFixed(1)}h
+                                </span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-blue-700">
+                              Total estimado:
+                            </span>
+                            <span className="font-medium text-blue-900">
+                              {pricingData.avgHourlyRate > 0
+                                ? Math.round(
+                                    parseFloat(targetTotalPrice) /
+                                      (pricingData.avgHourlyRate *
+                                        complexityFactor)
+                                  )
+                                : 0}
+                              h
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-blue-600 mt-2">
+                        💡 Ajusta la distribución de horas arriba para optimizar
+                        el precio objetivo.
+                      </p>
+                    </div>
+                  )}
+
+                {/* Seniority Hours Allocation */}
+                {useSeniorityAllocation &&
+                  pricingData &&
+                  pricingData.seniorityLevels.length > 0 && (
+                    <div className="space-y-4 p-4 bg-muted/50 rounded-lg border">
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Distribución de Horas por Senioridad
+                        </Label>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium">
+                            {Object.values(seniorityHours).reduce(
+                              (sum, h) => sum + h,
+                              0
+                            )}
+                            h totales
+                          </span>
+                          {useTargetPrice &&
+                            targetTotalPrice &&
+                            parseFloat(targetTotalPrice) > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Info className="h-4 w-4 text-muted-foreground" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="max-w-xs text-xs">
+                                    Ajusta las horas para alcanzar el precio
+                                    objetivo de $
+                                    {parseFloat(
+                                      targetTotalPrice
+                                    ).toLocaleString()}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                        </div>
+                      </div>
+                      {pricingData.seniorityLevels.map((level) => {
+                        const hours = seniorityHours[level.level] || 0;
+                        const totalHours = Object.values(seniorityHours).reduce(
+                          (sum, h) => sum + h,
+                          0
+                        );
+                        return (
+                          <div key={level.level} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  className={level.color}
+                                  variant="secondary"
+                                >
+                                  {level.label}
+                                </Badge>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-xs text-muted-foreground cursor-help">
+                                      $
+                                      {Math.round(
+                                        level.avgHourlyRate
+                                      ).toLocaleString()}
+                                      /h
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="space-y-1 text-xs">
+                                      <p className="font-semibold">
+                                        {level.label}
+                                      </p>
+                                      <p>
+                                        Tarifa: $
+                                        {Math.round(
+                                          level.avgHourlyRate
+                                        ).toLocaleString()}
+                                        /hora
+                                      </p>
+                                      {(() => {
+                                        const seniorityData = (
+                                          mockPricingData as any
+                                        ).seniorityLevels?.[level.level];
+                                        if (seniorityData) {
+                                          return (
+                                            <>
+                                              <p>
+                                                Costo: $
+                                                {Math.round(
+                                                  seniorityData.hourlyCost
+                                                ).toLocaleString()}
+                                                /hora
+                                              </p>
+                                              <p>
+                                                Salario mensual: $
+                                                {Math.round(
+                                                  seniorityData.monthlySalary
+                                                ).toLocaleString()}
+                                              </p>
+                                            </>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                              <span className="text-sm font-medium">
+                                {hours}h
+                              </span>
+                            </div>
+                            <Slider
+                              min={0}
+                              max={useTargetPrice ? 1000 : estimatedHours}
+                              step={0.5}
+                              value={[hours]}
+                              onValueChange={(value) => {
+                                const newHours = { ...seniorityHours };
+                                newHours[level.level] = value[0];
+                                // Adjust total hours (only if not using target price)
+                                if (!useTargetPrice) {
+                                  const newTotal = Object.values(
+                                    newHours
+                                  ).reduce((sum, h) => sum + h, 0);
+                                  if (newTotal !== estimatedHours) {
+                                    setEstimatedHours(Math.round(newTotal));
+                                  }
+                                }
+                                setSeniorityHours(newHours);
+                              }}
+                              className="w-full"
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>
+                                {level.professionals.length} profesional(es)
+                              </span>
+                              <div className="flex items-center gap-3">
+                                <span>
+                                  {totalHours > 0
+                                    ? `${Math.round(
+                                        (hours / totalHours) * 100
+                                      )}% del total`
+                                    : "0%"}
+                                </span>
+                                {hours > 0 && (
+                                  <>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="font-medium cursor-help">
+                                          ≈ $
+                                          {Math.round(
+                                            level.avgHourlyRate *
+                                              hours *
+                                              complexityFactor
+                                          ).toLocaleString()}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <div className="space-y-1 text-xs">
+                                          <p className="font-semibold">
+                                            Desglose de Costos
+                                          </p>
+                                          <p>
+                                            Ingresos: $
+                                            {Math.round(
+                                              level.avgHourlyRate *
+                                                hours *
+                                                complexityFactor
+                                            ).toLocaleString()}
+                                          </p>
+                                          {(() => {
+                                            const seniorityData = (
+                                              mockPricingData as any
+                                            ).seniorityLevels?.[level.level];
+                                            if (seniorityData) {
+                                              const cost =
+                                                seniorityData.hourlyCost *
+                                                hours;
+                                              const profit =
+                                                level.avgHourlyRate *
+                                                  hours *
+                                                  complexityFactor -
+                                                cost;
+                                              const margin =
+                                                level.avgHourlyRate *
+                                                  hours *
+                                                  complexityFactor >
+                                                0
+                                                  ? (profit /
+                                                      (level.avgHourlyRate *
+                                                        hours *
+                                                        complexityFactor)) *
+                                                    100
+                                                  : 0;
+                                              return (
+                                                <>
+                                                  <p>
+                                                    Costo: $
+                                                    {Math.round(
+                                                      cost
+                                                    ).toLocaleString()}
+                                                  </p>
+                                                  <p>
+                                                    Ganancia: $
+                                                    {Math.round(
+                                                      profit
+                                                    ).toLocaleString()}
+                                                  </p>
+                                                  <p>
+                                                    Margen: {margin.toFixed(1)}%
+                                                  </p>
+                                                </>
+                                              );
+                                            }
+                                            return null;
+                                          })()}
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => {
+                            // Distribute hours evenly
+                            const newHours: SeniorityHours = {};
+                            const totalHoursToDistribute =
+                              useTargetPrice &&
+                              targetTotalPrice &&
+                              parseFloat(targetTotalPrice) > 0
+                                ? estimatedHours
+                                : estimatedHours;
+                            const hoursPerLevel =
+                              totalHoursToDistribute /
+                              pricingData.seniorityLevels.length;
+                            pricingData.seniorityLevels.forEach((level) => {
+                              newHours[level.level] = Math.floor(hoursPerLevel);
+                            });
+                            // Distribute remainder
+                            const totalDistributed = Object.values(
+                              newHours
+                            ).reduce((sum, h) => sum + h, 0);
+                            if (
+                              totalDistributed < totalHoursToDistribute &&
+                              pricingData.seniorityLevels.length > 0
+                            ) {
+                              newHours[pricingData.seniorityLevels[0].level] +=
+                                totalHoursToDistribute - totalDistributed;
+                            }
+                            setSeniorityHours(newHours);
+                          }}
+                        >
+                          Distribuir Equitativamente
+                        </Button>
+                        {useTargetPrice &&
+                          targetTotalPrice &&
+                          parseFloat(targetTotalPrice) > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => {
+                                // Calculate hours needed to reach target price
+                                const targetPrice =
+                                  parseFloat(targetTotalPrice);
+                                const newHours: SeniorityHours = {};
+
+                                // Calculate weighted average rate
+                                let totalWeight = 0;
+                                let weightedRate = 0;
+                                pricingData.seniorityLevels.forEach((level) => {
+                                  const weight =
+                                    1 / pricingData.seniorityLevels.length;
+                                  totalWeight += weight;
+                                  weightedRate += level.avgHourlyRate * weight;
+                                });
+
+                                // Calculate total hours needed
+                                const totalHoursNeeded =
+                                  targetPrice /
+                                  (weightedRate * complexityFactor);
+
+                                // Distribute proportionally based on rates
+                                pricingData.seniorityLevels.forEach((level) => {
+                                  const proportion =
+                                    level.avgHourlyRate / weightedRate;
+                                  newHours[level.level] =
+                                    Math.round(
+                                      totalHoursNeeded * proportion * 10
+                                    ) / 10;
+                                });
+
+                                // Adjust to match exactly
+                                const totalDistributed = Object.values(
+                                  newHours
+                                ).reduce((sum, h) => sum + h, 0);
+                                if (
+                                  totalDistributed !== totalHoursNeeded &&
+                                  pricingData.seniorityLevels.length > 0
+                                ) {
+                                  const diff =
+                                    totalHoursNeeded - totalDistributed;
+                                  newHours[
+                                    pricingData.seniorityLevels[0].level
+                                  ] =
+                                    Math.round(
+                                      (newHours[
+                                        pricingData.seniorityLevels[0].level
+                                      ] +
+                                        diff) *
+                                        10
+                                    ) / 10;
+                                }
+
+                                setEstimatedHours(Math.round(totalHoursNeeded));
+                                setSeniorityHours(newHours);
+                              }}
+                            >
+                              Calcular para Precio Objetivo
+                            </Button>
+                          )}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Complexity Factor */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label
+                      htmlFor="complexity"
+                      className="flex items-center gap-2"
+                    >
+                      <TrendingUp className="h-4 w-4" />
+                      Factor de Complejidad
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs text-xs">
+                            Ajusta el precio según la complejidad del caso. 0.5
+                            = Muy simple, 1.0 = Complejidad estándar, 1.5 = Muy
+                            complejo
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <Badge
+                      className={getComplexityColor(complexityFactor)}
+                      variant="secondary"
+                    >
+                      {getComplexityLabel(complexityFactor)} (
+                      {complexityFactor.toFixed(1)}x)
+                    </Badge>
+                  </div>
+                  <Slider
+                    id="complexity"
+                    min={0.5}
+                    max={2}
+                    step={0.1}
+                    value={[complexityFactor]}
+                    onValueChange={(value) => setComplexityFactor(value[0])}
+                    className="w-full"
+                  />
+                </div>
+
+                <Separator />
+
+                {/* Advanced Pricing Controls */}
+                <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm font-semibold flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      Controles Avanzados de Precio
+                    </Label>
+                  </div>
+
+                  {/* Target Total Price */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label
+                        htmlFor="target-price"
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                        Precio Total Objetivo
+                      </Label>
+                      <Switch
+                        id="use-target-price"
+                        checked={useTargetPrice}
+                        onCheckedChange={(checked) => {
+                          setUseTargetPrice(checked);
+                          if (!checked) {
+                            setTargetTotalPrice("");
+                          }
+                        }}
+                      />
+                    </div>
+                    {useTargetPrice && (
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            $
+                          </span>
+                          <Input
+                            id="target-price"
+                            type="number"
+                            min="0"
+                            step="1000"
+                            value={targetTotalPrice}
+                            onChange={(e) =>
+                              setTargetTotalPrice(e.target.value)
+                            }
+                            placeholder="Ingresa el precio total deseado"
+                            className="pl-7"
+                          />
+                        </div>
+                        {targetTotalPrice && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setTargetTotalPrice("");
+                              setUseTargetPrice(false);
+                            }}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Establece un precio total fijo. El sistema calculará las
+                      horas/tarifas necesarias.
+                    </p>
+                  </div>
+
+                  {/* Target Profit Margin */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label
+                        htmlFor="target-margin"
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <TrendingUp className="h-4 w-4" />
+                        Margen de Ganancia Objetivo
+                      </Label>
+                      <Switch
+                        id="use-target-margin"
+                        checked={useTargetMargin}
+                        onCheckedChange={setUseTargetMargin}
+                      />
+                    </div>
+                    {useTargetMargin && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Slider
+                            id="target-margin"
+                            min={0}
+                            max={80}
+                            step={1}
+                            value={[targetProfitMargin]}
+                            onValueChange={(value) =>
+                              setTargetProfitMargin(value[0])
+                            }
+                            className="flex-1"
+                          />
+                          <span className="text-sm font-medium w-16 text-right">
+                            {targetProfitMargin}%
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          El precio se ajustará automáticamente para alcanzar
+                          este margen de ganancia.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Custom Hourly Rate (Optional) */}
+                  {!useTargetPrice && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <Label
+                        htmlFor="custom-rate"
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                        Tarifa por Hora Personalizada (Opcional)
+                      </Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                            $
+                          </span>
+                          <Input
+                            id="custom-rate"
+                            type="number"
+                            min="0"
+                            step="1000"
+                            value={customHourlyRate}
+                            onChange={(e) =>
+                              setCustomHourlyRate(e.target.value)
+                            }
+                            placeholder="Dejar vacío para usar promedio"
+                            className="pl-7"
+                          />
+                        </div>
+                        {customHourlyRate && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setCustomHourlyRate("")}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                      {pricingData &&
+                        pricingData.avgHourlyRate > 0 &&
+                        !customHourlyRate && (
+                          <p className="text-xs text-muted-foreground">
+                            Usando tarifa promedio: $
+                            {Math.round(
+                              pricingData.avgHourlyRate
+                            ).toLocaleString()}
+                            /hora
+                          </p>
+                        )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Historical Data Card */}
+            {selectedArea && pricingData && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Datos Históricos - {selectedArea}
+                  </CardTitle>
+                  <CardDescription>
+                    Estadísticas basadas en {pricingData.totalCases} casos
+                    históricos
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {dataLoading ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                      <Skeleton className="h-16 w-full" />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <p className="text-sm text-blue-600 font-medium mb-1">
+                            Tarifa Promedio/Hora
+                          </p>
+                          <p className="text-2xl font-bold text-blue-900">
+                            $
+                            {Math.round(
+                              pricingData.avgHourlyRate
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                          <p className="text-sm text-purple-600 font-medium mb-1">
+                            Tarifa Mediana/Hora
+                          </p>
+                          <p className="text-2xl font-bold text-purple-900">
+                            $
+                            {Math.round(
+                              pricingData.medianHourlyRate
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                          <p className="text-sm text-green-600 font-medium mb-1">
+                            Facturación Promedio/Caso
+                          </p>
+                          <p className="text-2xl font-bold text-green-900">
+                            $
+                            {Math.round(
+                              pricingData.avgTotalBilled
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                          <p className="text-sm text-amber-600 font-medium mb-1">
+                            Horas Promedio/Caso
+                          </p>
+                          <p className="text-2xl font-bold text-amber-900">
+                            {Math.round(pricingData.avgHoursPerCase)}h
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Seniority Levels */}
+                      {pricingData.seniorityLevels.length > 0 && (
+                        <div className="pt-4 border-t">
+                          <Collapsible
+                            open={showSeniorityCosts}
+                            onOpenChange={setShowSeniorityCosts}
+                          >
+                            <CollapsibleTrigger className="w-full">
+                              <div className="flex items-center justify-between w-full hover:bg-muted/50 p-2 rounded transition-colors">
+                                <p className="text-sm font-semibold flex items-center gap-2">
+                                  <Users className="h-4 w-4" />
+                                  Niveles de Senioridad Detectados
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">
+                                    Ver costos y salarios
+                                  </span>
+                                  {showSeniorityCosts ? (
+                                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </div>
+                              </div>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <div className="space-y-2 mt-3">
+                                {pricingData.seniorityLevels.map((level) => {
+                                  const seniorityData = (mockPricingData as any)
+                                    .seniorityLevels?.[level.level];
+                                  return (
+                                    <div
+                                      key={level.level}
+                                      className="p-3 rounded-lg border"
+                                    >
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                          <Badge
+                                            className={level.color}
+                                            variant="secondary"
+                                          >
+                                            {level.label}
+                                          </Badge>
+                                          <span className="text-xs text-muted-foreground">
+                                            {level.professionals.length}{" "}
+                                            profesional(es)
+                                          </span>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-sm font-semibold">
+                                            $
+                                            {Math.round(
+                                              level.avgHourlyRate
+                                            ).toLocaleString()}
+                                            /h
+                                          </p>
+                                          <p className="text-xs text-muted-foreground">
+                                            Tarifa promedio
+                                          </p>
+                                        </div>
+                                      </div>
+                                      {seniorityData && (
+                                        <div className="pt-2 border-t space-y-1">
+                                          <div className="flex justify-between text-xs">
+                                            <span className="text-muted-foreground">
+                                              Costo por hora:
+                                            </span>
+                                            <span className="font-medium text-red-600">
+                                              $
+                                              {Math.round(
+                                                seniorityData.hourlyCost
+                                              ).toLocaleString()}
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between text-xs">
+                                            <span className="text-muted-foreground">
+                                              Salario mensual:
+                                            </span>
+                                            <span className="font-medium">
+                                              $
+                                              {Math.round(
+                                                seniorityData.monthlySalary
+                                              ).toLocaleString()}
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between text-xs pt-1 border-t">
+                                            <span className="text-muted-foreground">
+                                              Margen por hora:
+                                            </span>
+                                            <span className="font-medium text-green-600">
+                                              $
+                                              {Math.round(
+                                                level.avgHourlyRate -
+                                                  seniorityData.hourlyCost
+                                              ).toLocaleString()}{" "}
+                                              (
+                                              {Math.round(
+                                                ((level.avgHourlyRate -
+                                                  seniorityData.hourlyCost) /
+                                                  level.avgHourlyRate) *
+                                                  100
+                                              )}
+                                              %)
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Right Column - Price Result */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Precio Estimado
+                </CardTitle>
+                <CardDescription>
+                  Basado en los parámetros seleccionados
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {!selectedArea ? (
+                  <div className="text-center py-12">
+                    <Calculator className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-sm text-muted-foreground">
+                      Selecciona un área de práctica para comenzar
+                    </p>
+                  </div>
+                ) : dataLoading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Main Price Display */}
+                    <div className="text-center p-6 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg border-2 border-primary/20">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {useTargetPrice
+                          ? "Precio Objetivo Establecido"
+                          : "Precio Total Estimado"}
+                      </p>
+                      <p className="text-4xl font-bold text-primary mb-2">
+                        ${calculatedPrice.toLocaleString()}
+                      </p>
+                      {calculatedPrice > 0 &&
+                        (() => {
+                          const totalHours = useSeniorityAllocation
+                            ? Object.values(seniorityHours).reduce(
+                                (sum, h) => sum + h,
+                                0
+                              )
+                            : estimatedHours;
+                          return totalHours > 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              ≈ $
+                              {Math.round(
+                                calculatedPrice / totalHours
+                              ).toLocaleString()}
+                              /hora
+                            </p>
+                          ) : null;
+                        })()}
+                      {useTargetPrice && (
+                        <p className="text-xs text-primary/70 mt-2">
+                          💡 Ajusta la distribución de horas para optimizar este
+                          precio
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Price Breakdown */}
+                    <div className="space-y-3">
+                      <Separator />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Método de facturación:
+                        </span>
+                        <span className="font-medium">
+                          {billingMethod === "hourly" && "Por Hora"}
+                          {billingMethod === "fixed" && "Precio Fijo"}
+                          {billingMethod === "value-based" && "Por Valor"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Horas estimadas:
+                        </span>
+                        <span className="font-medium">
+                          {useSeniorityAllocation
+                            ? Object.values(seniorityHours)
+                                .reduce((sum, h) => sum + h, 0)
+                                .toFixed(1)
+                            : estimatedHours}
+                          h
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Factor de complejidad:
+                        </span>
+                        <span className="font-medium">
+                          {complexityFactor.toFixed(1)}x
+                        </span>
+                      </div>
+                      {customHourlyRate && !useSeniorityAllocation && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Tarifa personalizada:
+                          </span>
+                          <span className="font-medium">
+                            ${parseFloat(customHourlyRate).toLocaleString()}/h
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Profitability Analysis - Always show when we have data */}
+                    {(() => {
+                      const profitability = calculateProfitability();
+                      if (!profitability) return null;
+
+                      const marginColor =
+                        profitability.profitMargin >=
+                        (useTargetMargin ? targetProfitMargin : 20)
+                          ? "text-green-600"
+                          : profitability.profitMargin >= 0
+                          ? "text-yellow-600"
+                          : "text-red-600";
+
+                      return (
+                        <div className="space-y-3 pt-4">
+                          <Separator />
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                              <Label className="text-sm font-semibold">
+                                Análisis de Rentabilidad
+                              </Label>
+                            </div>
+                            {useTargetMargin && (
+                              <Badge variant="outline" className="text-xs">
+                                Objetivo: {targetProfitMargin}%
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Ingresos estimados:
+                              </span>
+                              <span className="font-medium text-emerald-600">
+                                $
+                                {Math.round(
+                                  profitability.totalRevenue
+                                ).toLocaleString()}
+                              </span>
+                            </div>
+                            <Collapsible
+                              open={showCostBreakdown}
+                              onOpenChange={setShowCostBreakdown}
+                            >
+                              <CollapsibleTrigger className="w-full">
+                                <div className="flex justify-between text-sm w-full hover:bg-muted/30 p-1 rounded transition-colors">
+                                  <span className="text-muted-foreground">
+                                    Costo estimado:
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-red-600">
+                                      $
+                                      {Math.round(
+                                        profitability.totalCost
+                                      ).toLocaleString()}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      Ver desglose
+                                    </span>
+                                    {showCostBreakdown ? (
+                                      <ChevronUp className="h-3 w-3 text-muted-foreground" />
+                                    ) : (
+                                      <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                </div>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <div className="pt-2 space-y-1 border-t mt-2">
+                                  {useSeniorityAllocation &&
+                                  pricingData.seniorityLevels.length > 0 ? (
+                                    pricingData.seniorityLevels.map((level) => {
+                                      const hours =
+                                        seniorityHours[level.level] || 0;
+                                      const seniorityData = (
+                                        mockPricingData as any
+                                      ).seniorityLevels?.[level.level];
+                                      if (!seniorityData || hours === 0)
+                                        return null;
+                                      const cost =
+                                        seniorityData.hourlyCost * hours;
+                                      return (
+                                        <div
+                                          key={level.level}
+                                          className="flex justify-between text-xs"
+                                        >
+                                          <span className="text-muted-foreground">
+                                            {level.label} ({hours}h):
+                                          </span>
+                                          <span className="font-medium">
+                                            ${Math.round(cost).toLocaleString()}
+                                          </span>
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    <div className="flex justify-between text-xs">
+                                      <span className="text-muted-foreground">
+                                        Costo promedio ({estimatedHours}h):
+                                      </span>
+                                      <span className="font-medium">
+                                        $
+                                        {Math.round(
+                                          profitability.totalCost
+                                        ).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Ganancia estimada:
+                            </span>
+                            <span
+                              className={`font-medium ${
+                                profitability.profit >= 0
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              $
+                              {Math.round(
+                                profitability.profit
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm pt-2 border-t">
+                            <span className="text-muted-foreground">
+                              Margen de ganancia:
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium ${marginColor}`}>
+                                {profitability.profitMargin.toFixed(1)}%
+                              </span>
+                              {useTargetMargin && (
+                                <span className="text-xs text-muted-foreground">
+                                  {profitability.profitMargin >=
+                                  targetProfitMargin
+                                    ? "✓"
+                                    : "✗"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-xs pt-2 border-t text-muted-foreground">
+                            <span>Ingreso/hora:</span>
+                            <span>
+                              $
+                              {Math.round(
+                                profitability.avgHourlyRevenue
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Costo/hora:</span>
+                            <span>
+                              $
+                              {Math.round(
+                                profitability.avgHourlyCost
+                              ).toLocaleString()}
+                            </span>
+                          </div>
+                          {useTargetMargin &&
+                            profitability.profitMargin < targetProfitMargin && (
+                              <div className="pt-2 border-t">
+                                <p className="text-xs text-amber-600">
+                                  ⚠️ El margen actual (
+                                  {profitability.profitMargin.toFixed(1)}%) está
+                                  por debajo del objetivo ({targetProfitMargin}
+                                  %). Considera ajustar el precio o reducir
+                                  costos.
+                                </p>
+                              </div>
+                            )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Action Buttons */}
+                    <div className="space-y-2 pt-4">
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        onClick={exportToPDF}
+                        disabled={exporting || !selectedArea || !pricingData}
+                      >
+                        {exporting ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Generando PDF...
+                          </>
+                        ) : (
+                          "Exportar Cotización"
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setSelectedArea("");
+                          setEstimatedHours(10);
+                          setComplexityFactor(1);
+                          setCustomHourlyRate("");
+                          setBillingMethod("hourly");
+                          setPricingData(null);
+                          setCalculatedPrice(0);
+                          setUseSeniorityAllocation(false);
+                          setSeniorityHours({});
+                          setTargetProfitMargin(30);
+                          setTargetTotalPrice("");
+                          setUseTargetPrice(false);
+                          setUseTargetMargin(false);
+                        }}
+                      >
+                        Reiniciar
+                      </Button>
+                    </div>
+
+                    {/* Warning for low data */}
+                    {pricingData && pricingData.totalCases < 5 && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-xs text-amber-800">
+                          ⚠️ Datos limitados: Solo {pricingData.totalCases}{" "}
+                          caso(s) histórico(s). Los resultados pueden no ser
+                          representativos.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+};
+
+export default Pricing;
