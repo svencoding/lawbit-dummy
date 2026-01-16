@@ -79,6 +79,7 @@ import {
   getTransformedTimeEntries,
 } from "@/lib/mockDataUtils";
 import { ClientCost, TimeEntry, ProjectCost } from "@/lib/types";
+import { formatDateLocal } from "@/lib/utils";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
@@ -331,11 +332,11 @@ const Clientes = () => {
   >([]);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2024, 0, 1)
-  ); // 1/1/2024
+    new Date(2023, 0, 1)
+  ); // 1/1/2023
   const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2024, 11, 31)
-  ); // 31/12/2024
+    new Date(2023, 11, 31)
+  ); // 31/12/2023
   const [filteredMetrics, setFilteredMetrics] = useState({
     totalRevenue: 0,
     promedioDiasFacturacion: 0,
@@ -392,8 +393,8 @@ const Clientes = () => {
         const { data: edgeFunctionData, error: edgeFunctionError } =
           await supabase.functions.invoke("clientes-data", {
             body: {
-              startDate: startDate?.toISOString().split("T")[0],
-              endDate: endDate?.toISOString().split("T")[0],
+              startDate: startDate ? formatDateLocal(startDate) : undefined,
+              endDate: endDate ? formatDateLocal(endDate) : undefined,
               selectedClientFilter,
             },
           });
@@ -505,14 +506,14 @@ const Clientes = () => {
       if (startDate) {
         horasQuery = horasQuery.gte(
           '"Trabajo (día)"',
-          startDate.toISOString().split("T")[0]
+          formatDateLocal(startDate)
         );
       }
 
       if (endDate) {
         horasQuery = horasQuery.lte(
           '"Trabajo (día)"',
-          endDate.toISOString().split("T")[0]
+          formatDateLocal(endDate)
         );
       }
 

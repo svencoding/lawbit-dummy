@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -39,7 +39,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { AREAS_PROFESIONALES, getAreaColor } from "@/lib/constants";
+import { getAreaColor } from "@/lib/constants";
 import {
   Tooltip,
   TooltipContent,
@@ -52,7 +52,11 @@ import {
 } from "@/components/ui/collapsible";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { getPricingData, getFullPricingData } from "@/lib/mockDataUtils";
+import {
+  getPricingData,
+  getFullPricingData,
+  getAsuntos,
+} from "@/lib/mockDataUtils";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
@@ -199,6 +203,22 @@ const Pricing = () => {
   const [dataLoading, setDataLoading] = useState(false);
   const [calculatedPrice, setCalculatedPrice] = useState<number>(0);
 
+  // Memoize full pricing data to avoid recomputing on every render
+  const fullPricingData = useMemo(() => getFullPricingData(), []);
+
+  // Get available practice areas from mock data
+  const availableAreas = useMemo(() => {
+    if (!USE_MOCK_DATA) return [];
+    const asuntos = getAsuntos();
+    const areas = new Set<string>();
+    asuntos.forEach((a) => {
+      if (a.practice_area) {
+        areas.add(a.practice_area);
+      }
+    });
+    return Array.from(areas).sort();
+  }, []);
+
   useEffect(() => {
     if (!loading && !user) {
       navigate("/auth");
@@ -260,28 +280,29 @@ const Pricing = () => {
               setSeniorityHours(initialHours);
             }
           } else {
-            // Fallback: use generic data with all seniority levels
-            const fullPricingData = getFullPricingData();
+            // No data for this area - use empty data structure
             const seniorityLevels = Object.entries(
               fullPricingData.seniorityLevels
-            ).map(([levelKey, levelData]: [string, any]) => ({
-              level: levelKey,
-              label: levelData.label,
-              avgHourlyRate: levelData.avgHourlyRate,
-              professionals: ["Profesional 1", "Profesional 2"],
-              color: levelData.color,
-            }));
+            )
+              .filter(([_, levelData]) => levelData.avgHourlyRate > 0)
+              .map(([levelKey, levelData]: [string, any]) => ({
+                level: levelKey,
+                label: levelData.label,
+                avgHourlyRate: levelData.avgHourlyRate,
+                professionals: [],
+                color: levelData.color,
+              }));
 
             setPricingData({
-              avgHourlyRate: 90000,
-              avgTotalBilled: 3000000,
-              avgHoursPerCase: 35,
-              totalCases: 10,
-              medianHourlyRate: 85000,
+              avgHourlyRate: 0,
+              avgTotalBilled: 0,
+              avgHoursPerCase: 0,
+              totalCases: 0,
+              medianHourlyRate: 0,
               seniorityLevels: seniorityLevels as any,
             });
 
-            // Initialize seniority hours distribution
+            // Initialize seniority hours distribution only if we have levels
             if (seniorityLevels.length > 0) {
               const initialHours: SeniorityHours = {};
               seniorityLevels.forEach((level: any) => {
@@ -469,7 +490,7 @@ const Pricing = () => {
         setDataLoading(false);
       }
     },
-    [estimatedHours]
+    [estimatedHours, fullPricingData]
   );
 
   // Fetch pricing data when area is selected
@@ -535,7 +556,6 @@ const Pricing = () => {
       if (useTargetMargin && targetProfitMargin > 0) {
         // Calculate total cost first
         let totalCost = 0;
-        const fullPricingData = getFullPricingData();
         pricingData.seniorityLevels.forEach((level) => {
           const hours = seniorityHours[level.level] || 0;
           const seniorityData =
@@ -584,7 +604,6 @@ const Pricing = () => {
       // Apply target profit margin if enabled (simple mode)
       if (useTargetMargin && targetProfitMargin > 0) {
         // Estimate cost based on average hourly cost
-        const fullPricingData = getFullPricingData();
         const avgHourlyCost =
           fullPricingData.seniorityLevels.associate?.hourlyCost || 50;
         const totalCost = avgHourlyCost * estimatedHours;
@@ -607,6 +626,7 @@ const Pricing = () => {
     targetTotalPrice,
     useTargetMargin,
     targetProfitMargin,
+    fullPricingData,
   ]);
 
   // Recalculate price whenever inputs change
@@ -615,7 +635,7 @@ const Pricing = () => {
   }, [calculatePrice]);
 
   // Calculate profitability metrics
-  const calculateProfitability = () => {
+  const calculateProfitability = useCallback(() => {
     if (!pricingData) {
       return null;
     }
@@ -625,7 +645,6 @@ const Pricing = () => {
     let totalCost = 0;
     let totalHours = 0;
 
-    const fullPricingData = getFullPricingData();
     if (useSeniorityAllocation && pricingData.seniorityLevels.length > 0) {
       pricingData.seniorityLevels.forEach((level) => {
         const hours = seniorityHours[level.level] || 0;
@@ -665,7 +684,14 @@ const Pricing = () => {
       avgHourlyRevenue,
       totalHours,
     };
-  };
+  }, [
+    pricingData,
+    calculatedPrice,
+    useSeniorityAllocation,
+    seniorityHours,
+    estimatedHours,
+    fullPricingData,
+  ]);
 
   const getComplexityLabel = (factor: number): string => {
     if (factor <= 0.7) return "Muy Baja";
@@ -972,16 +998,14 @@ const Pricing = () => {
                       <SelectValue placeholder="Selecciona un área de práctica" />
                     </SelectTrigger>
                     <SelectContent>
-                      {AREAS_PROFESIONALES.filter(
-                        (a) => a.area !== "NO USAR"
-                      ).map((area) => (
-                        <SelectItem key={area.area} value={area.area}>
+                      {availableAreas.map((area) => (
+                        <SelectItem key={area} value={area}>
                           <div className="flex items-center gap-2">
                             <div
                               className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: area.color }}
+                              style={{ backgroundColor: getAreaColor(area) }}
                             />
-                            {area.area}
+                            {area}
                           </div>
                         </SelectItem>
                       ))}
@@ -1206,8 +1230,6 @@ const Pricing = () => {
                                         /hora
                                       </p>
                                       {(() => {
-                                        const fullPricingData =
-                                          getFullPricingData();
                                         const seniorityData =
                                           fullPricingData.seniorityLevels[
                                             level.level as keyof typeof fullPricingData.seniorityLevels
@@ -1769,7 +1791,6 @@ const Pricing = () => {
                             <CollapsibleContent>
                               <div className="space-y-2 mt-3">
                                 {pricingData.seniorityLevels.map((level) => {
-                                  const fullPricingData = getFullPricingData();
                                   const seniorityData =
                                     fullPricingData.seniorityLevels[
                                       level.level as keyof typeof fullPricingData.seniorityLevels
@@ -2050,8 +2071,6 @@ const Pricing = () => {
                                     pricingData.seniorityLevels.map((level) => {
                                       const hours =
                                         seniorityHours[level.level] || 0;
-                                      const fullPricingData =
-                                        getFullPricingData();
                                       const seniorityData =
                                         fullPricingData.seniorityLevels[
                                           level.level as keyof typeof fullPricingData.seniorityLevels

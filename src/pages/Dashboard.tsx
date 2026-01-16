@@ -63,6 +63,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { getDashboardData } from "@/lib/mockDataUtils";
+import { formatDateLocal } from "@/lib/utils";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
@@ -77,11 +78,11 @@ const Facturacion = () => {
   const [selectedArea, setSelectedArea] = useState<string>("all");
   const [availableAreas, setAvailableAreas] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2024, 0, 1)
-  ); // 1/1/2024
+    new Date(2023, 0, 1)
+  ); // 1/1/2023
   const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2024, 11, 31)
-  ); // 31/12/2024
+    new Date(2023, 11, 31)
+  ); // 31/12/2023
 
   const transformFinalNumber = (value: number | string | null | undefined) => {
     if (value === null || value === undefined) {
@@ -186,9 +187,8 @@ const Facturacion = () => {
               {
                 body: {
                   selectedArea: "all",
-                  startDate:
-                    startDate?.toISOString().split("T")[0] || undefined,
-                  endDate: endDate?.toISOString().split("T")[0] || undefined,
+                  startDate: startDate ? formatDateLocal(startDate) : undefined,
+                  endDate: endDate ? formatDateLocal(endDate) : undefined,
                 },
               }
             );
@@ -216,8 +216,8 @@ const Facturacion = () => {
           await supabase.functions.invoke("dashboard-data", {
             body: {
               selectedArea,
-              startDate: startDate?.toISOString().split("T")[0] || undefined,
-              endDate: endDate?.toISOString().split("T")[0] || undefined,
+              startDate: startDate ? formatDateLocal(startDate) : undefined,
+              endDate: endDate ? formatDateLocal(endDate) : undefined,
             },
           });
 
@@ -236,8 +236,8 @@ const Facturacion = () => {
             {
               body: {
                 selectedArea: "all",
-                startDate: startDate?.toISOString().split("T")[0] || undefined,
-                endDate: endDate?.toISOString().split("T")[0] || undefined,
+                startDate: startDate ? formatDateLocal(startDate) : undefined,
+                endDate: endDate ? formatDateLocal(endDate) : undefined,
               },
             }
           );
@@ -345,14 +345,14 @@ const Facturacion = () => {
       if (startDate) {
         horasQuery = horasQuery.gte(
           '"Trabajo (día)"',
-          startDate.toISOString().split("T")[0]
+          formatDateLocal(startDate)
         );
       }
 
       if (endDate) {
         horasQuery = horasQuery.lte(
           '"Trabajo (día)"',
-          endDate.toISOString().split("T")[0]
+          formatDateLocal(endDate)
         );
       }
 
@@ -686,8 +686,8 @@ const Facturacion = () => {
       .select(
         '"N° Cobro", "Área Profesional", "Trabajo (día)", "Horas Trabajadas"'
       )
-      .gte('"Trabajo (día)"', fechaMin.toISOString().split("T")[0])
-      .lte('"Trabajo (día)"', fechaMax.toISOString().split("T")[0])
+      .gte('"Trabajo (día)"', formatDateLocal(fechaMin))
+      .lte('"Trabajo (día)"', formatDateLocal(fechaMax))
       .not('"Área Profesional"', "is", null);
 
     let horas: any[] = [];

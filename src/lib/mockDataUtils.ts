@@ -18,22 +18,13 @@ import type {
   UserProjectCost,
 } from "./types";
 import { getAreaColor } from "./constants";
+import { formatDateLocal } from "./utils";
 
-// Map new practice areas to old format for compatibility
+// Use practice areas directly from mock data - no mapping needed
 function mapPracticeArea(area: string | null): string {
-  if (!area) return "CORPORATIVO";
-
-  const mapping: Record<string, string> = {
-    "Corporativo": "CORPORATIVO",
-    "Laboral": "DERECHO LABORAL",
-    "Litigios": "LITIGIO",
-    "Penal": "DERECHO PENAL",
-    "Consultoría": "CORPORATIVO", // Default mapping
-    "Asuntos Internos": "CORPORATIVO", // Default mapping
-    "Procesal": "LITIGIO", // Default mapping
-  };
-
-  return mapping[area] || "CORPORATIVO";
+  // Just return the area as-is from the mock data
+  // The mock data uses: "Asuntos Internos", "Consultoría", "Corporativo", "Laboral", "Litigios", "Penal", "Procesal"
+  return area || "";
 }
 
 // Type assertions
@@ -64,6 +55,13 @@ function normalizeDate(dateStr: string | null | undefined): string | null {
   return dateStr;
 }
 
+// Helper function to compare dates by date only (ignoring time)
+function compareDateOnly(date1: Date, date2: Date): number {
+  const d1 = new Date(date1.getFullYear(), date1.getMonth(), date1.getDate());
+  const d2 = new Date(date2.getFullYear(), date2.getMonth(), date2.getDate());
+  return d1.getTime() - d2.getTime();
+}
+
 // Create lookup maps for efficient joins
 const clientesMap = new Map<number, Cliente>();
 const asuntosMap = new Map<number, Asunto>();
@@ -90,16 +88,75 @@ export function getTransformedTimeEntries(
   startDate?: Date,
   endDate?: Date,
 ): Array<TimeEntry & { originalEntry: RelationalTimeEntry }> {
-  return timeEntries
+  // Debug logging
+  if (startDate || endDate) {
+    console.log("🔍 Date Filter Debug:", {
+      startDate: startDate ? formatDateLocal(startDate) : "none",
+      endDate: endDate ? formatDateLocal(endDate) : "none",
+      totalEntries: timeEntries.length,
+    });
+
+    // Sample first 5 dates to see what we're working with
+    const sampleDates = timeEntries.slice(0, 5).map((e) => ({
+      original: e.date,
+      normalized: normalizeDate(e.date),
+    }));
+    console.log("📅 Sample dates from data:", sampleDates);
+  }
+
+  let filteredCount = 0;
+  let passedCount = 0;
+
+  const result = timeEntries
     .map((entry) => {
       const entryDate = normalizeDate(entry.date);
       if (!entryDate) return null;
 
       // Filter by date range if provided
       if (startDate || endDate) {
-        const date = new Date(entryDate);
-        if (startDate && date < startDate) return null;
-        if (endDate && date > endDate) return null;
+        const date = new Date(entryDate + "T00:00:00"); // Ensure consistent timezone
+        let shouldInclude = true;
+
+        if (startDate) {
+          const start = new Date(
+            startDate.getFullYear(),
+            startDate.getMonth(),
+            startDate.getDate(),
+          );
+          const comparison = compareDateOnly(date, start);
+          if (comparison < 0) {
+            shouldInclude = false;
+            filteredCount++;
+          }
+        }
+        if (endDate && shouldInclude) {
+          const end = new Date(
+            endDate.getFullYear(),
+            endDate.getMonth(),
+            endDate.getDate(),
+          );
+          const comparison = compareDateOnly(date, end);
+          if (comparison > 0) {
+            shouldInclude = false;
+            filteredCount++;
+          }
+        }
+
+        if (!shouldInclude) {
+          // Log first few filtered entries for debugging
+          if (filteredCount <= 3) {
+            console.log(
+              `❌ Filtered out: ${entryDate} (entry date: ${entry.date})`,
+              {
+                dateObj: date.toISOString(),
+                startDate: startDate ? formatDateLocal(startDate) : null,
+                endDate: endDate ? formatDateLocal(endDate) : null,
+              },
+            );
+          }
+          return null;
+        }
+        passedCount++;
       }
 
       const clienteId = parseInt(entry.cliente_id.toString(), 10);
@@ -139,14 +196,48 @@ export function getTransformedTimeEntries(
     ): entry is TimeEntry & { originalEntry: RelationalTimeEntry } =>
       entry !== null
     );
+
+  // Log summary after filtering
+  if (startDate || endDate) {
+    console.log("✅ Date Filter Summary:", {
+      totalEntries: timeEntries.length,
+      entriesPassedFilter: result.length,
+      filteredOut: timeEntries.length - result.length,
+      dateRange: {
+        start: startDate ? formatDateLocal(startDate) : "none",
+        end: endDate ? formatDateLocal(endDate) : "none",
+      },
+      samplePassedDates: result.slice(0, 5).map((e) => e.date),
+    });
+  }
+
+  return result;
 }
 
 // Get client costs aggregated data
 export function getClientCosts(
   startDate?: Date,
   endDate?: Date,
+  clientName?: string | null,
+  area?: string | null,
 ): ClientCost[] {
-  const transformedEntries = getTransformedTimeEntries(startDate, endDate);
+  let transformedEntries = getTransformedTimeEntries(startDate, endDate);
+
+  // Filter by client if provided
+  if (clientName) {
+    transformedEntries = transformedEntries.filter(
+      (entry) => entry.client_name === clientName,
+    );
+  }
+
+  // Filter by area if provided (use area directly from mock data)
+  if (area && area !== "all") {
+    transformedEntries = transformedEntries.filter((entry) => {
+      const asunto = asuntosMap.get(entry.project_id);
+      return asunto && asunto.practice_area === area;
+    });
+  }
+
   const clientMap = new Map<string, ClientCost>();
 
   transformedEntries.forEach((entry) => {
@@ -282,6 +373,57 @@ export function getUserProjectCosts(
   return Array.from(userMap.values());
 }
 
+// Get revenue by user (for top users chart)
+export function getRevenueByUser(
+  startDate?: Date,
+  endDate?: Date,
+  clientName?: string | null,
+): Array<{
+  user_id: number;
+  user_name: string;
+  user_code: string;
+  revenue: number;
+}> {
+  let transformedEntries = getTransformedTimeEntries(startDate, endDate);
+
+  // Filter by client if provided
+  if (clientName) {
+    transformedEntries = transformedEntries.filter(
+      (entry) => entry.client_name === clientName,
+    );
+  }
+
+  const userRevenueMap = new Map<number, {
+    user_id: number;
+    user_name: string;
+    user_code: string;
+    revenue: number;
+  }>();
+
+  transformedEntries.forEach((entry) => {
+    const usuario = usuariosMap.get(entry.user_id);
+    if (!usuario) return;
+
+    if (!userRevenueMap.has(entry.user_id)) {
+      userRevenueMap.set(entry.user_id, {
+        user_id: entry.user_id,
+        user_name: usuario.name,
+        user_code: usuario.code,
+        revenue: 0,
+      });
+    }
+
+    const userRevenue = userRevenueMap.get(entry.user_id)!;
+    // Calculate revenue: billable_duration * rate
+    const revenue = entry.billable_duration * (usuario.rate || 0);
+    userRevenue.revenue += revenue;
+  });
+
+  return Array.from(userRevenueMap.values())
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5); // Top 5 users
+}
+
 // Get professional project details
 export function getProfessionalProjectDetails(
   startDate?: Date,
@@ -318,6 +460,171 @@ export function getProfessionalProjectDetails(
   return Array.from(projectMap.values());
 }
 
+// Get comprehensive user profile data
+export function getUserProfileData(
+  userCode: string,
+  startDate?: Date,
+  endDate?: Date,
+): {
+  user_id: number;
+  user_name: string;
+  user_code: string;
+  total_hours: number;
+  total_revenue: number;
+  total_cost: number;
+  projects: Array<{
+    project_id: number;
+    project_name: string;
+    project_code: string;
+    client_name: string;
+    client_code: string;
+    total_hours: number;
+    total_cost: number;
+    revenue: number;
+  }>;
+  clients: Array<{
+    client_name: string;
+    client_code: string;
+    total_hours: number;
+    total_cost: number;
+    revenue: number;
+    project_count: number;
+  }>;
+} | null {
+  // Find user by code
+  const usuario = Array.from(usuariosMap.values()).find(
+    (u) => u.code === userCode,
+  );
+  if (!usuario) return null;
+
+  let transformedEntries = getTransformedTimeEntries(startDate, endDate);
+
+  // Filter entries for this user
+  const userEntries = transformedEntries.filter(
+    (entry) => entry.user_id === usuario.id,
+  );
+
+  if (userEntries.length === 0) {
+    return {
+      user_id: usuario.id,
+      user_name: usuario.name,
+      user_code: usuario.code,
+      total_hours: 0,
+      total_revenue: 0,
+      total_cost: 0,
+      projects: [],
+      clients: [],
+    };
+  }
+
+  // Calculate totals
+  let total_hours = 0;
+  let total_revenue = 0;
+  let total_cost = 0;
+
+  // Track projects
+  const projectMap = new Map<
+    number,
+    {
+      project_id: number;
+      project_name: string;
+      project_code: string;
+      client_name: string;
+      client_code: string;
+      total_hours: number;
+      total_cost: number;
+      revenue: number;
+    }
+  >();
+
+  // Track clients
+  const clientMap = new Map<
+    string,
+    {
+      client_name: string;
+      client_code: string;
+      total_hours: number;
+      total_cost: number;
+      revenue: number;
+      project_ids: Set<number>;
+    }
+  >();
+
+  userEntries.forEach((entry) => {
+    // Calculate cost
+    const cost = entry.originalEntry.total_cost ??
+      entry.duration * (entry.originalEntry.hourly_cost || 0);
+
+    // Calculate revenue (billable hours * rate)
+    const revenue = entry.billable_duration * (usuario.rate || 0);
+
+    total_hours += entry.duration;
+    total_cost += cost;
+    total_revenue += revenue;
+
+    // Track project
+    if (!projectMap.has(entry.project_id)) {
+      projectMap.set(entry.project_id, {
+        project_id: entry.project_id,
+        project_name: entry.project_name,
+        project_code: entry.project_code,
+        client_name: entry.client_name,
+        client_code: entry.client_code,
+        total_hours: 0,
+        total_cost: 0,
+        revenue: 0,
+      });
+    }
+    const project = projectMap.get(entry.project_id)!;
+    project.total_hours += entry.duration;
+    project.total_cost += cost;
+    project.revenue += revenue;
+
+    // Track client
+    if (!clientMap.has(entry.client_code)) {
+      clientMap.set(entry.client_code, {
+        client_name: entry.client_name,
+        client_code: entry.client_code,
+        total_hours: 0,
+        total_cost: 0,
+        revenue: 0,
+        project_ids: new Set(),
+      });
+    }
+    const client = clientMap.get(entry.client_code)!;
+    client.total_hours += entry.duration;
+    client.total_cost += cost;
+    client.revenue += revenue;
+    client.project_ids.add(entry.project_id);
+  });
+
+  // Convert maps to arrays
+  const projects = Array.from(projectMap.values()).sort(
+    (a, b) => b.revenue - a.revenue,
+  );
+  const clients = Array.from(clientMap.values())
+    .map((client) => ({
+      client_name: client.client_name,
+      client_code: client.client_code,
+      total_hours: client.total_hours,
+      total_cost: client.total_cost,
+      revenue: client.revenue,
+      project_count: client.project_ids.size,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  return {
+    user_id: usuario.id,
+    user_name: usuario.name,
+    user_code: usuario.code,
+    total_hours,
+    total_revenue,
+    total_cost,
+    projects,
+    clients,
+  };
+}
+
 // Export raw data accessors
 export function getClientes(): Cliente[] {
   return clientes;
@@ -344,6 +651,7 @@ export interface DashboardData {
   clientesUnicos: number;
   totalFacturado: number;
   metaFacturacion: number;
+  totalHorasFacturables?: number;
   promedioDiasFacturacion: number;
   promedioDiasPago: number;
   facturacionPorArea: Array<{
@@ -375,16 +683,24 @@ export function getDashboardData(
   selectedArea: string = "all",
   startDate?: Date,
   endDate?: Date,
+  clientName?: string | null,
 ): DashboardData {
   const transformedEntries = getTransformedTimeEntries(startDate, endDate);
 
-  // Filter entries by area if needed
-  const filteredEntries = selectedArea === "all"
+  // Filter entries by area if needed (use area directly from mock data)
+  let filteredEntries = selectedArea === "all"
     ? transformedEntries
     : transformedEntries.filter((entry) => {
       const asunto = asuntosMap.get(entry.project_id);
-      return asunto && mapPracticeArea(asunto.practice_area) === selectedArea;
+      return asunto && asunto.practice_area === selectedArea;
     });
+
+  // Filter entries by client if needed
+  if (clientName) {
+    filteredEntries = filteredEntries.filter((entry) =>
+      entry.client_name === clientName
+    );
+  }
 
   // Get unique clients
   const uniqueClients = new Set(filteredEntries.map((e) => e.client_code));
@@ -394,19 +710,51 @@ export function getDashboardData(
     if (!f.month) return false;
     const paymentDate = normalizeDate(f.month);
     if (!paymentDate) return false;
-    const date = new Date(paymentDate);
-    if (startDate && date < startDate) return false;
-    if (endDate && date > endDate) return false;
+    const date = new Date(paymentDate + "T00:00:00"); // Ensure consistent timezone
+    if (startDate) {
+      const start = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+      );
+      if (compareDateOnly(date, start) < 0) return false;
+    }
+    if (endDate) {
+      const end = new Date(
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate(),
+      );
+      if (compareDateOnly(date, end) > 0) return false;
+    }
 
     if (selectedArea !== "all") {
       const asunto = asuntosMap.get(f.asunto_id || 0);
-      return asunto && mapPracticeArea(asunto.practice_area) === selectedArea;
+      if (!asunto || asunto.practice_area !== selectedArea) {
+        return false;
+      }
     }
+
+    // Filter by client if needed
+    if (clientName) {
+      const clienteId = f.cliente_id;
+      const cliente = clientesMap.get(clienteId);
+      if (!cliente || cliente.name !== clientName) {
+        return false;
+      }
+    }
+
     return true;
   });
 
   const totalFacturado = filteredFacturacion.reduce(
     (sum, f) => sum + (f.amount_charged || 0),
+    0,
+  );
+
+  // Calculate total billable hours from filtered entries
+  const totalHorasFacturables = filteredEntries.reduce(
+    (sum, entry) => sum + (entry.billable_duration || 0),
     0,
   );
 
@@ -425,7 +773,7 @@ export function getDashboardData(
     const asunto = asuntosMap.get(entry.project_id);
     if (!asunto || !asunto.practice_area) return;
 
-    const area = mapPracticeArea(asunto.practice_area);
+    const area = asunto.practice_area; // Use area directly from mock data
     if (!areaDataMap.has(area)) {
       areaDataMap.set(area, {
         clientes: new Set(),
@@ -445,7 +793,7 @@ export function getDashboardData(
     const asunto = asuntosMap.get(f.asunto_id || 0);
     if (!asunto || !asunto.practice_area) return;
 
-    const area = mapPracticeArea(asunto.practice_area);
+    const area = asunto.practice_area; // Use area directly from mock data
     const areaData = areaDataMap.get(area);
     if (areaData) {
       areaData.facturacion += f.amount_charged || 0;
@@ -609,6 +957,7 @@ export function getDashboardData(
     clientesUnicos: uniqueClients.size,
     totalFacturado,
     metaFacturacion: totalFacturado * 1.1,
+    totalHorasFacturables,
     promedioDiasFacturacion: 18,
     promedioDiasPago: 32,
     facturacionPorArea,
@@ -654,7 +1003,7 @@ export interface PricingDataStructure {
   areaSpecificData: Record<string, PricingData>;
 }
 
-// Group professionals by seniority based on their rates
+// Group professionals by seniority based on their actual category from usuarios.json
 function groupProfessionalsBySeniority(
   professionalRates: Map<number, { name: string; rate: number }>,
 ): Array<{
@@ -666,46 +1015,51 @@ function groupProfessionalsBySeniority(
 }> {
   if (professionalRates.size === 0) return [];
 
-  const rates = Array.from(professionalRates.values()).map((p) => p.rate);
-  rates.sort((a, b) => a - b);
-  const minRate = rates[0];
-  const maxRate = rates[rates.length - 1];
-  const range = maxRate - minRate;
+  // Group professionals by their actual category from usuarios.json
+  const categoryGroups = new Map<
+    string,
+    { professionals: string[]; rates: number[] }
+  >();
 
-  const levels = [
-    {
-      level: "junior",
-      label: "Asociado Junior",
-      color: "bg-blue-100 text-blue-800",
-    },
-    {
-      level: "associate",
-      label: "Asociado",
-      color: "bg-green-100 text-green-800",
-    },
-    {
-      level: "senior",
-      label: "Asociado Senior",
-      color: "bg-yellow-100 text-yellow-800",
-    },
-    {
+  professionalRates.forEach((prof, userId) => {
+    const usuario = usuariosMap.get(userId);
+    if (!usuario) return;
+
+    const category = usuario.category;
+    if (!categoryGroups.has(category)) {
+      categoryGroups.set(category, { professionals: [], rates: [] });
+    }
+    const group = categoryGroups.get(category)!;
+    group.professionals.push(prof.name);
+    group.rates.push(prof.rate);
+  });
+
+  // Map categories to seniority levels
+  const categoryToLevel: Record<
+    string,
+    { level: string; label: string; color: string }
+  > = {
+    "Socio": {
       level: "partner",
       label: "Socio",
       color: "bg-orange-100 text-orange-800",
     },
-  ];
-
-  const numProfessionals = professionalRates.size;
-  let activeLevels = levels;
-  if (numProfessionals <= 2) {
-    activeLevels = [levels[0], levels[levels.length - 1]];
-  } else if (numProfessionals <= 4) {
-    activeLevels = [
-      levels[0],
-      levels[Math.floor(levels.length / 2)],
-      levels[levels.length - 1],
-    ];
-  }
+    "Asociado Sr": {
+      level: "senior",
+      label: "Asociado Senior",
+      color: "bg-yellow-100 text-yellow-800",
+    },
+    "Asociado": {
+      level: "associate",
+      label: "Asociado",
+      color: "bg-green-100 text-green-800",
+    },
+    "Asociado Junior": {
+      level: "junior",
+      label: "Asociado Junior",
+      color: "bg-blue-100 text-blue-800",
+    },
+  };
 
   const result: Array<{
     level: string;
@@ -714,56 +1068,77 @@ function groupProfessionalsBySeniority(
     professionals: string[];
     color: string;
   }> = [];
-  const numLevels = activeLevels.length;
 
-  for (let i = 0; i < numLevels; i++) {
-    const percentileStart = i / numLevels;
-    const percentileEnd = (i + 1) / numLevels;
+  // Process categories in order: Junior -> Associate -> Senior -> Partner
+  const categoryOrder = ["Asociado Junior", "Asociado", "Asociado Sr", "Socio"];
 
-    const rateStart = minRate + range * percentileStart;
-    const rateEnd = minRate + range * percentileEnd;
-
-    const professionals: string[] = [];
-    let totalRate = 0;
-    let count = 0;
-
-    professionalRates.forEach((prof) => {
-      if (
-        prof.rate >= rateStart &&
-        (i === numLevels - 1 ? prof.rate <= rateEnd : prof.rate < rateEnd)
-      ) {
-        professionals.push(prof.name);
-        totalRate += prof.rate;
-        count++;
-      }
-    });
-
-    if (count > 0) {
+  categoryOrder.forEach((category) => {
+    const group = categoryGroups.get(category);
+    if (group && group.professionals.length > 0) {
+      const levelInfo = categoryToLevel[category];
+      const avgRate = Math.round(
+        group.rates.reduce((sum, r) => sum + r, 0) / group.rates.length,
+      );
       result.push({
-        level: activeLevels[i].level,
-        label: activeLevels[i].label,
-        avgHourlyRate: Math.round(totalRate / count),
-        professionals,
-        color: activeLevels[i].color,
+        level: levelInfo.level,
+        label: levelInfo.label,
+        avgHourlyRate: avgRate,
+        professionals: group.professionals,
+        color: levelInfo.color,
       });
     }
+  });
+
+  // If we have "Asociado" but no "Asociado Junior", estimate junior as 70% of associate
+  const asociadoGroup = categoryGroups.get("Asociado");
+  const juniorGroup = categoryGroups.get("Asociado Junior");
+  if (asociadoGroup && !juniorGroup && asociadoGroup.professionals.length > 0) {
+    const asociadoAvgRate = Math.round(
+      asociadoGroup.rates.reduce((sum, r) => sum + r, 0) /
+        asociadoGroup.rates.length,
+    );
+    // Add junior level at the beginning
+    result.unshift({
+      level: "junior",
+      label: "Asociado Junior",
+      avgHourlyRate: Math.round(asociadoAvgRate * 0.7),
+      professionals: [],
+      color: "bg-blue-100 text-blue-800",
+    });
   }
 
   return result;
 }
 
+// Cache for pricing data to avoid recomputing expensive operations
+let cachedFullPricingData: PricingDataStructure | null = null;
+const cachedPricingDataByArea = new Map<string, PricingData>();
+let cachedTransformedEntries:
+  | Array<TimeEntry & { originalEntry: RelationalTimeEntry }>
+  | null = null;
+
 // Get pricing data for a specific area
 export function getPricingData(area: string): PricingData {
-  const transformedEntries = getTransformedTimeEntries();
+  // Check cache first
+  if (cachedPricingDataByArea.has(area)) {
+    return cachedPricingDataByArea.get(area)!;
+  }
 
-  // Filter entries by area
+  // Use cached transformed entries if available, otherwise compute
+  const transformedEntries = cachedTransformedEntries ||
+    getTransformedTimeEntries();
+  if (!cachedTransformedEntries) {
+    cachedTransformedEntries = transformedEntries;
+  }
+
+  // Filter entries by area (use area directly from mock data)
   const areaEntries = transformedEntries.filter((entry) => {
     const asunto = asuntosMap.get(entry.project_id);
-    return asunto && mapPracticeArea(asunto.practice_area) === area;
+    return asunto && asunto.practice_area === area;
   });
 
   if (areaEntries.length === 0) {
-    return {
+    const emptyResult: PricingData = {
       avgHourlyRate: 0,
       avgTotalBilled: 0,
       avgHoursPerCase: 0,
@@ -771,6 +1146,8 @@ export function getPricingData(area: string): PricingData {
       medianHourlyRate: 0,
       seniorityLevels: [],
     };
+    cachedPricingDataByArea.set(area, emptyResult);
+    return emptyResult;
   }
 
   // Get unique cases (asuntos) for this area
@@ -824,7 +1201,7 @@ export function getPricingData(area: string): PricingData {
   const facturacionesByCase = new Map<number, number>();
   facturacion.forEach((f) => {
     const asunto = asuntosMap.get(f.asunto_id || 0);
-    if (asunto && mapPracticeArea(asunto.practice_area) === area) {
+    if (asunto && asunto.practice_area === area) {
       facturacionesByCase.set(
         f.asunto_id || 0,
         (facturacionesByCase.get(f.asunto_id || 0) || 0) +
@@ -852,7 +1229,7 @@ export function getPricingData(area: string): PricingData {
       hoursByCase.size
     : 0;
 
-  // Group professionals by seniority
+  // Group professionals by seniority based on their actual categories
   const professionalRatesForGrouping = new Map<
     number,
     { name: string; rate: number }
@@ -868,79 +1245,250 @@ export function getPricingData(area: string): PricingData {
     professionalRatesForGrouping,
   );
 
-  return {
+  // Ensure we always show all 3 levels that exist in usuarios.json, even if no professionals in this area
+  // Calculate averages for all categories from usuarios.json
+  const categoryGroups = new Map<
+    string,
+    { rates: number[]; costs: number[] }
+  >();
+  usuarios.forEach((u) => {
+    if (!categoryGroups.has(u.category)) {
+      categoryGroups.set(u.category, { rates: [], costs: [] });
+    }
+    const group = categoryGroups.get(u.category)!;
+    if (u.rate > 0) group.rates.push(u.rate);
+    if (u.hourly_cost > 0) group.costs.push(u.hourly_cost);
+  });
+
+  const categoryAverages = new Map<
+    string,
+    { avgRate: number; avgCost: number }
+  >();
+  categoryGroups.forEach((group, category) => {
+    const avgRate = group.rates.length > 0
+      ? Math.round(
+        group.rates.reduce((sum, r) => sum + r, 0) / group.rates.length,
+      )
+      : 0;
+    const avgCost = group.costs.length > 0
+      ? Math.round(
+        group.costs.reduce((sum, c) => sum + c, 0) / group.costs.length,
+      )
+      : 0;
+    categoryAverages.set(category, { avgRate, avgCost });
+  });
+
+  // Map categories to levels
+  const categoryToLevel: Record<
+    string,
+    { level: string; label: string; color: string }
+  > = {
+    "Socio": {
+      level: "partner",
+      label: "Socio",
+      color: "bg-orange-100 text-orange-800",
+    },
+    "Asociado Sr": {
+      level: "senior",
+      label: "Asociado Senior",
+      color: "bg-yellow-100 text-yellow-800",
+    },
+    "Asociado": {
+      level: "associate",
+      label: "Asociado",
+      color: "bg-green-100 text-green-800",
+    },
+    "Asociado Junior": {
+      level: "junior",
+      label: "Asociado Junior",
+      color: "bg-blue-100 text-blue-800",
+    },
+  };
+
+  // Build final list: use actual professionals if they exist, otherwise use average from all usuarios
+  const categoryOrder = ["Asociado Junior", "Asociado", "Asociado Sr", "Socio"];
+  const finalSeniorityLevels = categoryOrder
+    .filter((category) => {
+      const avg = categoryAverages.get(category);
+      return avg && avg.avgRate > 0;
+    })
+    .map((category) => {
+      const existingLevel = seniorityLevels.find(
+        (l) => l.level === categoryToLevel[category].level,
+      );
+      if (existingLevel) {
+        return existingLevel; // Use the one with actual professionals in this area
+      }
+      // Include the level even if no professionals in this area, using average from all usuarios
+      const avg = categoryAverages.get(category)!;
+      const levelInfo = categoryToLevel[category];
+      return {
+        level: levelInfo.level,
+        label: levelInfo.label,
+        avgHourlyRate: avg.avgRate,
+        professionals: [],
+        color: levelInfo.color,
+      };
+    });
+
+  const result: PricingData = {
     avgHourlyRate: Math.round(avgHourlyRate),
     avgTotalBilled: Math.round(avgTotalBilled),
     avgHoursPerCase: Math.round(avgHoursPerCase * 10) / 10,
     totalCases: uniqueCases.size,
     medianHourlyRate: Math.round(medianHourlyRate),
-    seniorityLevels,
+    seniorityLevels: finalSeniorityLevels,
   };
+
+  // Cache the result
+  cachedPricingDataByArea.set(area, result);
+  return result;
 }
 
 // Get full pricing data structure
 export function getFullPricingData(): PricingDataStructure {
-  // Get all unique areas
+  // Return cached result if available
+  if (cachedFullPricingData) {
+    return cachedFullPricingData;
+  }
+  // Get all unique areas directly from mock data
   const areas = new Set<string>();
   asuntos.forEach((a) => {
     if (a.practice_area) {
-      areas.add(mapPracticeArea(a.practice_area));
+      areas.add(a.practice_area); // Use area directly, no mapping
     }
   });
 
-  // Build seniority levels from usuarios
-  const seniorityLevels: PricingDataStructure["seniorityLevels"] = {
-    junior: {
+  // Build seniority levels from actual usuarios data
+  // Group usuarios by category to calculate averages
+  const categoryGroups = new Map<
+    string,
+    { rates: number[]; costs: number[] }
+  >();
+
+  usuarios.forEach((u) => {
+    if (!categoryGroups.has(u.category)) {
+      categoryGroups.set(u.category, { rates: [], costs: [] });
+    }
+    const group = categoryGroups.get(u.category)!;
+    if (u.rate > 0) group.rates.push(u.rate);
+    if (u.hourly_cost > 0) group.costs.push(u.hourly_cost);
+  });
+
+  // Calculate averages for each category
+  const categoryAverages = new Map<
+    string,
+    { avgRate: number; avgCost: number }
+  >();
+  categoryGroups.forEach((group, category) => {
+    const avgRate = group.rates.length > 0
+      ? Math.round(
+        group.rates.reduce((sum, r) => sum + r, 0) / group.rates.length,
+      )
+      : 0;
+    const avgCost = group.costs.length > 0
+      ? Math.round(
+        group.costs.reduce((sum, c) => sum + c, 0) / group.costs.length,
+      )
+      : 0;
+    categoryAverages.set(category, { avgRate, avgCost });
+  });
+
+  // Map categories to seniority levels based on actual data from usuarios.json
+  // Only use data that exists - no hardcoded fallbacks
+  const socioData = categoryAverages.get("Socio");
+  const asociadoSrData = categoryAverages.get("Asociado Sr");
+  const asociadoData = categoryAverages.get("Asociado");
+  const juniorData = categoryAverages.get("Asociado Junior");
+
+  // Calculate monthly salaries: hourly_cost * 160 hours/month (standard working hours)
+  // Build seniority levels only from data that exists
+  const seniorityLevels: Partial<PricingDataStructure["seniorityLevels"]> = {};
+
+  // Junior: use actual data if exists, otherwise estimate from Asociado (70%)
+  if (juniorData) {
+    seniorityLevels.junior = {
       label: "Asociado Junior",
-      avgHourlyRate: 125,
-      monthlySalary: 4500,
-      hourlyCost: 28,
+      avgHourlyRate: juniorData.avgRate,
+      monthlySalary: Math.round(juniorData.avgCost * 160),
+      hourlyCost: juniorData.avgCost,
+      color: "bg-blue-100 text-blue-800",
+    };
+  } else if (asociadoData) {
+    // Estimate junior as 70% of associate if no junior data exists
+    seniorityLevels.junior = {
+      label: "Asociado Junior",
+      avgHourlyRate: Math.round(asociadoData.avgRate * 0.7),
+      monthlySalary: Math.round(asociadoData.avgCost * 0.7 * 160),
+      hourlyCost: Math.round(asociadoData.avgCost * 0.7),
+      color: "bg-blue-100 text-blue-800",
+    };
+  }
+
+  // Associate: use actual data
+  if (asociadoData) {
+    seniorityLevels.associate = {
+      label: "Asociado",
+      avgHourlyRate: asociadoData.avgRate,
+      monthlySalary: Math.round(asociadoData.avgCost * 160),
+      hourlyCost: asociadoData.avgCost,
+      color: "bg-green-100 text-green-800",
+    };
+  }
+
+  // Senior: use actual data
+  if (asociadoSrData) {
+    seniorityLevels.senior = {
+      label: "Asociado Senior",
+      avgHourlyRate: asociadoSrData.avgRate,
+      monthlySalary: Math.round(asociadoSrData.avgCost * 160),
+      hourlyCost: asociadoSrData.avgCost,
+      color: "bg-yellow-100 text-yellow-800",
+    };
+  }
+
+  // Partner: use actual data
+  if (socioData) {
+    seniorityLevels.partner = {
+      label: "Socio",
+      avgHourlyRate: socioData.avgRate,
+      monthlySalary: Math.round(socioData.avgCost * 160),
+      hourlyCost: socioData.avgCost,
+      color: "bg-orange-100 text-orange-800",
+    };
+  }
+
+  // Ensure we have all required levels (fill with empty defaults if missing)
+  const finalSeniorityLevels: PricingDataStructure["seniorityLevels"] = {
+    junior: seniorityLevels.junior || {
+      label: "Asociado Junior",
+      avgHourlyRate: 0,
+      monthlySalary: 0,
+      hourlyCost: 0,
       color: "bg-blue-100 text-blue-800",
     },
-    associate: {
+    associate: seniorityLevels.associate || {
       label: "Asociado",
-      avgHourlyRate: 250,
-      monthlySalary: 8000,
-      hourlyCost: 50,
+      avgHourlyRate: 0,
+      monthlySalary: 0,
+      hourlyCost: 0,
       color: "bg-green-100 text-green-800",
     },
-    senior: {
+    senior: seniorityLevels.senior || {
       label: "Asociado Senior",
-      avgHourlyRate: 500,
-      monthlySalary: 15000,
-      hourlyCost: 94,
+      avgHourlyRate: 0,
+      monthlySalary: 0,
+      hourlyCost: 0,
       color: "bg-yellow-100 text-yellow-800",
     },
-    partner: {
+    partner: seniorityLevels.partner || {
       label: "Socio",
-      avgHourlyRate: 850,
-      monthlySalary: 25000,
-      hourlyCost: 156,
+      avgHourlyRate: 0,
+      monthlySalary: 0,
+      hourlyCost: 0,
       color: "bg-orange-100 text-orange-800",
     },
   };
-
-  // Calculate average rates from actual data
-  const rates = usuarios.map((u) => u.rate).filter((r) => r > 0);
-  if (rates.length > 0) {
-    rates.sort((a, b) => a - b);
-    const quartiles = [
-      rates[Math.floor(rates.length * 0.25)],
-      rates[Math.floor(rates.length * 0.5)],
-      rates[Math.floor(rates.length * 0.75)],
-    ];
-
-    seniorityLevels.junior.avgHourlyRate = Math.round(quartiles[0] || 125);
-    seniorityLevels.associate.avgHourlyRate = Math.round(
-      (quartiles[0] + quartiles[1]) / 2 || 250,
-    );
-    seniorityLevels.senior.avgHourlyRate = Math.round(
-      (quartiles[1] + quartiles[2]) / 2 || 500,
-    );
-    seniorityLevels.partner.avgHourlyRate = Math.round(
-      quartiles[2] || 850,
-    );
-  }
 
   // Build area-specific data
   const areaSpecificData: Record<string, PricingData> = {};
@@ -948,8 +1496,12 @@ export function getFullPricingData(): PricingDataStructure {
     areaSpecificData[area] = getPricingData(area);
   });
 
-  return {
-    seniorityLevels,
+  const result: PricingDataStructure = {
+    seniorityLevels: finalSeniorityLevels,
     areaSpecificData,
   };
+
+  // Cache the result
+  cachedFullPricingData = result;
+  return result;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -62,26 +62,59 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { getDashboardData } from "@/lib/mockDataUtils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  getDashboardData,
+  getClientCosts,
+  getRevenueByUser,
+} from "@/lib/mockDataUtils";
+import { formatDateLocal } from "@/lib/utils";
+import {
+  FacturacionFiltersProvider,
+  useFacturacionFilters,
+} from "@/hooks/useFacturacionFilters";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
 
-const Facturacion = () => {
+const FacturacionContent = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const {
+    filters,
+    setAreaFilter,
+    setClientFilter,
+    clearFilters,
+    hasActiveFilters,
+  } = useFacturacionFilters();
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [chartData, setChartData] = useState<any>(null); // Chart data always shows all areas
   const [dataLoading, setDataLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false); // For incremental loading
-  const [selectedArea, setSelectedArea] = useState<string>("all");
   const [availableAreas, setAvailableAreas] = useState<string[]>([]);
+  const [allClients, setAllClients] = useState<
+    Array<{ nombre: string; totalFacturado: number }>
+  >([]);
+  const [allRevenueByUsers, setAllRevenueByUsers] = useState<
+    Array<{ user_name: string; user_code: string; revenue: number }>
+  >([]);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2024, 0, 1)
-  ); // 1/1/2024
+    new Date(2023, 0, 1)
+  ); // 1/1/2023
   const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2024, 11, 31)
-  ); // 31/12/2024
+    new Date(2023, 11, 31)
+  ); // 31/12/2023
+
+  // Determine selectedArea from filters (for backward compatibility with getDashboardData)
+  const selectedArea = filters.area || "all";
 
   const transformFinalNumber = (value: number | string | null | undefined) => {
     if (value === null || value === undefined) {
@@ -101,6 +134,28 @@ const Facturacion = () => {
       navigate("/auth");
     }
   }, [user, loading, navigate]);
+
+  // Filter clients based on active filters
+  const clients = useMemo(() => {
+    let filtered = allClients;
+
+    // Filter by client name if filter is active
+    if (filters.clientName) {
+      filtered = filtered.filter((c) => c.nombre === filters.clientName);
+    }
+
+    // Note: Area filtering is already done in getClientCosts, so allClients
+    // already contains only clients with work in the selected area
+
+    return filtered;
+  }, [allClients, filters.clientName]);
+
+  // Filter revenue by users based on active filters
+  // Note: For now, we show all users. In a full implementation,
+  // we would filter users based on which clients they worked for
+  const revenueByUsers = useMemo(() => {
+    return allRevenueByUsers;
+  }, [allRevenueByUsers]);
 
   // Fetch areas disponibles (solo una vez)
   useEffect(() => {
@@ -150,17 +205,25 @@ const Facturacion = () => {
           const filteredData = getDashboardData(
             selectedArea,
             startDate,
-            endDate
+            endDate,
+            filters.clientName
           );
+
+          // Get pie chart data - filter by client if client filter is active
+          const pieChartData = filters.clientName
+            ? getDashboardData("all", startDate, endDate, filters.clientName)
+                .facturacionPorArea
+            : allAreasData.facturacionPorArea;
 
           console.log(`🎯 Filtering by area: ${selectedArea}`, {
             hasAreaData: !!filteredData.areaSpecificData[selectedArea],
             clientesUnicos: filteredData.clientesUnicos,
+            clientFilter: filters.clientName,
           });
 
           setDashboardData(filteredData);
-          // Chart data always shows all areas
-          setChartData(allAreasData.facturacionPorArea);
+          // Chart data filtered by client if client filter is active
+          setChartData(pieChartData);
           setDataLoading(false);
           setIsRefreshing(false);
           return;
@@ -179,24 +242,35 @@ const Facturacion = () => {
             formaCobroChartLength: cachedData.formaCobroChart?.length || 0,
           });
           setDashboardData(cachedData);
-          // Always fetch chart data with "all" to keep chart showing all areas
-          if (selectedArea !== "all") {
-            const { data: chartDataResponse } = await supabase.functions.invoke(
-              "dashboard-data",
-              {
-                body: {
-                  selectedArea: "all",
-                  startDate:
-                    startDate?.toISOString().split("T")[0] || undefined,
-                  endDate: endDate?.toISOString().split("T")[0] || undefined,
-                },
-              }
-            );
-            if (chartDataResponse) {
-              setChartData(chartDataResponse.facturacionPorArea);
-            }
+          // Fetch chart data - filter by client if client filter is active
+          if (filters.clientName && USE_MOCK_DATA) {
+            // For mock data, use getDashboardData directly
+            const pieChartData = getDashboardData(
+              "all",
+              startDate,
+              endDate,
+              filters.clientName
+            ).facturacionPorArea;
+            setChartData(pieChartData);
           } else {
-            setChartData(cachedData.facturacionPorArea);
+            // Always fetch chart data with "all" to keep chart showing all areas
+            if (selectedArea !== "all") {
+              const { data: chartDataResponse } =
+                await supabase.functions.invoke("dashboard-data", {
+                  body: {
+                    selectedArea: "all",
+                    startDate: startDate
+                      ? formatDateLocal(startDate)
+                      : undefined,
+                    endDate: endDate ? formatDateLocal(endDate) : undefined,
+                  },
+                });
+              if (chartDataResponse) {
+                setChartData(chartDataResponse.facturacionPorArea);
+              }
+            } else {
+              setChartData(cachedData.facturacionPorArea);
+            }
           }
           setDataLoading(false);
           setIsRefreshing(false);
@@ -216,8 +290,8 @@ const Facturacion = () => {
           await supabase.functions.invoke("dashboard-data", {
             body: {
               selectedArea,
-              startDate: startDate?.toISOString().split("T")[0] || undefined,
-              endDate: endDate?.toISOString().split("T")[0] || undefined,
+              startDate: startDate ? formatDateLocal(startDate) : undefined,
+              endDate: endDate ? formatDateLocal(endDate) : undefined,
             },
           });
 
@@ -229,24 +303,36 @@ const Facturacion = () => {
         console.log("✅ Datos obtenidos desde edge function");
         setDashboardData(edgeFunctionData);
 
-        // Always fetch chart data with "all" to keep chart showing all areas
-        if (selectedArea !== "all") {
-          const { data: chartDataResponse } = await supabase.functions.invoke(
-            "dashboard-data",
-            {
-              body: {
-                selectedArea: "all",
-                startDate: startDate?.toISOString().split("T")[0] || undefined,
-                endDate: endDate?.toISOString().split("T")[0] || undefined,
-              },
-            }
-          );
-          if (chartDataResponse) {
-            setChartData(chartDataResponse.facturacionPorArea);
-          }
+        // Fetch chart data - filter by client if client filter is active
+        if (filters.clientName && USE_MOCK_DATA) {
+          // For mock data, use getDashboardData directly
+          const pieChartData = getDashboardData(
+            "all",
+            startDate,
+            endDate,
+            filters.clientName
+          ).facturacionPorArea;
+          setChartData(pieChartData);
         } else {
-          // When "all" is selected, use the same data
-          setChartData(edgeFunctionData.facturacionPorArea);
+          // Always fetch chart data with "all" to keep chart showing all areas
+          if (selectedArea !== "all") {
+            const { data: chartDataResponse } = await supabase.functions.invoke(
+              "dashboard-data",
+              {
+                body: {
+                  selectedArea: "all",
+                  startDate: startDate ? formatDateLocal(startDate) : undefined,
+                  endDate: endDate ? formatDateLocal(endDate) : undefined,
+                },
+              }
+            );
+            if (chartDataResponse) {
+              setChartData(chartDataResponse.facturacionPorArea);
+            }
+          } else {
+            // When "all" is selected, use the same data
+            setChartData(edgeFunctionData.facturacionPorArea);
+          }
         }
 
         // Guardar en caché
@@ -265,9 +351,8 @@ const Facturacion = () => {
         setDataLoading(false);
         setIsRefreshing(false);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [selectedArea, startDate, endDate]
+    [selectedArea, startDate, endDate, filters.area, filters.clientName]
   );
 
   const fetchDashboardDataLegacy = async () => {
@@ -345,14 +430,14 @@ const Facturacion = () => {
       if (startDate) {
         horasQuery = horasQuery.gte(
           '"Trabajo (día)"',
-          startDate.toISOString().split("T")[0]
+          formatDateLocal(startDate)
         );
       }
 
       if (endDate) {
         horasQuery = horasQuery.lte(
           '"Trabajo (día)"',
-          endDate.toISOString().split("T")[0]
+          formatDateLocal(endDate)
         );
       }
 
@@ -428,6 +513,11 @@ const Facturacion = () => {
       // 5. Calcular total facturado
       const totalFacturado = liquidaciones.reduce((sum, l) => {
         return sum + (parseFloat(l["Total facturado"]) || 0);
+      }, 0);
+
+      // 6. Calcular total de horas facturables
+      const totalHorasFacturables = horas.reduce((sum: number, h: any) => {
+        return sum + (parseFloat(h["Horas Trabajadas"]) || 0);
       }, 0);
 
       // 6b. Calcular meta de facturación
@@ -596,6 +686,7 @@ const Facturacion = () => {
         totalFacturado,
         metaFacturacion,
         // horasTrabajadas,
+        totalHorasFacturables,
         promedioDiasFacturacion,
         promedioDiasPago,
         areasChart,
@@ -686,8 +777,8 @@ const Facturacion = () => {
       .select(
         '"N° Cobro", "Área Profesional", "Trabajo (día)", "Horas Trabajadas"'
       )
-      .gte('"Trabajo (día)"', fechaMin.toISOString().split("T")[0])
-      .lte('"Trabajo (día)"', fechaMax.toISOString().split("T")[0])
+      .gte('"Trabajo (día)"', formatDateLocal(fechaMin))
+      .lte('"Trabajo (día)"', formatDateLocal(fechaMax))
       .not('"Área Profesional"', "is", null);
 
     let horas: any[] = [];
@@ -1142,6 +1233,45 @@ const Facturacion = () => {
     }
   }, [user, selectedArea, startDate, endDate, fetchDashboardData]);
 
+  // Fetch clients data
+  useEffect(() => {
+    if (user && USE_MOCK_DATA) {
+      // Fetch clients filtered by area if area filter is active
+      const clientCosts = getClientCosts(
+        startDate,
+        endDate,
+        null, // Don't filter by client name here - we want all clients for the table
+        filters.area || undefined // Filter by area if active
+      );
+      const clientsData = clientCosts
+        .map((client) => ({
+          nombre: client.client_name,
+          totalFacturado: client.total_cost,
+        }))
+        .sort((a, b) => b.totalFacturado - a.totalFacturado);
+      setAllClients(clientsData);
+
+      // Calculate revenue by user (top 5) - filter by client if active
+      const userRevenue = getRevenueByUser(
+        startDate,
+        endDate,
+        filters.clientName
+      );
+      setAllRevenueByUsers(userRevenue);
+    }
+  }, [user, startDate, endDate, filters.clientName, filters.area]);
+
+  // Scroll table to show client #10 on load
+  useEffect(() => {
+    if (tableScrollRef.current && clients.length >= 10) {
+      // Calculate scroll position: each row is approximately h-7 (28px) + border
+      // Scroll to show row 10 (index 9) at the top
+      const rowHeight = 28; // h-7 = 28px
+      const scrollPosition = rowHeight * 9; // Scroll to position of 10th client (index 9)
+      tableScrollRef.current.scrollTop = scrollPosition;
+    }
+  }, [clients]);
+
   if (loading || dataLoading) {
     return (
       <DashboardLayout>
@@ -1163,18 +1293,12 @@ const Facturacion = () => {
 
   const stats = [
     {
-      title: "Promedio días de pago",
-      value: dashboardData?.promedioDiasPago || "0",
-      description: "Días promedio entre facturación y pago",
-      icon: DollarSign,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100",
-    },
-    {
-      title: "Promedio días de facturación",
-      value: dashboardData?.promedioDiasFacturacion || "0",
-      description: "Días promedio entre último trabajo y facturación",
-      icon: CalendarIcon,
+      title: "Total de horas facturables",
+      value: Math.round(
+        dashboardData?.totalHorasFacturables || 0
+      ).toLocaleString(),
+      description: "Total de horas facturables en el período",
+      icon: Clock,
       color: "text-green-600",
       bgColor: "bg-green-100",
     },
@@ -1204,6 +1328,14 @@ const Facturacion = () => {
       color: "text-emerald-600",
       bgColor: "bg-emerald-100",
     },
+    {
+      title: "Promedio días de pago",
+      value: dashboardData?.promedioDiasPago || "0",
+      description: "Días promedio entre facturación y pago",
+      icon: DollarSign,
+      color: "text-blue-600",
+      bgColor: "bg-blue-100",
+    },
     // {
     //   title: "Meta de Facturación",
     //   value: `$${(dashboardData?.metaFacturacion || 0).toLocaleString()}`,
@@ -1222,17 +1354,6 @@ const Facturacion = () => {
     // },
   ];
 
-  const COLORS = [
-    "#0088FE",
-    "#00C49F",
-    "#FFBB28",
-    "#FF8042",
-    "#8884d8",
-    "#82ca9d",
-    "#ffc658",
-    "#ff7c7c",
-  ];
-
   const baseFacturacionData =
     chartData || dashboardData?.facturacionPorArea || [];
   const transformedFacturacionData = baseFacturacionData.map((item: any) => ({
@@ -1240,6 +1361,15 @@ const Facturacion = () => {
     facturacion: transformFinalNumber(item.facturacion),
     meta: transformFinalNumber(item.meta),
   }));
+
+  // Colors for pie charts - tones of primary color (matching Top20Clientes)
+  const PRIMARY_COLORS = [
+    "hsl(210 55% 23%)", // Base primary (darkest)
+    "hsl(210 55% 35%)", // Medium-dark
+    "hsl(210 55% 47%)", // Medium
+    "hsl(210 55% 59%)", // Medium-light
+    "hsl(210 55% 71%)", // Light
+  ];
   const transformedFormaCobroChart = (dashboardData?.formaCobroChart || []).map(
     (item: any) => ({
       ...item,
@@ -1364,7 +1494,12 @@ const Facturacion = () => {
 
             {/* Area Filter */}
             <div className="w-full lg:w-64">
-              <Select value={selectedArea} onValueChange={setSelectedArea}>
+              <Select
+                value={filters.area || "all"}
+                onValueChange={(value) =>
+                  setAreaFilter(value === "all" ? null : value)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Filtrar por área" />
                 </SelectTrigger>
@@ -1380,6 +1515,45 @@ const Facturacion = () => {
             </div>
           </div>
         </div>
+
+        {/* Active Filters */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-muted-foreground">
+              Filtros activos:
+            </span>
+            {filters.area && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                <span>Área: {filters.area}</span>
+                <button
+                  onClick={() => setAreaFilter(null)}
+                  className="ml-1 hover:bg-primary/20 rounded p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {filters.clientName && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                <span>Cliente: {filters.clientName}</span>
+                <button
+                  onClick={() => setClientFilter(null)}
+                  className="ml-1 hover:bg-primary/20 rounded p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-8 text-xs"
+            >
+              Limpiar filtros
+            </Button>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="relative">
@@ -1423,8 +1597,194 @@ const Facturacion = () => {
           </div>
         </div>
 
-        {/* Gráfico Comparativo: Meta vs Facturación por Área */}
+        {/* Clients Table and Facturación por Área Pie Chart */}
         <div
+          className={`flex gap-4 transition-opacity duration-200 ${
+            isRefreshing ? "opacity-60" : "opacity-100"
+          }`}
+        >
+          {/* Clients Table on Left */}
+          <Card className="border-border/50 w-[380px] flex-shrink-0">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-foreground">
+                Todos los Clientes
+              </CardTitle>
+              <CardDescription>
+                Lista completa de clientes ordenados por facturación
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div
+                ref={tableScrollRef}
+                className="overflow-y-auto rounded-md"
+                style={{ maxHeight: "320px" }}
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="h-8 px-1 text-[10px] font-semibold w-[15px]">
+                        #
+                      </TableHead>
+                      <TableHead className="h-8 px-1 text-[10px] font-semibold">
+                        Nombre
+                      </TableHead>
+                      <TableHead className="h-8 px-1 text-[10px] font-semibold text-right">
+                        Facturación
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {clients.map((client, index) => {
+                      const isActive = filters.clientName === client.nombre;
+                      return (
+                        <TableRow
+                          key={client.nombre}
+                          className={`border-b h-7 transition-all duration-200 ${
+                            isActive ? "bg-primary/10" : "hover:bg-muted/50"
+                          }`}
+                          onClick={() => setClientFilter(client.nombre)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <TableCell className="px-1 py-0.5 text-[11px] font-medium">
+                            {index + 1}
+                          </TableCell>
+                          <TableCell className="px-1 py-0.5 text-[11px] truncate max-w-[200px]">
+                            {client.nombre}
+                          </TableCell>
+                          <TableCell className="px-1 py-0.5 text-[11px] text-right font-medium text-emerald-600">
+                            $
+                            {Math.round(client.totalFacturado).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Facturación por Área Pie Chart on Right */}
+          <Card className="border-border/50 flex-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-foreground">
+                Facturación por Área
+              </CardTitle>
+              <CardDescription>
+                Distribución de facturación por área profesional
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {chartData && chartData.length > 0 ? (
+                <ChartContainer
+                  config={{
+                    facturacion: {
+                      label: "Facturación",
+                    },
+                  }}
+                >
+                  <ResponsiveContainer width="100%" height={400}>
+                    <PieChart>
+                      <Pie
+                        data={transformedFacturacionData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ area, percent }) => {
+                          if (percent == null || isNaN(percent)) {
+                            return `${area}: 0%`;
+                          }
+                          const percentValue = percent * 100;
+                          if (percentValue < 1 && percentValue > 0) {
+                            return `${area}: <1%`;
+                          }
+                          return `${area}: ${percentValue.toFixed(0)}%`;
+                        }}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="facturacion"
+                        onClick={(data) => {
+                          if (data?.area) {
+                            if (filters.area === data.area) {
+                              setAreaFilter(null);
+                            } else {
+                              setAreaFilter(data.area);
+                            }
+                          }
+                        }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {transformedFacturacionData.map(
+                          (entry: any, index: number) => {
+                            const isActive = filters.area === entry.area;
+                            const baseColor =
+                              PRIMARY_COLORS[index % PRIMARY_COLORS.length];
+                            // Make active slice brighter/more opaque
+                            const fillColor = isActive
+                              ? baseColor.replace(
+                                  /hsl\(([^)]+)\)/,
+                                  (match, content) => {
+                                    // Increase opacity/brightness for active
+                                    return `hsl(${content.replace(
+                                      /\d+%\)/,
+                                      "75%)"
+                                    )}`;
+                                  }
+                                )
+                              : baseColor;
+                            return (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={fillColor}
+                                style={{ cursor: "pointer" }}
+                              />
+                            );
+                          }
+                        )}
+                      </Pie>
+                      <ChartTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const total = transformedFacturacionData.reduce(
+                              (sum: number, item: any) =>
+                                sum + (item.facturacion || 0),
+                              0
+                            );
+                            const percent = (
+                              (Number(payload[0].value) / total) *
+                              100
+                            ).toFixed(1);
+                            return (
+                              <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-sm font-medium">
+                                    {payload[0].payload.area}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    ${Number(payload[0].value).toLocaleString()}{" "}
+                                    ({percent}%)
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              ) : (
+                <div className="h-[400px] flex items-center justify-center text-sm text-muted-foreground">
+                  No hay datos disponibles
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Gráfico Comparativo: Meta vs Facturación por Área */}
+        {/* <div
           className={`relative transition-opacity duration-200 ${
             isRefreshing ? "opacity-60" : "opacity-100"
           }`}
@@ -1586,10 +1946,10 @@ const Facturacion = () => {
               </CardContent>
             </Card>
           )}
-        </div>
+        </div> */}
 
         {/* Charts Section */}
-        {(dashboardData?.statusChart && dashboardData.statusChart.length > 0) ||
+        {(revenueByUsers && revenueByUsers.length > 0) ||
         (transformedFormaCobroChart &&
           transformedFormaCobroChart.length > 0) ? (
           <div
@@ -1597,93 +1957,115 @@ const Facturacion = () => {
               isRefreshing ? "opacity-60" : "opacity-100"
             }`}
           >
-            {/* Status Distribution */}
-            {dashboardData?.statusChart &&
-              dashboardData.statusChart.length > 0 && (
-                <Card className="border-border/50">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-foreground">
-                      Facturación según Estado de Liquidación
-                    </CardTitle>
-                    <CardDescription>
-                      Distribución por estado de facturación
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie
-                          data={dashboardData.statusChart}
-                          cx="45%"
-                          cy="50%"
-                          labelLine={false}
-                          label={false}
-                          outerRadius={90}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {dashboardData.statusChart.map(
-                            (entry: any, index: number) => (
-                              <Cell
-                                key={`cell-${index}`}
-                                fill={COLORS[index % COLORS.length]}
-                              />
-                            )
-                          )}
-                        </Pie>
+            {/* Revenue by Users (Top 5) */}
+            {revenueByUsers && revenueByUsers.length > 0 && (
+              <Card className="border-border/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-foreground">
+                    Facturación por Usuario (Top 5)
+                  </CardTitle>
+                  <CardDescription>
+                    Usuarios con mayor facturación en el período
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0 pb-0 px-0">
+                  <ChartContainer
+                    config={{
+                      revenue: {
+                        label: "Facturación",
+                      },
+                    }}
+                  >
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart
+                        data={revenueByUsers.map((user) => ({
+                          name: user.user_name,
+                          code: user.user_code,
+                          revenue: transformFinalNumber(user.revenue),
+                        }))}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 50 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fontSize: 10 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11 }}
+                          width={50}
+                          tickFormatter={(value) => {
+                            const millions = value / 1000000;
+                            return millions % 1 === 0
+                              ? `$${millions}M`
+                              : `$${millions.toFixed(1)}M`;
+                          }}
+                        />
                         <ChartTooltip
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
-                              const total = dashboardData.statusChart.reduce(
-                                (sum: number, item: { value: number }) =>
-                                  sum + item.value,
-                                0
-                              );
-                              const percent = (
-                                (Number(payload[0].value) / total) *
-                                100
-                              ).toFixed(1);
                               return (
-                                <div className="bg-white p-2 border rounded shadow-sm">
-                                  <p className="text-sm font-semibold">
-                                    {payload[0].name}
-                                  </p>
-                                  <p className="text-sm">
-                                    {payload[0].value} liquidaciones ({percent}
-                                    %)
-                                  </p>
+                                <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-medium">
+                                      {payload[0].payload.name}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      $
+                                      {Number(
+                                        payload[0].value
+                                      ).toLocaleString()}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground mt-1">
+                                      Haz clic para ver perfil
+                                    </span>
+                                  </div>
                                 </div>
                               );
                             }
                             return null;
                           }}
                         />
-                        <Legend
-                          verticalAlign="middle"
-                          align="right"
-                          layout="vertical"
-                          formatter={(value, entry) => {
-                            const total = dashboardData.statusChart.reduce(
-                              (sum: number, item: { value: number }) =>
-                                sum + item.value,
-                              0
-                            );
-                            const itemValue = entry.payload?.value || 0;
-                            const percent = ((itemValue / total) * 100).toFixed(
-                              0
-                            );
-                            return `${value}: ${percent}%`;
-                          }}
-                          wrapperStyle={{
-                            paddingLeft: "10px",
-                            fontSize: "11px",
-                          }}
-                        />
-                      </PieChart>
+                        <Bar
+                          dataKey="revenue"
+                          fill="hsl(210 55% 47%)"
+                          radius={[4, 4, 0, 0]}
+                        >
+                          {revenueByUsers.map((user, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill="hsl(210 55% 47%)"
+                              style={{ cursor: "pointer" }}
+                              onClick={() => {
+                                // Pass date filters as query params
+                                const params = new URLSearchParams();
+                                if (startDate) {
+                                  params.set(
+                                    "startDate",
+                                    startDate.toISOString()
+                                  );
+                                }
+                                if (endDate) {
+                                  params.set("endDate", endDate.toISOString());
+                                }
+                                const queryString = params.toString();
+                                navigate(
+                                  `/user/${user.user_code}${
+                                    queryString ? `?${queryString}` : ""
+                                  }`
+                                );
+                              }}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
                     </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              )}
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Forma de Cobro Distribution */}
             {transformedFormaCobroChart &&
@@ -1714,7 +2096,9 @@ const Facturacion = () => {
                             (entry: any, index: number) => (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={COLORS[index % COLORS.length]}
+                                fill={
+                                  PRIMARY_COLORS[index % PRIMARY_COLORS.length]
+                                }
                               />
                             )
                           )}
@@ -1732,14 +2116,19 @@ const Facturacion = () => {
                                 100
                               ).toFixed(1);
                               return (
-                                <div className="bg-white p-2 border rounded shadow-sm">
-                                  <p className="text-sm font-semibold">
-                                    {payload[0].name}
-                                  </p>
-                                  <p className="text-sm">
-                                    ${Number(payload[0].value).toLocaleString()}{" "}
-                                    ({percent}%)
-                                  </p>
+                                <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-medium">
+                                      {payload[0].name}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      $
+                                      {Number(
+                                        payload[0].value
+                                      ).toLocaleString()}{" "}
+                                      ({percent}%)
+                                    </span>
+                                  </div>
                                 </div>
                               );
                             }
@@ -1776,6 +2165,14 @@ const Facturacion = () => {
         ) : null}
       </div>
     </DashboardLayout>
+  );
+};
+
+const Facturacion = () => {
+  return (
+    <FacturacionFiltersProvider>
+      <FacturacionContent />
+    </FacturacionFiltersProvider>
   );
 };
 

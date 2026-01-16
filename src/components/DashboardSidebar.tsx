@@ -21,18 +21,30 @@ import {
   Settings,
   Bell,
   Activity,
+  Trophy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const menuItems = [
   { title: "Facturación", url: "/facturacion", icon: LayoutDashboard },
-  { title: "Clientes", url: "/dashboard/clientes", icon: Users },
+  // { title: "Clientes", url: "/dashboard/clientes", icon: Users },
+  { title: "Clientes", url: "/dashboard/top20-clientes", icon: Trophy },
   { title: "Utilización", url: "/facturacion/utilizacion", icon: Activity },
   { title: "Alertas", url: "/dashboard/alertas", icon: Bell },
   { title: "Pricing", url: "/dashboard/pricing", icon: Calculator },
   { title: "Configuración", url: "/dashboard/settings", icon: Settings },
   // { title: "Proyecciones", url: "/dashboard/proyecciones", icon: TrendingUp },
 ];
+
+// Helper function to extract initials from firm name
+function getInitials(firmName: string): string {
+  if (!firmName) return "";
+  const words = firmName.trim().split(/\s+/);
+  if (words.length === 1) {
+    return words[0].substring(0, 2).toUpperCase();
+  }
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
 
 export function DashboardSidebar() {
   const { state } = useSidebar();
@@ -103,27 +115,45 @@ export function DashboardSidebar() {
     >
       <SidebarContent className="bg-sidebar">
         <div className="p-4 flex flex-col items-center gap-2">
-          <div className="w-28 h-28 bg-sidebar-accent/50 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden relative">
-            {isLoading ? (
-              <Loader2 className="w-10 h-10 text-sidebar-foreground/40 animate-spin" />
-            ) : logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="Logo de la firma"
-                className="w-full h-full object-contain p-1"
-                onError={(e) => {
-                  // If image fails to load, show the lawbit logo as fallback
-                  e.currentTarget.src = "/lawbit_logo_black.png";
-                }}
-              />
-            ) : (
-              <img
-                src="/lawbit_logo_black.png"
-                alt="Lawbit Logo"
-                className="w-full h-full object-contain p-2"
-              />
-            )}
-          </div>
+          {state === "collapsed" ? (
+            // When collapsed, show initials in a circular avatar
+            <div className="w-12 h-12 rounded-full bg-sidebar-accent flex items-center justify-center border-2 border-sidebar-accent/30">
+              {isLoading ? (
+                <Loader2 className="w-6 h-6 text-sidebar-foreground animate-spin" />
+              ) : firmName ? (
+                <span className="text-sidebar-foreground font-bold text-base leading-none">
+                  {getInitials(firmName)}
+                </span>
+              ) : (
+                <span className="text-sidebar-foreground font-bold text-base leading-none">
+                  LB
+                </span>
+              )}
+            </div>
+          ) : (
+            // When expanded, show the logo/image
+            <div className="w-28 h-28 bg-sidebar-accent/50 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+              {isLoading ? (
+                <Loader2 className="w-10 h-10 text-sidebar-foreground/40 animate-spin" />
+              ) : logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Logo de la firma"
+                  className="w-full h-full object-contain p-1"
+                  onError={(e) => {
+                    // If image fails to load, show the lawbit logo as fallback
+                    e.currentTarget.src = "/lawbit_logo_black.png";
+                  }}
+                />
+              ) : (
+                <img
+                  src="/lawbit_logo_black.png"
+                  alt="Lawbit Logo"
+                  className="w-full h-full object-contain p-2"
+                />
+              )}
+            </div>
+          )}
           {state !== "collapsed" && firmName && (
             <div className="text-center">
               <h2 className="text-sm font-bold text-sidebar-foreground">
