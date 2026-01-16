@@ -1,288 +1,379 @@
 {
-  "clients": [
+  "timeEntries": [
     {
-      "nombre": "Corporación ABC S.A.",
-      "totalFacturado": 62000,
-      "totalFacturas": 24,
-      "ultimaFactura": "2025-09-15",
-      "primeraFactura": "2025-01-10",
-      "facturasPagadas": 18,
-      "facturasPendientes": 6,
-      "horasTrabajadas": 1240
+      "id": 1,
+      "date": "2025-01-15",
+      "duration": 8.0,
+      "billable_duration": 7.5,
+      "user_id": 1,
+      "user_name": "María González",
+      "project_id": 1,
+      "project_name": "Fusión Corporativa ABC",
+      "project_code": "ABC-001",
+      "client_name": "Corporación ABC S.A.",
+      "client_code": "ABC",
+      "client_group_name": "Grupo ABC",
+      "billable": true
     },
     {
-      "nombre": "Grupo Empresarial XYZ",
-      "totalFacturado": 56000,
-      "totalFacturas": 22,
-      "ultimaFactura": "2025-09-20",
-      "primeraFactura": "2025-01-05",
-      "facturasPagadas": 16,
-      "facturasPendientes": 6,
-      "horasTrabajadas": 1150
+      "id": 2,
+      "date": "2025-01-15",
+      "duration": 6.0,
+      "billable_duration": 6.0,
+      "user_id": 2,
+      "user_name": "Juan Pérez",
+      "project_id": 1,
+      "project_name": "Fusión Corporativa ABC",
+      "project_code": "ABC-001",
+      "client_name": "Corporación ABC S.A.",
+      "client_code": "ABC",
+      "client_group_name": "Grupo ABC",
+      "billable": true
     },
     {
-      "nombre": "Inversiones Delta Ltda.",
-      "totalFacturado": 49000,
-      "totalFacturas": 19,
-      "ultimaFactura": "2025-09-10",
-      "primeraFactura": "2025-01-15",
-      "facturasPagadas": 14,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 980
+      "id": 3,
+      "date": "2025-01-16",
+      "duration": 4.5,
+      "billable_duration": 4.0,
+      "user_id": 3,
+      "user_name": "Ana Martínez",
+      "project_id": 2,
+      "project_name": "Reestructuración Laboral XYZ",
+      "project_code": "XYZ-002",
+      "client_name": "Grupo Empresarial XYZ",
+      "client_code": "XYZ",
+      "client_group_name": null,
+      "billable": true
     },
     {
-      "nombre": "Holdings Omega S.A.",
-      "totalFacturado": 43000,
-      "totalFacturas": 17,
-      "ultimaFactura": "2025-09-12",
-      "primeraFactura": "2025-01-20",
-      "facturasPagadas": 12,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 890
+      "id": 4,
+      "date": "2025-01-17",
+      "duration": 7.0,
+      "billable_duration": 7.0,
+      "user_id": 1,
+      "user_name": "María González",
+      "project_id": 3,
+      "project_name": "Litigio Comercial Delta",
+      "project_code": "DEL-003",
+      "client_name": "Inversiones Delta Ltda.",
+      "client_code": "DEL",
+      "client_group_name": null,
+      "billable": true
     },
     {
-      "nombre": "Compañía Beta S.A.",
-      "totalFacturado": 47000,
-      "totalFacturas": 16,
-      "ultimaFactura": "2025-09-08",
-      "primeraFactura": "2025-02-01",
-      "facturasPagadas": 11,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 820
+      "id": 5,
+      "date": "2025-01-18",
+      "duration": 5.5,
+      "billable_duration": 0,
+      "user_id": 4,
+      "user_name": "Carlos Rodríguez",
+      "project_id": 4,
+      "project_name": "Asesoría Tributaria Omega",
+      "project_code": "OMG-004",
+      "client_name": "Holdings Omega S.A.",
+      "client_code": "OMG",
+      "client_group_name": "Grupo Omega",
+      "billable": false
     },
     {
-      "nombre": "Empresa Gamma Ltda.",
-      "totalFacturado": 36000,
-      "totalFacturas": 15,
-      "ultimaFactura": "2025-09-18",
-      "primeraFactura": "2025-02-10",
-      "facturasPagadas": 10,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 750
+      "id": 6,
+      "date": "2025-01-19",
+      "duration": 8.0,
+      "billable_duration": 8.0,
+      "user_id": 2,
+      "user_name": "Juan Pérez",
+      "project_id": 1,
+      "project_name": "Fusión Corporativa ABC",
+      "project_code": "ABC-001",
+      "client_name": "Corporación ABC S.A.",
+      "client_code": "ABC",
+      "client_group_name": "Grupo ABC",
+      "billable": true
     },
     {
-      "nombre": "Sociedad Alfa S.A.",
-      "totalFacturado": 33000,
-      "totalFacturas": 14,
-      "ultimaFactura": "2025-09-05",
-      "primeraFactura": "2025-02-15",
-      "facturasPagadas": 9,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 690
+      "id": 7,
+      "date": "2025-01-20",
+      "duration": 6.5,
+      "billable_duration": 6.5,
+      "user_id": 3,
+      "user_name": "Ana Martínez",
+      "project_id": 2,
+      "project_name": "Reestructuración Laboral XYZ",
+      "project_code": "XYZ-002",
+      "client_name": "Grupo Empresarial XYZ",
+      "client_code": "XYZ",
+      "client_group_name": null,
+      "billable": true
     },
     {
-      "nombre": "Corporación Epsilon",
-      "totalFacturado": 30000,
-      "totalFacturas": 13,
-      "ultimaFactura": "2025-09-22",
-      "primeraFactura": "2025-02-20",
-      "facturasPagadas": 8,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 630
-    },
-    {
-      "nombre": "Grupo Zeta S.A.",
-      "totalFacturado": 27000,
-      "totalFacturas": 12,
-      "ultimaFactura": "2025-09-14",
-      "primeraFactura": "2025-03-01",
-      "facturasPagadas": 7,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 570
-    },
-    {
-      "nombre": "Inversiones Theta Ltda.",
-      "totalFacturado": 24000,
-      "totalFacturas": 11,
-      "ultimaFactura": "2025-09-16",
-      "primeraFactura": "2025-03-10",
-      "facturasPagadas": 6,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 510
-    },
-    {
-      "nombre": "Holdings Lambda S.A.",
-      "totalFacturado": 22000,
-      "totalFacturas": 10,
-      "ultimaFactura": "2025-09-11",
-      "primeraFactura": "2025-03-15",
-      "facturasPagadas": 5,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 450
-    },
-    {
-      "nombre": "Compañía Sigma S.A.",
-      "totalFacturado": 19000,
-      "totalFacturas": 9,
-      "ultimaFactura": "2025-09-19",
-      "primeraFactura": "2025-03-20",
-      "facturasPagadas": 4,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 390
-    },
-    {
-      "nombre": "Empresa Phi Ltda.",
-      "totalFacturado": 16000,
-      "totalFacturas": 8,
-      "ultimaFactura": "2025-09-07",
-      "primeraFactura": "2025-04-01",
-      "facturasPagadas": 3,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 330
-    },
-    {
-      "nombre": "Sociedad Psi S.A.",
-      "totalFacturado": 13000,
-      "totalFacturas": 7,
-      "ultimaFactura": "2025-09-13",
-      "primeraFactura": "2025-04-10",
-      "facturasPagadas": 2,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 270
-    },
-    {
-      "nombre": "Corporación Omega Plus",
-      "totalFacturado": 10500,
-      "totalFacturas": 6,
-      "ultimaFactura": "2025-09-09",
-      "primeraFactura": "2025-04-15",
-      "facturasPagadas": 1,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 210
-    },
-    {
-      "nombre": "Grupo Alpha Beta",
-      "totalFacturado": 7800,
-      "totalFacturas": 5,
-      "ultimaFactura": "2025-09-17",
-      "primeraFactura": "2025-04-20",
-      "facturasPagadas": 0,
-      "facturasPendientes": 5,
-      "horasTrabajadas": 150
-    },
-    {
-      "nombre": "Inversiones Gamma Delta",
-      "totalFacturado": 5000,
-      "totalFacturas": 4,
-      "ultimaFactura": "2025-09-06",
-      "primeraFactura": "2025-05-01",
-      "facturasPagadas": 0,
-      "facturasPendientes": 4,
-      "horasTrabajadas": 90
-    },
-    {
-      "nombre": "Holdings Epsilon Zeta",
-      "totalFacturado": 2200,
-      "totalFacturas": 2,
-      "ultimaFactura": "2025-09-21",
-      "primeraFactura": "2025-05-10",
-      "facturasPagadas": 0,
-      "facturasPendientes": 2,
-      "horasTrabajadas": 30
+      "id": 8,
+      "date": "2025-01-21",
+      "duration": 4.0,
+      "billable_duration": 4.0,
+      "user_id": 5,
+      "user_name": "Laura Sánchez",
+      "project_id": 5,
+      "project_name": "Due Diligence Beta",
+      "project_code": "BET-005",
+      "client_name": "Compañía Beta S.A.",
+      "client_code": "BET",
+      "client_group_name": null,
+      "billable": true
     }
   ],
-  "overallRevenueChart": [
-    { "month": "2024-10", "revenue": 42800 },
-    { "month": "2024-11", "revenue": 45800 },
-    { "month": "2024-12", "revenue": 44200 },
-    { "month": "2025-01", "revenue": 47200 },
-    { "month": "2025-02", "revenue": 43200 },
-    { "month": "2025-03", "revenue": 49400 },
-    { "month": "2025-04", "revenue": 51300 },
-    { "month": "2025-05", "revenue": 53100 },
-    { "month": "2025-06", "revenue": 55000 },
-    { "month": "2025-07", "revenue": 56900 },
-    { "month": "2025-08", "revenue": 58700 },
-    { "month": "2025-09", "revenue": 60500 }
+  "userCosts": [
+    {
+      "user_id": 1,
+      "hourly_cost": 150000,
+      "effective_date": "2025-01-01"
+    },
+    {
+      "user_id": 2,
+      "hourly_cost": 120000,
+      "effective_date": "2025-01-01"
+    },
+    {
+      "user_id": 3,
+      "hourly_cost": 100000,
+      "effective_date": "2025-01-01"
+    },
+    {
+      "user_id": 4,
+      "hourly_cost": 80000,
+      "effective_date": "2025-01-01"
+    },
+    {
+      "user_id": 5,
+      "hourly_cost": 90000,
+      "effective_date": "2025-01-01"
+    }
   ],
-  "areasChart": [
-    { "name": "CORPORATIVO", "value": 2850, "color": "#86626e" },
-    { "name": "DERECHO LABORAL", "value": 2450, "color": "#80ffdb" },
-    { "name": "LITIGIO", "value": 2100, "color": "#708090" },
-    { "name": "DERECHO TRIBUTARIO", "value": 1850, "color": "#e6d6b4" },
-    { "name": "DERECHO INMOBILIARIO", "value": 1650, "color": "#2a9d8f" },
-    { "name": "DERECHO PENAL", "value": 1450, "color": "#e76f51" },
-    { "name": "ENERGÍA", "value": 1250, "color": "#225544" },
-    { "name": "COMPLIANCE", "value": 1050, "color": "#00264b" }
+  "projectCosts": [
+    {
+      "project_id": 1,
+      "project_name": "Fusión Corporativa ABC",
+      "project_code": "ABC-001",
+      "client_name": "Corporación ABC S.A.",
+      "total_cost": 2400000,
+      "total_hours": 16.0,
+      "billable_hours": 15.5
+    },
+    {
+      "project_id": 2,
+      "project_name": "Reestructuración Laboral XYZ",
+      "project_code": "XYZ-002",
+      "client_name": "Grupo Empresarial XYZ",
+      "total_cost": 1000000,
+      "total_hours": 11.0,
+      "billable_hours": 10.5
+    },
+    {
+      "project_id": 3,
+      "project_name": "Litigio Comercial Delta",
+      "project_code": "DEL-003",
+      "client_name": "Inversiones Delta Ltda.",
+      "total_cost": 1050000,
+      "total_hours": 7.0,
+      "billable_hours": 7.0
+    },
+    {
+      "project_id": 4,
+      "project_name": "Asesoría Tributaria Omega",
+      "project_code": "OMG-004",
+      "client_name": "Holdings Omega S.A.",
+      "total_cost": 440000,
+      "total_hours": 5.5,
+      "billable_hours": 0
+    },
+    {
+      "project_id": 5,
+      "project_name": "Due Diligence Beta",
+      "project_code": "BET-005",
+      "client_name": "Compañía Beta S.A.",
+      "total_cost": 360000,
+      "total_hours": 4.0,
+      "billable_hours": 4.0
+    }
   ],
-  "filteredMetrics": {
-    "totalRevenue": 503000,
-    "promedioDiasFacturacion": 18,
-    "promedioDiasPago": 32,
-    "horasPendientes": 1250
-  },
-  "clientSpecificData": {
-    "Corporación ABC S.A.": {
-      "filteredMetrics": {
-        "totalRevenue": 62000,
-        "promedioDiasFacturacion": 15,
-        "promedioDiasPago": 28,
-        "horasPendientes": 120
-      },
-      "overallRevenueChart": [
-        { "month": "2025-01", "revenue": 5000 },
-        { "month": "2025-02", "revenue": 5330 },
-        { "month": "2025-03", "revenue": 5780 },
-        { "month": "2025-04", "revenue": 5440 },
-        { "month": "2025-05", "revenue": 5670 },
-        { "month": "2025-06", "revenue": 6000 },
-        { "month": "2025-07", "revenue": 6220 },
-        { "month": "2025-08", "revenue": 6440 },
-        { "month": "2025-09", "revenue": 6670 }
-      ],
-      "areasChart": [
-        { "name": "CORPORATIVO", "value": 650, "color": "#86626e" },
-        { "name": "DERECHO LABORAL", "value": 350, "color": "#80ffdb" },
-        { "name": "LITIGIO", "value": 240, "color": "#708090" }
+  "userProjectCosts": [
+    {
+      "user_id": 1,
+      "user_name": "María González",
+      "total_cost": 2250000,
+      "total_hours": 15.0,
+      "project_count": 2
+    },
+    {
+      "user_id": 2,
+      "user_name": "Juan Pérez",
+      "total_cost": 1740000,
+      "total_hours": 14.5,
+      "project_count": 1
+    },
+    {
+      "user_id": 3,
+      "user_name": "Ana Martínez",
+      "total_cost": 1050000,
+      "total_hours": 11.0,
+      "project_count": 1
+    },
+    {
+      "user_id": 4,
+      "user_name": "Carlos Rodríguez",
+      "total_cost": 440000,
+      "total_hours": 5.5,
+      "project_count": 1
+    },
+    {
+      "user_id": 5,
+      "user_name": "Laura Sánchez",
+      "total_cost": 360000,
+      "total_hours": 4.0,
+      "project_count": 1
+    }
+  ],
+  "professionalProjectDetails": [
+    {
+      "project_id": 1,
+      "project_name": "Fusión Corporativa ABC",
+      "project_code": "ABC-001",
+      "client_name": "Corporación ABC S.A.",
+      "client_code": "ABC",
+      "total_hours": 16.0,
+      "total_cost": 2400000,
+      "entries_count": 3
+    },
+    {
+      "project_id": 2,
+      "project_name": "Reestructuración Laboral XYZ",
+      "project_code": "XYZ-002",
+      "client_name": "Grupo Empresarial XYZ",
+      "client_code": "XYZ",
+      "total_hours": 11.0,
+      "total_cost": 1000000,
+      "entries_count": 2
+    },
+    {
+      "project_id": 3,
+      "project_name": "Litigio Comercial Delta",
+      "project_code": "DEL-003",
+      "client_name": "Inversiones Delta Ltda.",
+      "client_code": "DEL",
+      "total_hours": 7.0,
+      "total_cost": 1050000,
+      "entries_count": 1
+    },
+    {
+      "project_id": 4,
+      "project_name": "Asesoría Tributaria Omega",
+      "project_code": "OMG-004",
+      "client_name": "Holdings Omega S.A.",
+      "client_code": "OMG",
+      "total_hours": 5.5,
+      "total_cost": 440000,
+      "entries_count": 1
+    },
+    {
+      "project_id": 5,
+      "project_name": "Due Diligence Beta",
+      "project_code": "BET-005",
+      "client_name": "Compañía Beta S.A.",
+      "client_code": "BET",
+      "total_hours": 4.0,
+      "total_cost": 360000,
+      "entries_count": 1
+    }
+  ],
+  "clientCosts": [
+    {
+      "client_name": "Corporación ABC S.A.",
+      "client_code": "ABC",
+      "client_group_name": "Grupo ABC",
+      "total_cost": 2400000,
+      "total_hours": 16.0,
+      "billable_hours": 15.5,
+      "project_count": 1,
+      "projects": [
+        {
+          "project_id": 1,
+          "project_name": "Fusión Corporativa ABC",
+          "project_code": "ABC-001",
+          "cost": 2400000,
+          "hours": 16.0
+        }
       ]
     },
-    "Grupo Empresarial XYZ": {
-      "filteredMetrics": {
-        "totalRevenue": 56000,
-        "promedioDiasFacturacion": 12,
-        "promedioDiasPago": 25,
-        "horasPendientes": 110
-      },
-      "overallRevenueChart": [
-        { "month": "2025-01", "revenue": 4670 },
-        { "month": "2025-02", "revenue": 5000 },
-        { "month": "2025-03", "revenue": 5330 },
-        { "month": "2025-04", "revenue": 5110 },
-        { "month": "2025-05", "revenue": 5440 },
-        { "month": "2025-06", "revenue": 5670 },
-        { "month": "2025-07", "revenue": 5890 },
-        { "month": "2025-08", "revenue": 6110 },
-        { "month": "2025-09", "revenue": 6330 }
-      ],
-      "areasChart": [
-        { "name": "DERECHO LABORAL", "value": 580, "color": "#80ffdb" },
-        { "name": "CORPORATIVO", "value": 420, "color": "#86626e" },
-        { "name": "DERECHO TRIBUTARIO", "value": 150, "color": "#e6d6b4" }
+    {
+      "client_name": "Grupo Empresarial XYZ",
+      "client_code": "XYZ",
+      "client_group_name": null,
+      "total_cost": 1000000,
+      "total_hours": 11.0,
+      "billable_hours": 10.5,
+      "project_count": 1,
+      "projects": [
+        {
+          "project_id": 2,
+          "project_name": "Reestructuración Laboral XYZ",
+          "project_code": "XYZ-002",
+          "cost": 1000000,
+          "hours": 11.0
+        }
       ]
     },
-    "Inversiones Delta Ltda.": {
-      "filteredMetrics": {
-        "totalRevenue": 49000,
-        "promedioDiasFacturacion": 20,
-        "promedioDiasPago": 35,
-        "horasPendientes": 95
-      },
-      "overallRevenueChart": [
-        { "month": "2025-01", "revenue": 4220 },
-        { "month": "2025-02", "revenue": 4440 },
-        { "month": "2025-03", "revenue": 4780 },
-        { "month": "2025-04", "revenue": 4560 },
-        { "month": "2025-05", "revenue": 4890 },
-        { "month": "2025-06", "revenue": 5110 },
-        { "month": "2025-07", "revenue": 5330 },
-        { "month": "2025-08", "revenue": 5560 },
-        { "month": "2025-09", "revenue": 5780 }
-      ],
-      "areasChart": [
-        { "name": "LITIGIO", "value": 520, "color": "#708090" },
-        { "name": "DERECHO PENAL", "value": 280, "color": "#e76f51" },
-        { "name": "DERECHO INMOBILIARIO", "value": 180, "color": "#2a9d8f" }
+    {
+      "client_name": "Inversiones Delta Ltda.",
+      "client_code": "DEL",
+      "client_group_name": null,
+      "total_cost": 1050000,
+      "total_hours": 7.0,
+      "billable_hours": 7.0,
+      "project_count": 1,
+      "projects": [
+        {
+          "project_id": 3,
+          "project_name": "Litigio Comercial Delta",
+          "project_code": "DEL-003",
+          "cost": 1050000,
+          "hours": 7.0
+        }
+      ]
+    },
+    {
+      "client_name": "Holdings Omega S.A.",
+      "client_code": "OMG",
+      "client_group_name": "Grupo Omega",
+      "total_cost": 440000,
+      "total_hours": 5.5,
+      "billable_hours": 0,
+      "project_count": 1,
+      "projects": [
+        {
+          "project_id": 4,
+          "project_name": "Asesoría Tributaria Omega",
+          "project_code": "OMG-004",
+          "cost": 440000,
+          "hours": 5.5
+        }
+      ]
+    },
+    {
+      "client_name": "Compañía Beta S.A.",
+      "client_code": "BET",
+      "client_group_name": null,
+      "total_cost": 360000,
+      "total_hours": 4.0,
+      "billable_hours": 4.0,
+      "project_count": 1,
+      "projects": [
+        {
+          "project_id": 5,
+          "project_name": "Due Diligence Beta",
+          "project_code": "BET-005",
+          "cost": 360000,
+          "hours": 4.0
+        }
       ]
     }
-  }
+  ]
 }

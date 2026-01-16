@@ -36,7 +36,7 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate("/dashboard");
+      navigate("/facturacion");
     }
   }, [user, navigate]);
 
@@ -74,7 +74,7 @@ const Auth = () => {
         variant: "destructive",
       });
     } else {
-      navigate("/dashboard");
+      navigate("/facturacion");
     }
   };
 

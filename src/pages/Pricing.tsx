@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/collapsible";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import mockPricingData from "@/lib/mockPricingData.json";
+import { getPricingData, getFullPricingData } from "@/lib/mockDataUtils";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
@@ -234,18 +234,11 @@ const Pricing = () => {
           // Simulate a small delay for realistic loading
           await new Promise((resolve) => setTimeout(resolve, 300));
 
-          // Get area-specific data
-          const areaData = (mockPricingData as any).areaSpecificData?.[area];
+          // Get area-specific data from relational data
+          const areaData = getPricingData(area);
 
-          if (areaData) {
-            setPricingData({
-              avgHourlyRate: areaData.avgHourlyRate,
-              avgTotalBilled: areaData.avgTotalBilled,
-              avgHoursPerCase: areaData.avgHoursPerCase,
-              totalCases: areaData.totalCases,
-              medianHourlyRate: areaData.medianHourlyRate,
-              seniorityLevels: areaData.seniorityLevels,
-            });
+          if (areaData && areaData.totalCases > 0) {
+            setPricingData(areaData);
 
             // Initialize seniority hours distribution
             if (areaData.seniorityLevels.length > 0) {
@@ -267,18 +260,17 @@ const Pricing = () => {
               setSeniorityHours(initialHours);
             }
           } else {
-            // Fallback: use generic data with all seniority levels from mock data
-            const seniorityLevelsData =
-              (mockPricingData as any).seniorityLevels || {};
-            const seniorityLevels = Object.entries(seniorityLevelsData).map(
-              ([levelKey, levelData]: [string, any]) => ({
-                level: levelKey,
-                label: levelData.label,
-                avgHourlyRate: levelData.avgHourlyRate,
-                professionals: ["Profesional 1", "Profesional 2"],
-                color: levelData.color,
-              })
-            );
+            // Fallback: use generic data with all seniority levels
+            const fullPricingData = getFullPricingData();
+            const seniorityLevels = Object.entries(
+              fullPricingData.seniorityLevels
+            ).map(([levelKey, levelData]: [string, any]) => ({
+              level: levelKey,
+              label: levelData.label,
+              avgHourlyRate: levelData.avgHourlyRate,
+              professionals: ["Profesional 1", "Profesional 2"],
+              color: levelData.color,
+            }));
 
             setPricingData({
               avgHourlyRate: 90000,
@@ -543,11 +535,13 @@ const Pricing = () => {
       if (useTargetMargin && targetProfitMargin > 0) {
         // Calculate total cost first
         let totalCost = 0;
+        const fullPricingData = getFullPricingData();
         pricingData.seniorityLevels.forEach((level) => {
           const hours = seniorityHours[level.level] || 0;
-          const seniorityData = (mockPricingData as any).seniorityLevels?.[
-            level.level
-          ];
+          const seniorityData =
+            fullPricingData.seniorityLevels[
+              level.level as keyof typeof fullPricingData.seniorityLevels
+            ];
           if (seniorityData) {
             totalCost += seniorityData.hourlyCost * hours;
           }
@@ -590,8 +584,9 @@ const Pricing = () => {
       // Apply target profit margin if enabled (simple mode)
       if (useTargetMargin && targetProfitMargin > 0) {
         // Estimate cost based on average hourly cost
+        const fullPricingData = getFullPricingData();
         const avgHourlyCost =
-          (mockPricingData as any).seniorityLevels?.associate?.hourlyCost || 50;
+          fullPricingData.seniorityLevels.associate?.hourlyCost || 50;
         const totalCost = avgHourlyCost * estimatedHours;
         const requiredRevenue = totalCost / (1 - targetProfitMargin / 100);
         price = requiredRevenue * complexityFactor;
@@ -630,15 +625,17 @@ const Pricing = () => {
     let totalCost = 0;
     let totalHours = 0;
 
+    const fullPricingData = getFullPricingData();
     if (useSeniorityAllocation && pricingData.seniorityLevels.length > 0) {
       pricingData.seniorityLevels.forEach((level) => {
         const hours = seniorityHours[level.level] || 0;
         totalHours += hours;
 
-        // Cost based on fixed hourly cost from mock data
-        const seniorityData = (mockPricingData as any).seniorityLevels?.[
-          level.level
-        ];
+        // Cost based on fixed hourly cost from pricing data
+        const seniorityData =
+          fullPricingData.seniorityLevels[
+            level.level as keyof typeof fullPricingData.seniorityLevels
+          ];
         if (seniorityData) {
           const cost = seniorityData.hourlyCost * hours;
           totalCost += cost;
@@ -648,7 +645,7 @@ const Pricing = () => {
       // Simple mode: estimate cost based on average
       totalHours = estimatedHours;
       const avgHourlyCost =
-        (mockPricingData as any).seniorityLevels?.associate?.hourlyCost || 50;
+        fullPricingData.seniorityLevels.associate?.hourlyCost || 50;
       totalCost = avgHourlyCost * estimatedHours;
     }
 
@@ -1209,9 +1206,12 @@ const Pricing = () => {
                                         /hora
                                       </p>
                                       {(() => {
-                                        const seniorityData = (
-                                          mockPricingData as any
-                                        ).seniorityLevels?.[level.level];
+                                        const fullPricingData =
+                                          getFullPricingData();
+                                        const seniorityData =
+                                          fullPricingData.seniorityLevels[
+                                            level.level as keyof typeof fullPricingData.seniorityLevels
+                                          ];
                                         if (seniorityData) {
                                           return (
                                             <>
@@ -1301,9 +1301,12 @@ const Pricing = () => {
                                             ).toLocaleString()}
                                           </p>
                                           {(() => {
-                                            const seniorityData = (
-                                              mockPricingData as any
-                                            ).seniorityLevels?.[level.level];
+                                            const fullPricingData =
+                                              getFullPricingData();
+                                            const seniorityData =
+                                              fullPricingData.seniorityLevels[
+                                                level.level as keyof typeof fullPricingData.seniorityLevels
+                                              ];
                                             if (seniorityData) {
                                               const cost =
                                                 seniorityData.hourlyCost *
@@ -1766,8 +1769,11 @@ const Pricing = () => {
                             <CollapsibleContent>
                               <div className="space-y-2 mt-3">
                                 {pricingData.seniorityLevels.map((level) => {
-                                  const seniorityData = (mockPricingData as any)
-                                    .seniorityLevels?.[level.level];
+                                  const fullPricingData = getFullPricingData();
+                                  const seniorityData =
+                                    fullPricingData.seniorityLevels[
+                                      level.level as keyof typeof fullPricingData.seniorityLevels
+                                    ];
                                   return (
                                     <div
                                       key={level.level}
@@ -2044,9 +2050,12 @@ const Pricing = () => {
                                     pricingData.seniorityLevels.map((level) => {
                                       const hours =
                                         seniorityHours[level.level] || 0;
-                                      const seniorityData = (
-                                        mockPricingData as any
-                                      ).seniorityLevels?.[level.level];
+                                      const fullPricingData =
+                                        getFullPricingData();
+                                      const seniorityData =
+                                        fullPricingData.seniorityLevels[
+                                          level.level as keyof typeof fullPricingData.seniorityLevels
+                                        ];
                                       if (!seniorityData || hours === 0)
                                         return null;
                                       const cost =

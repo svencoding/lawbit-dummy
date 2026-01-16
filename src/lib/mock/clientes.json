@@ -1,0 +1,2672 @@
+[
+  {
+    "id": 202,
+    "name": "TechNova Solutions",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 211,
+    "name": "GreenWave Enterprises",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 126,
+    "name": "SkyHigh Innovations",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 125,
+    "name": "Horizon Logistics",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 652,
+    "name": "CrystalClear Technologies",
+    "client_manager": "MFE",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 1,
+    "name": "BlueOcean Ventures",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 567,
+    "name": "SilverLeaf Consulting",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 679,
+    "name": "SunRise Energy",
+    "client_manager": "JRA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 523,
+    "name": "Quantum Dynamics",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 745,
+    "name": "RapidGrow Marketing",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 658,
+    "name": "EcoFusion Group",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 640,
+    "name": "MetroBuild Construction",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 649,
+    "name": "Vertex Financial Services",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 74,
+    "name": "StarLink Communications",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 502,
+    "name": "OmniHealth Medical",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 627,
+    "name": "BrightPath Education",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 361,
+    "name": "UrbanNest Realty",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 8,
+    "name": "PureWater Industries",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 335,
+    "name": "Infinity Software",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 597,
+    "name": "GlobalEdge Consulting",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 9,
+    "name": "NextGen Robotics",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 617,
+    "name": "SolarFlare Systems",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 498,
+    "name": "BlueSky Architects",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 722,
+    "name": "EcoSustain Solutions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 704,
+    "name": "CyberShield Security",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 534,
+    "name": "FreshStart Foods",
+    "client_manager": "VRO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 742,
+    "name": "PureTech Labs",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 290,
+    "name": "FutureVision Media",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 715,
+    "name": "Aurora Pharmaceuticals",
+    "client_manager": "ETO",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 529,
+    "name": "DreamScape Productions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 472,
+    "name": "SilverStream Publishing",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 303,
+    "name": "PrimeWave Technologies",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 13,
+    "name": "ClearView Financials",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 410,
+    "name": "BrightFuture Education",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 682,
+    "name": "UrbanVista Developments",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 625,
+    "name": "GreenLeaf Organics",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 622,
+    "name": "TechPulse Analytics",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 94,
+    "name": "SkyLine Construction",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 480,
+    "name": "QuickConnect Communications",
+    "client_manager": "VRO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 604,
+    "name": "EcoGuard Systems",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 657,
+    "name": "SolarPeak Energy",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 318,
+    "name": "TrueNorth Logistics",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 710,
+    "name": "CrystalWave Consulting",
+    "client_manager": "MFE",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 655,
+    "name": "TechSavvy Solutions",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 454,
+    "name": "BrightMind Academy",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 482,
+    "name": "FutureNest Realty",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 587,
+    "name": "BlueWave Shipping",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 711,
+    "name": "QuantumLeap Technologies",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 20,
+    "name": "PureHealth Supplements",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 542,
+    "name": "SilverStar Industries",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 21,
+    "name": "MetroLink Solutions",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 22,
+    "name": "BrightHorizon Education",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 642,
+    "name": "OmniWave Media",
+    "client_manager": "ETO",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 692,
+    "name": "FreshWave Organics",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 598,
+    "name": "ClearStream Financials",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 204,
+    "name": "SkyHigh Construction",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 667,
+    "name": "NextStep Technologies",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 533,
+    "name": "UrbanGrowth Developments",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 27,
+    "name": "GreenValley Organics",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 610,
+    "name": "PrimePeak Systems",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 227,
+    "name": "SilverLine Consulting",
+    "client_manager": "JRA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 28,
+    "name": "BrightPath Logistics",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 258,
+    "name": "CrystalClear Media",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 614,
+    "name": "BlueOcean Shipping",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 31,
+    "name": "PureTech Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 548,
+    "name": "TrueNorth Consulting",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 702,
+    "name": "SkyNet Communications",
+    "client_manager": "#N/A",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 37,
+    "name": "NextWave Industries",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 509,
+    "name": "GreenLeaf Ventures",
+    "client_manager": "#N/A",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 39,
+    "name": "TechFusion Analytics",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 40,
+    "name": "SolarWave Energy",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 41,
+    "name": "QuantumNet Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 473,
+    "name": "MetroBuild Developments",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 478,
+    "name": "CrystalView Technologies",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 519,
+    "name": "EcoSmart Systems",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 42,
+    "name": "UrbanLink Realty",
+    "client_manager": "JRA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 443,
+    "name": "FutureBright Education",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 686,
+    "name": "PureWater Technologies",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 44,
+    "name": "NextGen Innovations",
+    "client_manager": "JRA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 45,
+    "name": "BrightFuture Consulting",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 515,
+    "name": "SilverStream Logistics",
+    "client_manager": "MFE",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 47,
+    "name": "SkyPeak Solutions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 680,
+    "name": "TrueWave Ventures",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 363,
+    "name": "GreenWave Shipping",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 681,
+    "name": "TechPulse Solutions",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 553,
+    "name": "SolarGuard Systems",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 414,
+    "name": "UrbanView Realty",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 445,
+    "name": "BlueHorizon Logistics",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 568,
+    "name": "CrystalWave Industries",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 332,
+    "name": "FreshTech Labs",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 49,
+    "name": "BrightStream Media",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 582,
+    "name": "PrimePath Education",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 253,
+    "name": "NextStep Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 50,
+    "name": "TrueNorth Ventures",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 571,
+    "name": "GreenLine Consulting",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 703,
+    "name": "QuantumWave Technologies",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 578,
+    "name": "SolarStream Energy",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 569,
+    "name": "MetroWave Solutions",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 54,
+    "name": "ClearView Innovations",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 707,
+    "name": "SilverLeaf Ventures",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 631,
+    "name": "PureStream Industries",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 511,
+    "name": "BluePeak Shipping",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 561,
+    "name": "NextGen Media",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 55,
+    "name": "GreenGuard Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 56,
+    "name": "BrightMind Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 463,
+    "name": "SkyLine Ventures",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 57,
+    "name": "TechSustain Labs",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 527,
+    "name": "FutureWave Energy",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 683,
+    "name": "CrystalStream Logistics",
+    "client_manager": "#N/A",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 17,
+    "name": "UrbanEdge Realty",
+    "client_manager": "JRA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 59,
+    "name": "PrimeGuard Systems",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 663,
+    "name": "EcoNest Solutions",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 226,
+    "name": "SilverWave Technologies",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 60,
+    "name": "TrueStream Consulting",
+    "client_manager": "JRA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 61,
+    "name": "SolarPeak Solutions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 728,
+    "name": "ClearWave Media",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 521,
+    "name": "GreenValley Ventures",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 675,
+    "name": "QuantumStream Technologies",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 630,
+    "name": "UrbanVista Logistics",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 516,
+    "name": "BlueStream Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 725,
+    "name": "FutureGuard Systems",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 588,
+    "name": "PureNest Developments",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 63,
+    "name": "SilverStar Ventures",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 716,
+    "name": "TrueNest Realty",
+    "client_manager": "SLO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 64,
+    "name": "BrightPeak Media",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 424,
+    "name": "SkyHigh Ventures",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 65,
+    "name": "GreenNest Technologies",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 250,
+    "name": "NextStep Logistics",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 634,
+    "name": "SolarNest Energy",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 532,
+    "name": "CrystalPeak Technologies",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 645,
+    "name": "TrueVision Media",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 545,
+    "name": "MetroStream Ventures",
+    "client_manager": "JRA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 470,
+    "name": "UrbanWave Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 400,
+    "name": "PrimeStream Industries",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 66,
+    "name": "ClearPeak Systems",
+    "client_manager": "VRO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 435,
+    "name": "FreshStream Logistics",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 549,
+    "name": "SilverVista Consulting",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 487,
+    "name": "QuantumNest Solutions",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 68,
+    "name": "TrueGuard Technologies",
+    "client_manager": "SLO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 665,
+    "name": "UrbanStream Developments",
+    "client_manager": "#N/A",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 507,
+    "name": "TechStream Innovations",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 446,
+    "name": "BlueNest Logistics",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 718,
+    "name": "SilverPeak Technologies",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 699,
+    "name": "UrbanGuard Ventures",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 676,
+    "name": "SkyNest Innovations",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 496,
+    "name": "PureStream Logistics",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 348,
+    "name": "NextStream Solutions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 721,
+    "name": "QuantumNest Developments",
+    "client_manager": "MFE",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 700,
+    "name": "ClearNest Technologies",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 687,
+    "name": "BrightNest Consulting",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 79,
+    "name": "FutureStream Systems",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 80,
+    "name": "NextNest Logistics",
+    "client_manager": "#N/A",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 201,
+    "name": "QuantumNest Innovations",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 81,
+    "name": "FutureNest Ventures",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 646,
+    "name": "BrightStream Systems",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 82,
+    "name": "UrbanStream Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 83,
+    "name": "PrimeStream Developments",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 448,
+    "name": "QuantumNest Ventures",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 84,
+    "name": "UrbanStream Innovations",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 739,
+    "name": "FutureNest Innovations",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 370,
+    "name": "QuantumStream Ventures",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 566,
+    "name": "PrimeStream Systems",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 541,
+    "name": "ClearNest Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 740,
+    "name": "QuantumStream Innovations",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 85,
+    "name": "PrimeStream Ventures",
+    "client_manager": "JRA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 670,
+    "name": "FutureStream Developments",
+    "client_manager": "ETO",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 87,
+    "name": "PrimeStream Innovations",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 650,
+    "name": "ClearNest Developments",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 371,
+    "name": "UrbanStream Ventures",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 600,
+    "name": "FutureNest Developments",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 386,
+    "name": "UrbanNest Solutions",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 637,
+    "name": "FreshStream Solutions",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 526,
+    "name": "SilverNest Systems",
+    "client_manager": "ACA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 693,
+    "name": "FutureStream Solutions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 551,
+    "name": "SolarStream Solutions",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 89,
+    "name": "TechNest Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 263,
+    "name": "TrueStream Systems",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 425,
+    "name": "Orbit",
+    "client_manager": "#N/A",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 706,
+    "name": "PrimeNest Developments",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 593,
+    "name": "UrbanNest Developments",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 563,
+    "name": "NextNest Developments",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 92,
+    "name": "CrystalNest Solutions",
+    "client_manager": "JRA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 514,
+    "name": "TechNest Solutions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 602,
+    "name": "BlueNest Developments",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 97,
+    "name": "NextNest Ventures",
+    "client_manager": "MFE",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 488,
+    "name": "SolarNest Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 620,
+    "name": "BrightNest Ventures",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 475,
+    "name": "GreenNest Systems",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 724,
+    "name": "FutureNest Solutions",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 709,
+    "name": "ClearStream Developments",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 296,
+    "name": "FreshNest Solutions",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 441,
+    "name": "BrightStream Ventures",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 434,
+    "name": "GreenNest Innovations",
+    "client_manager": "#N/A",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 562,
+    "name": "CrystalStream Systems",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 499,
+    "name": "TrueStream Ventures",
+    "client_manager": "SLO",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 326,
+    "name": "SolarNest Ventures",
+    "client_manager": "MFE",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 423,
+    "name": "MetroNest Solutions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 359,
+    "name": "TechNest Ventures",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 632,
+    "name": "FreshStream Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 101,
+    "name": "UrbanNest Innovations",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 674,
+    "name": "BlueNest Solutions",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 103,
+    "name": "ClearNest Ventures",
+    "client_manager": "MFE",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 104,
+    "name": "CrystalNest Developments",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 479,
+    "name": "BrightNest Solutions",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 517,
+    "name": "GreenStream Ventures",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 574,
+    "name": "TrueNest Developments",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 474,
+    "name": "TechNest Innovations",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 626,
+    "name": "UrbanNest Systems",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 661,
+    "name": "PrimeNest Ventures",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 450,
+    "name": "SolarStream Innovations",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 717,
+    "name": "FreshNest Ventures",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 712,
+    "name": "ClearStream Ventures",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 107,
+    "name": "MetroNest Developments",
+    "client_manager": "MFE",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 114,
+    "name": "BrightStream Innovations",
+    "client_manager": "JRA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 619,
+    "name": "GreenNest Ventures",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 539,
+    "name": "SilverNest Innovations",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 513,
+    "name": "TrueStream Developments",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 418,
+    "name": "BlueNest Ventures",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 254,
+    "name": "ClearNest Innovations",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 599,
+    "name": "FreshStream Developments",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 653,
+    "name": "CrystalNest Innovations",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 554,
+    "name": "BrightNest Systems",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 738,
+    "name": "PrimeStream Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 732,
+    "name": "GreenStream Developments",
+    "client_manager": "SLO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 494,
+    "name": "TechNest Developments",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 611,
+    "name": "NextNest Systems",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 223,
+    "name": "UrbanNest Ventures",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 616,
+    "name": "SolarNest Innovations",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 409,
+    "name": "TrueNest Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 633,
+    "name": "MetroNest Ventures",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 447,
+    "name": "ClearStream Innovations",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 698,
+    "name": "BlueNest Systems",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 672,
+    "name": "CrystalStream Ventures",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 636,
+    "name": "PrimeNest Innovations",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 438,
+    "name": "GreenNest Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 746,
+    "name": "SilverNest Developments",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 365,
+    "name": "FreshNest Developments",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 324,
+    "name": "ClearNest Solutions",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 302,
+    "name": "BrightNest Innovations",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 647,
+    "name": "TrueStream Solutions",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 128,
+    "name": "GreenStream Innovations",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 666,
+    "name": "NextNest Solutions",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 399,
+    "name": "CrystalNest Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 615,
+    "name": "FreshStream Innovations",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 320,
+    "name": "MetroNest Innovations",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 325,
+    "name": "ClearStream Solutions",
+    "client_manager": "MFE",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 639,
+    "name": "FutureStream Innovations",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 531,
+    "name": "TrueNest Innovations",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 648,
+    "name": "SolarStream Ventures",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 656,
+    "name": "BlueNest Innovations",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 669,
+    "name": "BrightStream Developments",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 525,
+    "name": "MetroNest Systems",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 662,
+    "name": "CrystalStream Solutions",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 577,
+    "name": "SilverNest Ventures",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 581,
+    "name": "PrimeNest Systems",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 743,
+    "name": "ClearStream Systems",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 573,
+    "name": "TrueStream Innovations",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 440,
+    "name": "BrightNest Developments",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 696,
+    "name": "SolarNest Developments",
+    "client_manager": "JRA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 133,
+    "name": "FreshNest Innovations",
+    "client_manager": "MFE",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 621,
+    "name": "CrystalStream Developments",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 134,
+    "name": "GreenStream Systems",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 560,
+    "name": "TrueNest Ventures",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 559,
+    "name": "CrystalNest Ventures",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 461,
+    "name": "FutureStream Ventures",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 726,
+    "name": "NextNest Innovations",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 367,
+    "name": "PrimeNest Solutions",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 192,
+    "name": "CrystalStream Innovations",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 607,
+    "name": "FreshStream Ventures",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 605,
+    "name": "TrueNest Solutions",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 495,
+    "name": "GreenNest Developments",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 584,
+    "name": "FreshNest Systems",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 585,
+    "name": "SilverNest Solutions",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 576,
+    "name": "SolarNest Solutions",
+    "client_manager": "ETO",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 406,
+    "name": "BrightStream Solutions",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 719,
+    "name": "SolarStream Developments",
+    "client_manager": "MFE",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 408,
+    "name": "Soluciones TecNova",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 730,
+    "name": "Empresas OndaVerde",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 416,
+    "name": "Innovaciones CieloAlto",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 612,
+    "name": "Logística Horizonte",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 505,
+    "name": "Tecnologías ClaroCristal",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 299,
+    "name": "Venturas OcéanoAzul",
+    "client_manager": "MFE",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 594,
+    "name": "Consultora HojaPlateada",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 213,
+    "name": "Energía Amanecer",
+    "client_manager": "SLO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 546,
+    "name": "Dinámicas Quantum",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 407,
+    "name": "Marketing CrecimientoRápido",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 575,
+    "name": "Grupo EcoFusión",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 589,
+    "name": "Construcciones MetroConstruye",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 403,
+    "name": "Servicios Financieros Vértice",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 689,
+    "name": "Comunicaciones EnlaceEstelar",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 528,
+    "name": "Salud OmniSalud",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 139,
+    "name": "Educación CaminoBrillante",
+    "client_manager": "SLO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 654,
+    "name": "Bienes Raíces NidoUrbano",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 536,
+    "name": "Industrias AguaPura",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 734,
+    "name": "Software Infinito",
+    "client_manager": "VRO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 609,
+    "name": "Consultora BordeGlobal",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 579,
+    "name": "Robótica NuevaGeneración",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 143,
+    "name": "Sistemas LlamaSolar",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 694,
+    "name": "Arquitectos CieloAzul",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 628,
+    "name": "Soluciones EcoSostenible",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 586,
+    "name": "Seguridad CiberEscudo",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 558,
+    "name": "Alimentos NuevoComienzo",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 144,
+    "name": "Laboratorios PuraTecnología",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 398,
+    "name": "Medios VisiónFutura",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 512,
+    "name": "Farmacéutica Aurora",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 145,
+    "name": "Producciones PaisajeSoñado",
+    "client_manager": "JRA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 644,
+    "name": "Editorial ArroyoPlateado",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 695,
+    "name": "Tecnologías OndaPrimera",
+    "client_manager": "MFE",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 685,
+    "name": "Finanzas VistaClara",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 530,
+    "name": "Educación FuturoBrillante",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 460,
+    "name": "Desarrollos VistaUrbana",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 340,
+    "name": "Orgánicos HojaVerde",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 747,
+    "name": "Analítica PulsoTecnológico",
+    "client_manager": "#N/A",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 659,
+    "name": "Construcción LíneaCielo",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 149,
+    "name": "Comunicaciones ConexiónRápida",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 151,
+    "name": "Sistemas EcoGuardia",
+    "client_manager": "MFE",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 453,
+    "name": "Energía PicoSolar",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 152,
+    "name": "Logística NorteVerdadero",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 154,
+    "name": "Consultora OndaCristalina",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 427,
+    "name": "Soluciones TecIngeniosas",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 565,
+    "name": "Academia MenteBrillante",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 570,
+    "name": "Bienes Raíces NidoFuturo",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 500,
+    "name": "Envíos OlaAzul",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 449,
+    "name": "Tecnologías SaltoCuántico",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 741,
+    "name": "Suplementos SaludPura",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 257,
+    "name": "Industrias EstrellaPlata",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 522,
+    "name": "Soluciones EnlaceMetro",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 156,
+    "name": "Educación HorizonteBrillante",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 723,
+    "name": "Medios OndaOmni",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 157,
+    "name": "Orgánicos OndaFresca",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 439,
+    "name": "Finanzas CorrienteClara",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 484,
+    "name": "Construcción CieloAlto",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 462,
+    "name": "Tecnologías PasoSiguiente",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 729,
+    "name": "Desarrollos CrecimientoUrbano",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 590,
+    "name": "Orgánicos ValleVerde",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 160,
+    "name": "Sistemas PicoPrimero",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 705,
+    "name": "Consultoría LíneaPlata",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 643,
+    "name": "Logística CaminoBrillante",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 390,
+    "name": "Medios ClaroCristal",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 162,
+    "name": "Envíos OcéanoAzul",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 71,
+    "name": "Soluciones TecPura",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 287,
+    "name": "Consultoría NorteVerdadero",
+    "client_manager": "SLO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 744,
+    "name": "Comunicaciones RedCielo",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 735,
+    "name": "Industrias OndaSiguiente",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 164,
+    "name": "Venturas HojaVerde",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 360,
+    "name": "Analítica FusiónTec",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 168,
+    "name": "Energía OndaSolar",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 613,
+    "name": "Soluciones RedCuántica",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 170,
+    "name": "Desarrollos ConstruyeMetro",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 172,
+    "name": "Tecnologías VistaCristalina",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 397,
+    "name": "Sistemas EcoInteligente",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 673,
+    "name": "Bienes Raíces EnlaceUrbano",
+    "client_manager": "ETO",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 555,
+    "name": "Educación BrilloFuturo",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 259,
+    "name": "Tecnologías AguaPura",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 221,
+    "name": "Innovaciones NuevaGeneración",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 197,
+    "name": "Consultoría FuturoBrillante",
+    "client_manager": "JRA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 708,
+    "name": "Logística CorrientePlateada",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 175,
+    "name": "Desarrollos NidoPrimero",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 537,
+    "name": "Soluciones PicoCielo",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 557,
+    "name": "Venturas OndaVerdadera",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 714,
+    "name": "Envíos OndaVerde",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 385,
+    "name": "Soluciones PulsoTec",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 476,
+    "name": "Sistemas GuardiaSolar",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 688,
+    "name": "Bienes Raíces VistaUrbana",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 668,
+    "name": "Logística HorizonteAzul",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 508,
+    "name": "Industrias OndaCristal",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 727,
+    "name": "Laboratorios TecFresco",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 214,
+    "name": "Medios CorrienteBrillante",
+    "client_manager": "VRO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 690,
+    "name": "Educación CaminoPrimero",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 148,
+    "name": "Soluciones PasoSiguiente",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 684,
+    "name": "Venturas NorteVerdadero",
+    "client_manager": "VRO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 179,
+    "name": "Desarrollos NidoUrbano",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 444,
+    "name": "Consultoría LíneaVerde",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 346,
+    "name": "Tecnologías OndaCuántica",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 180,
+    "name": "Energía CorrienteSolar",
+    "client_manager": "JRA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 547,
+    "name": "Soluciones OndaMetro",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 641,
+    "name": "Innovaciones VistaClara",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 697,
+    "name": "Venturas HojaPlateada",
+    "client_manager": "JRA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 404,
+    "name": "Industrias ArroyoPuro",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 635,
+    "name": "Envíos PicoAzul",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 486,
+    "name": "Medios NuevaGeneración",
+    "client_manager": "#N/A",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 701,
+    "name": "Sistemas GuardiaVerde",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 493,
+    "name": "Soluciones MenteBrillante",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 289,
+    "name": "Venturas LíneaCielo",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 305,
+    "name": "Laboratorios TecSostenible",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 255,
+    "name": "Energía OndaFutura",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 231,
+    "name": "Logística CorrienteCristalina",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 426,
+    "name": "Bienes Raíces EnlaceBorde",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 247,
+    "name": "Sistemas GuardiaPico",
+    "client_manager": "SLO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 660,
+    "name": "Soluciones EcoNido",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 638,
+    "name": "Tecnologías OndaPlata",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 274,
+    "name": "Consultoría CorrienteVerdadera",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 524,
+    "name": "Desarrollos NidoSiguiente",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 401,
+    "name": "Soluciones PicoSolar",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 596,
+    "name": "Medios OndaClara",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 591,
+    "name": "Venturas ValleVerde",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 437,
+    "name": "Tecnologías CorrienteCuántica",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 420,
+    "name": "Logística VistaUrbana",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 651,
+    "name": "Soluciones OndaBrillante",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 552,
+    "name": "Sistemas GuardiaFutura",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 483,
+    "name": "Desarrollos NidoPuro",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 664,
+    "name": "Venturas EstrellaPlata",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 564,
+    "name": "Bienes Raíces NidoVerdadero",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 417,
+    "name": "Soluciones NidoCristalino",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 736,
+    "name": "Medios PicoBrillante",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 458,
+    "name": "Innovaciones NidoCielo",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 490,
+    "name": "Tecnologías NidoVerde",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 492,
+    "name": "Logística PasoSiguiente",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 186,
+    "name": "Soluciones TecNido",
+    "client_manager": "MFE",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 485,
+    "name": "Energía NidoSolar",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 187,
+    "name": "Tecnologías OndaPico",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 618,
+    "name": "Medios VisiónVerdadera",
+    "client_manager": "ETO",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 595,
+    "name": "Venturas CorrienteMetro",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 189,
+    "name": "Soluciones OndaUrbana",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 543,
+    "name": "Industrias CorrientePrimera",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 592,
+    "name": "Desarrollos NidoAzul",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 629,
+    "name": "Sistemas PicoClaro",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 603,
+    "name": "Venturas NidoSiguiente",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 191,
+    "name": "Logística EnlaceFresco",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 477,
+    "name": "Consultoría VistaPlata",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 540,
+    "name": "Soluciones NidoCuántico",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 677,
+    "name": "Sistemas NidoSolar",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 623,
+    "name": "Tecnologías GuardiaVerdadera",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 671,
+    "name": "Desarrollos CorrienteBrillante",
+    "client_manager": "MSA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 193,
+    "name": "Venturas NidoBrillante",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 550,
+    "name": "Soluciones NidoVerde",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 194,
+    "name": "Innovaciones TecOnda",
+    "client_manager": "JRA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 624,
+    "name": "Soluciones NidoFuturo",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 606,
+    "name": "Desarrollos CorrienteClara",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 608,
+    "name": "Logística NidoAzul",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 349,
+    "name": "Tecnologías PicoPlateado",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 556,
+    "name": "Venturas GuardiaUrbana",
+    "client_manager": "ETO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 497,
+    "name": "Soluciones NidoFresco",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 506,
+    "name": "Venturas CorrienteBrillante",
+    "client_manager": "MSA",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 196,
+    "name": "Logística NidoPuro",
+    "client_manager": "MSA",
+    "fee_type": "RETAINER"
+  },
+  {
+    "id": 737,
+    "name": "Soluciones OndaSiguiente",
+    "client_manager": "JRA",
+    "fee_type": "HITOS"
+  },
+  {
+    "id": 678,
+    "name": "Innovaciones NidoVerde",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 501,
+    "name": "Sistemas OndaCristalina",
+    "client_manager": "MFE",
+    "fee_type": "FLAT FEE"
+  },
+  {
+    "id": 383,
+    "name": "Venturas NidoVerdadero",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 286,
+    "name": "Desarrollos NidoCuántico",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 313,
+    "name": "Soluciones ClaroNido",
+    "client_manager": "JRA",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 510,
+    "name": "Venturas OndaSolar",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 212,
+    "name": "Soluciones VistaMetro",
+    "client_manager": "SLO",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 583,
+    "name": "Consultoría NidoBrillante",
+    "client_manager": "MFE",
+    "fee_type": "TASA"
+  },
+  {
+    "id": 200,
+    "name": "Venturas TecNido",
+    "client_manager": "MSA",
+    "fee_type": "TASA"
+  }
+]

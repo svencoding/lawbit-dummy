@@ -72,10 +72,18 @@ import {
   PieChart,
   Cell,
 } from "recharts";
-import mockClientesData from "@/lib/mockClientesData.json";
+import {
+  getClientCosts,
+  getProjectCosts,
+  getUserCosts,
+  getTransformedTimeEntries,
+} from "@/lib/mockDataUtils";
+import { ClientCost, TimeEntry, ProjectCost } from "@/lib/types";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
+
+// Removed MockDataStructure - using utility functions directly
 
 interface ClientSummary {
   nombre: string;
@@ -87,6 +95,179 @@ interface ClientSummary {
   facturasPendientes: number;
   horasTrabajadas: number;
 }
+
+// Map project names to areas for chart generation
+const getAreaFromProjectName = (projectName: string): string => {
+  const name = projectName.toLowerCase();
+  if (
+    name.includes("corporativa") ||
+    name.includes("fusión") ||
+    name.includes("due diligence")
+  ) {
+    return "CORPORATIVO";
+  }
+  if (name.includes("laboral") || name.includes("reestructuración")) {
+    return "DERECHO LABORAL";
+  }
+  if (name.includes("litigio") || name.includes("comercial")) {
+    return "LITIGIO";
+  }
+  if (name.includes("tributaria") || name.includes("tributario")) {
+    return "DERECHO TRIBUTARIO";
+  }
+  if (name.includes("inmobiliario")) {
+    return "DERECHO INMOBILIARIO";
+  }
+  if (name.includes("penal")) {
+    return "DERECHO PENAL";
+  }
+  if (name.includes("energía") || name.includes("energia")) {
+    return "ENERGÍA";
+  }
+  if (name.includes("compliance")) {
+    return "COMPLIANCE";
+  }
+  return "CORPORATIVO"; // Default
+};
+
+// Transform data for Clientes page
+const transformMockData = (
+  startDate?: Date,
+  endDate?: Date,
+  selectedClientFilter?: string
+) => {
+  const clientCosts = getClientCosts(startDate, endDate);
+  const timeEntries = getTransformedTimeEntries(startDate, endDate).map((e) => {
+    // Remove originalEntry from the type for compatibility
+    const { originalEntry, ...entry } = e;
+    return entry as TimeEntry;
+  });
+  const projectCosts = getProjectCosts(startDate, endDate);
+  const userCosts = getUserCosts();
+
+  // Filter by client if specified
+  let filteredClientCosts = clientCosts;
+  let filteredTimeEntries = timeEntries;
+  let filteredProjectCosts = projectCosts;
+
+  if (selectedClientFilter && selectedClientFilter !== "all") {
+    filteredClientCosts = clientCosts.filter(
+      (c) => c.client_name === selectedClientFilter
+    );
+    filteredTimeEntries = timeEntries.filter(
+      (e) => e.client_name === selectedClientFilter
+    );
+    filteredProjectCosts = projectCosts.filter(
+      (p) => p.client_name === selectedClientFilter
+    );
+  }
+
+  // Transform clientCosts to clients array
+  const clients: ClientSummary[] = clientCosts.map((client) => {
+    // Calculate invoice counts (simulate based on projects)
+    const invoiceCount = Math.max(1, Math.floor(client.project_count * 2.5));
+    const paidInvoices = Math.floor(invoiceCount * 0.75);
+    const pendingInvoices = invoiceCount - paidInvoices;
+
+    // Get dates from time entries
+    const clientEntries = timeEntries.filter(
+      (e) => e.client_name === client.client_name
+    );
+    const dates = clientEntries.map((e) => e.date).sort();
+    const firstDate = dates[0] || null;
+    const lastDate = dates[dates.length - 1] || null;
+
+    return {
+      nombre: client.client_name,
+      totalFacturado: client.total_cost,
+      totalFacturas: invoiceCount,
+      ultimaFactura: lastDate,
+      primeraFactura: firstDate,
+      facturasPagadas: paidInvoices,
+      facturasPendientes: pendingInvoices,
+      horasTrabajadas: client.total_hours,
+    };
+  });
+
+  // Generate revenue chart from time entries grouped by month
+  const revenueByMonth: { [key: string]: number } = {};
+  timeEntries.forEach((entry) => {
+    if (
+      selectedClientFilter &&
+      selectedClientFilter !== "all" &&
+      entry.client_name !== selectedClientFilter
+    ) {
+      return;
+    }
+    const date = new Date(entry.date);
+    const monthKey = `${date.getFullYear()}-${String(
+      date.getMonth() + 1
+    ).padStart(2, "0")}`;
+    // Calculate revenue from billable hours and user cost
+    const userCost = userCosts.find((uc) => uc.user_id === entry.user_id);
+    const hourlyRate = userCost?.hourly_cost || 100000;
+    const revenue = entry.billable_duration * hourlyRate;
+    revenueByMonth[monthKey] = (revenueByMonth[monthKey] || 0) + revenue;
+  });
+
+  const overallRevenueChart = Object.entries(revenueByMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, revenue]) => ({
+      month,
+      revenue: Math.round(revenue),
+    }));
+
+  // Generate areas chart from project costs
+  const areasByProject: { [area: string]: number } = {};
+  projectCosts.forEach((project) => {
+    if (
+      selectedClientFilter &&
+      selectedClientFilter !== "all" &&
+      project.client_name !== selectedClientFilter
+    ) {
+      return;
+    }
+    const area = getAreaFromProjectName(project.project_name);
+    areasByProject[area] = (areasByProject[area] || 0) + project.total_hours;
+  });
+
+  const areasChart = Object.entries(areasByProject)
+    .map(([name, value]) => ({
+      name,
+      value: Math.round(value),
+      color: getAreaColor(name),
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  // Calculate filtered metrics
+  const totalRevenue = filteredClientCosts.reduce(
+    (sum, c) => sum + c.total_cost,
+    0
+  );
+  const totalHours = filteredClientCosts.reduce(
+    (sum, c) => sum + c.total_hours,
+    0
+  );
+  const billableHours = filteredClientCosts.reduce(
+    (sum, c) => sum + c.billable_hours,
+    0
+  );
+  const pendingHours = totalHours - billableHours;
+
+  const filteredMetrics = {
+    totalRevenue: Math.round(totalRevenue),
+    promedioDiasFacturacion: 18, // Simulated
+    promedioDiasPago: 32, // Simulated
+    horasPendientes: Math.round(pendingHours),
+  };
+
+  return {
+    clients,
+    overallRevenueChart,
+    areasChart,
+    filteredMetrics,
+  };
+};
 
 type SortField =
   | "nombre"
@@ -150,11 +331,11 @@ const Clientes = () => {
   >([]);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2025, 0, 1)
-  ); // 1/1/2025
+    new Date(2024, 0, 1)
+  ); // 1/1/2024
   const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2025, 8, 30)
-  ); // 30/9/2025
+    new Date(2024, 11, 31)
+  ); // 31/12/2024
   const [filteredMetrics, setFilteredMetrics] = useState({
     totalRevenue: 0,
     promedioDiasFacturacion: 0,
@@ -174,120 +355,25 @@ const Clientes = () => {
           // Simulate a small delay for realistic loading
           await new Promise((resolve) => setTimeout(resolve, 500));
 
-          // Filter mock data based on selected client (if not "all")
-          let filteredData: any;
+          // Transform new structure to expected format
+          const transformedData = transformMockData(
+            startDate,
+            endDate,
+            selectedClientFilter
+          );
 
-          if (selectedClientFilter !== "all") {
-            // Find the selected client
-            const selectedClient = mockClientesData.clients.find(
-              (c: any) => c.nombre === selectedClientFilter
-            );
+          console.log(`🎯 Using transformed mock data`, {
+            clientFilter: selectedClientFilter,
+            clientsCount: transformedData.clients.length,
+            revenueChartPoints: transformedData.overallRevenueChart.length,
+            areasCount: transformedData.areasChart.length,
+          });
 
-            if (!selectedClient) {
-              console.warn(
-                `⚠️ Client not found: ${selectedClientFilter}, using base data`
-              );
-              filteredData = {
-                clients: mockClientesData.clients,
-                overallRevenueChart: mockClientesData.overallRevenueChart,
-                areasChart: mockClientesData.areasChart,
-                filteredMetrics: mockClientesData.filteredMetrics,
-              };
-            } else {
-              // Check if we have predefined client-specific data
-              const clientData = (mockClientesData as any).clientSpecificData?.[
-                selectedClientFilter
-              ];
-
-              console.log(`🎯 Filtering by client: ${selectedClientFilter}`, {
-                hasClientData: !!clientData,
-                clientTotal: selectedClient.totalFacturado,
-              });
-
-              if (clientData) {
-                // Use predefined client-specific metrics and charts
-                filteredData = {
-                  clients: mockClientesData.clients,
-                  overallRevenueChart: clientData.overallRevenueChart,
-                  areasChart: clientData.areasChart,
-                  filteredMetrics: clientData.filteredMetrics,
-                };
-              } else {
-                // Calculate client-specific data proportionally
-                const totalRevenue =
-                  mockClientesData.filteredMetrics.totalRevenue;
-                const proportion = selectedClient.totalFacturado / totalRevenue;
-
-                // Create a deterministic hash from client name for consistent variation
-                let hash = 0;
-                for (let i = 0; i < selectedClientFilter.length; i++) {
-                  hash =
-                    (hash << 5) - hash + selectedClientFilter.charCodeAt(i);
-                  hash |= 0;
-                }
-                const variation = 0.8 + (Math.abs(hash) % 40) / 100; // 0.8 to 1.2
-
-                // Calculate client-specific metrics
-                const clientMetrics = {
-                  totalRevenue: selectedClient.totalFacturado,
-                  promedioDiasFacturacion: Math.round(
-                    mockClientesData.filteredMetrics.promedioDiasFacturacion *
-                      variation
-                  ),
-                  promedioDiasPago: Math.round(
-                    mockClientesData.filteredMetrics.promedioDiasPago *
-                      variation
-                  ),
-                  horasPendientes: Math.round(
-                    selectedClient.horasTrabajadas * 0.1 // ~10% of worked hours are pending
-                  ),
-                };
-
-                // Calculate client-specific revenue chart (proportional to total)
-                const clientRevenueChart =
-                  mockClientesData.overallRevenueChart.map((month: any) => ({
-                    month: month.month,
-                    revenue: Math.round(month.revenue * proportion),
-                  }));
-
-                // Calculate client-specific areas chart (distribute based on client's hours)
-                // Use a deterministic distribution based on the client's hash
-                const areasCount = 3 + (Math.abs(hash) % 3); // 3-5 areas
-                const baseProportions = [0.4, 0.3, 0.2, 0.07, 0.03]; // Decreasing proportions
-                const clientAreasChart = mockClientesData.areasChart
-                  .slice(0, areasCount)
-                  .map((area: any, index: number) => ({
-                    name: area.name,
-                    value: Math.round(
-                      selectedClient.horasTrabajadas * baseProportions[index]
-                    ),
-                    color: area.color,
-                  }))
-                  .filter((area: any) => area.value > 0);
-
-                filteredData = {
-                  clients: mockClientesData.clients,
-                  overallRevenueChart: clientRevenueChart,
-                  areasChart: clientAreasChart,
-                  filteredMetrics: clientMetrics,
-                };
-              }
-            }
-          } else {
-            // Use all base data when "all" is selected
-            filteredData = {
-              clients: mockClientesData.clients,
-              overallRevenueChart: mockClientesData.overallRevenueChart,
-              areasChart: mockClientesData.areasChart,
-              filteredMetrics: mockClientesData.filteredMetrics,
-            };
-          }
-
-          // Set data from mock
-          setClients(filteredData.clients);
-          setOverallRevenueChart(filteredData.overallRevenueChart);
-          setAreasChart(filteredData.areasChart);
-          setFilteredMetrics(filteredData.filteredMetrics);
+          // Set data from transformed mock
+          setClients(transformedData.clients);
+          setOverallRevenueChart(transformedData.overallRevenueChart);
+          setAreasChart(transformedData.areasChart);
+          setFilteredMetrics(transformedData.filteredMetrics);
           setDashboardData({});
 
           setDataLoading(false);

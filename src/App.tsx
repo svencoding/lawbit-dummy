@@ -6,7 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/hooks/useTheme";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
+import Facturacion from "./pages/Facturacion";
+import Utilizacion from "./pages/Utilizacion";
 import Proyecciones from "./pages/Proyecciones";
 import Clientes from "./pages/Clientes";
 import Alertas from "./pages/Alertas";
@@ -26,7 +27,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/facturacion" element={<Facturacion />} />
+            <Route path="/facturacion/utilizacion" element={<Utilizacion />} />
             <Route path="/dashboard/proyecciones" element={<Proyecciones />} />
             <Route path="/dashboard/clientes" element={<Clientes />} />
             <Route path="/dashboard/alertas" element={<Alertas />} />

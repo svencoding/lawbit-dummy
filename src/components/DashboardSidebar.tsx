@@ -20,16 +20,18 @@ import {
   Calculator,
   Settings,
   Bell,
+  Activity,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const menuItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  // { title: "Proyecciones", url: "/dashboard/proyecciones", icon: TrendingUp },
+  { title: "Facturación", url: "/facturacion", icon: LayoutDashboard },
   { title: "Clientes", url: "/dashboard/clientes", icon: Users },
+  { title: "Utilización", url: "/facturacion/utilizacion", icon: Activity },
   { title: "Alertas", url: "/dashboard/alertas", icon: Bell },
   { title: "Pricing", url: "/dashboard/pricing", icon: Calculator },
   { title: "Configuración", url: "/dashboard/settings", icon: Settings },
+  // { title: "Proyecciones", url: "/dashboard/proyecciones", icon: TrendingUp },
 ];
 
 export function DashboardSidebar() {
