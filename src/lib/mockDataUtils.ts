@@ -220,6 +220,7 @@ export function getClientCosts(
   endDate?: Date,
   clientName?: string | null,
   area?: string | null,
+  formaCobro?: string | null,
 ): ClientCost[] {
   let transformedEntries = getTransformedTimeEntries(startDate, endDate);
 
@@ -235,6 +236,14 @@ export function getClientCosts(
     transformedEntries = transformedEntries.filter((entry) => {
       const asunto = asuntosMap.get(entry.project_id);
       return asunto && asunto.practice_area === area;
+    });
+  }
+
+  // Filter by forma de cobro if provided
+  if (formaCobro) {
+    transformedEntries = transformedEntries.filter((entry) => {
+      const asunto = asuntosMap.get(entry.project_id);
+      return asunto && asunto.charge_type === formaCobro;
     });
   }
 
@@ -378,6 +387,7 @@ export function getRevenueByUser(
   startDate?: Date,
   endDate?: Date,
   clientName?: string | null,
+  formaCobro?: string | null,
 ): Array<{
   user_id: number;
   user_name: string;
@@ -391,6 +401,14 @@ export function getRevenueByUser(
     transformedEntries = transformedEntries.filter(
       (entry) => entry.client_name === clientName,
     );
+  }
+
+  // Filter by forma de cobro if provided
+  if (formaCobro) {
+    transformedEntries = transformedEntries.filter((entry) => {
+      const asunto = asuntosMap.get(entry.project_id);
+      return asunto && asunto.charge_type === formaCobro;
+    });
   }
 
   const userRevenueMap = new Map<number, {
@@ -684,6 +702,7 @@ export function getDashboardData(
   startDate?: Date,
   endDate?: Date,
   clientName?: string | null,
+  formaCobro?: string | null,
 ): DashboardData {
   const transformedEntries = getTransformedTimeEntries(startDate, endDate);
 
@@ -700,6 +719,14 @@ export function getDashboardData(
     filteredEntries = filteredEntries.filter((entry) =>
       entry.client_name === clientName
     );
+  }
+
+  // Filter entries by forma de cobro if needed
+  if (formaCobro) {
+    filteredEntries = filteredEntries.filter((entry) => {
+      const asunto = asuntosMap.get(entry.project_id);
+      return asunto && asunto.charge_type === formaCobro;
+    });
   }
 
   // Get unique clients
@@ -740,6 +767,14 @@ export function getDashboardData(
       const clienteId = f.cliente_id;
       const cliente = clientesMap.get(clienteId);
       if (!cliente || cliente.name !== clientName) {
+        return false;
+      }
+    }
+
+    // Filter by forma de cobro if needed
+    if (formaCobro) {
+      const asunto = asuntosMap.get(f.asunto_id || 0);
+      if (!asunto || asunto.charge_type !== formaCobro) {
         return false;
       }
     }

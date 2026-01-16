@@ -55,13 +55,13 @@ export const getAreaColor = (areaProfesional: string): string => {
   if (AREA_PROFESIONAL_COLORS[areaProfesional]) {
     return AREA_PROFESIONAL_COLORS[areaProfesional];
   }
-  
+
   // Try mapping
   const mappedKey = AREA_NAME_MAPPING[areaProfesional];
   if (mappedKey && AREA_PROFESIONAL_COLORS[mappedKey]) {
     return AREA_PROFESIONAL_COLORS[mappedKey];
   }
-  
+
   // Try case-insensitive match
   const upperKey = areaProfesional.toUpperCase();
   for (const [key, color] of Object.entries(AREA_PROFESIONAL_COLORS)) {
@@ -69,6 +69,6 @@ export const getAreaColor = (areaProfesional: string): string => {
       return color;
     }
   }
-  
+
   return "#6b7280"; // Default gray color
 };

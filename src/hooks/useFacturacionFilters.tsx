@@ -9,12 +9,14 @@ import {
 export interface FacturacionFilters {
   area: string | null; // e.g., "Corporativo", "Laboral", "Litigios", "Procesal"
   clientName: string | null; // Client name filter
+  formaCobro: string | null; // Forma de cobro filter (e.g., "Honorarios Fijos", "Por Hora")
 }
 
 interface FacturacionFiltersContextType {
   filters: FacturacionFilters;
   setAreaFilter: (area: string | null) => void;
   setClientFilter: (clientName: string | null) => void;
+  setFormaCobroFilter: (formaCobro: string | null) => void;
   clearFilters: () => void;
   hasActiveFilters: boolean;
 }
@@ -31,26 +33,41 @@ export function FacturacionFiltersProvider({
   const [filters, setFilters] = useState<FacturacionFilters>({
     area: null,
     clientName: null,
+    formaCobro: null,
   });
 
   const setAreaFilter = useCallback((area: string | null) => {
     setFilters((prev) => {
-      // If clicking the same area, clear it. Otherwise, set area and clear client
+      // If clicking the same area, clear it. Otherwise, set area and clear other filters
       const newArea = prev.area === area ? null : area;
       return {
         area: newArea,
         clientName: null, // Clear client when setting area
+        formaCobro: null, // Clear formaCobro when setting area
       };
     });
   }, []);
 
   const setClientFilter = useCallback((clientName: string | null) => {
     setFilters((prev) => {
-      // If clicking the same client, clear it. Otherwise, set client and clear area
+      // If clicking the same client, clear it. Otherwise, set client and clear other filters
       const newClientName = prev.clientName === clientName ? null : clientName;
       return {
         area: null, // Clear area when setting client
         clientName: newClientName,
+        formaCobro: null, // Clear formaCobro when setting client
+      };
+    });
+  }, []);
+
+  const setFormaCobroFilter = useCallback((formaCobro: string | null) => {
+    setFilters((prev) => {
+      // If clicking the same formaCobro, clear it. Otherwise, set formaCobro and clear other filters
+      const newFormaCobro = prev.formaCobro === formaCobro ? null : formaCobro;
+      return {
+        area: null, // Clear area when setting formaCobro
+        clientName: null, // Clear client when setting formaCobro
+        formaCobro: newFormaCobro,
       };
     });
   }, []);
@@ -59,10 +76,14 @@ export function FacturacionFiltersProvider({
     setFilters({
       area: null,
       clientName: null,
+      formaCobro: null,
     });
   }, []);
 
-  const hasActiveFilters = filters.area !== null || filters.clientName !== null;
+  const hasActiveFilters =
+    filters.area !== null ||
+    filters.clientName !== null ||
+    filters.formaCobro !== null;
 
   return (
     <FacturacionFiltersContext.Provider
@@ -70,6 +91,7 @@ export function FacturacionFiltersProvider({
         filters,
         setAreaFilter,
         setClientFilter,
+        setFormaCobroFilter,
         clearFilters,
         hasActiveFilters,
       }}

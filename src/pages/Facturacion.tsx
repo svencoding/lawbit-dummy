@@ -91,6 +91,7 @@ const FacturacionContent = () => {
     filters,
     setAreaFilter,
     setClientFilter,
+    setFormaCobroFilter,
     clearFilters,
     hasActiveFilters,
   } = useFacturacionFilters();
@@ -144,8 +145,8 @@ const FacturacionContent = () => {
       filtered = filtered.filter((c) => c.nombre === filters.clientName);
     }
 
-    // Note: Area filtering is already done in getClientCosts, so allClients
-    // already contains only clients with work in the selected area
+    // Note: Area and formaCobro filtering is already done in getClientCosts, so allClients
+    // already contains only clients with work matching the selected filters
 
     return filtered;
   }, [allClients, filters.clientName]);
@@ -206,14 +207,21 @@ const FacturacionContent = () => {
             selectedArea,
             startDate,
             endDate,
-            filters.clientName
+            filters.clientName,
+            filters.formaCobro
           );
 
-          // Get pie chart data - filter by client if client filter is active
-          const pieChartData = filters.clientName
-            ? getDashboardData("all", startDate, endDate, filters.clientName)
-                .facturacionPorArea
-            : allAreasData.facturacionPorArea;
+          // Get pie chart data - filter by client or formaCobro if those filters are active
+          const pieChartData =
+            filters.clientName || filters.formaCobro
+              ? getDashboardData(
+                  "all",
+                  startDate,
+                  endDate,
+                  filters.clientName,
+                  filters.formaCobro
+                ).facturacionPorArea
+              : allAreasData.facturacionPorArea;
 
           console.log(`🎯 Filtering by area: ${selectedArea}`, {
             hasAreaData: !!filteredData.areaSpecificData[selectedArea],
@@ -242,14 +250,15 @@ const FacturacionContent = () => {
             formaCobroChartLength: cachedData.formaCobroChart?.length || 0,
           });
           setDashboardData(cachedData);
-          // Fetch chart data - filter by client if client filter is active
-          if (filters.clientName && USE_MOCK_DATA) {
+          // Fetch chart data - filter by client or formaCobro if those filters are active
+          if ((filters.clientName || filters.formaCobro) && USE_MOCK_DATA) {
             // For mock data, use getDashboardData directly
             const pieChartData = getDashboardData(
               "all",
               startDate,
               endDate,
-              filters.clientName
+              filters.clientName,
+              filters.formaCobro
             ).facturacionPorArea;
             setChartData(pieChartData);
           } else {
@@ -303,14 +312,15 @@ const FacturacionContent = () => {
         console.log("✅ Datos obtenidos desde edge function");
         setDashboardData(edgeFunctionData);
 
-        // Fetch chart data - filter by client if client filter is active
-        if (filters.clientName && USE_MOCK_DATA) {
+        // Fetch chart data - filter by client or formaCobro if those filters are active
+        if ((filters.clientName || filters.formaCobro) && USE_MOCK_DATA) {
           // For mock data, use getDashboardData directly
           const pieChartData = getDashboardData(
             "all",
             startDate,
             endDate,
-            filters.clientName
+            filters.clientName,
+            filters.formaCobro
           ).facturacionPorArea;
           setChartData(pieChartData);
         } else {
@@ -352,7 +362,14 @@ const FacturacionContent = () => {
         setIsRefreshing(false);
       }
     },
-    [selectedArea, startDate, endDate, filters.area, filters.clientName]
+    [
+      selectedArea,
+      startDate,
+      endDate,
+      filters.area,
+      filters.clientName,
+      filters.formaCobro,
+    ]
   );
 
   const fetchDashboardDataLegacy = async () => {
@@ -1236,12 +1253,13 @@ const FacturacionContent = () => {
   // Fetch clients data
   useEffect(() => {
     if (user && USE_MOCK_DATA) {
-      // Fetch clients filtered by area if area filter is active
+      // Fetch clients filtered by area or formaCobro if those filters are active
       const clientCosts = getClientCosts(
         startDate,
         endDate,
         null, // Don't filter by client name here - we want all clients for the table
-        filters.area || undefined // Filter by area if active
+        filters.area || undefined, // Filter by area if active
+        filters.formaCobro || undefined // Filter by formaCobro if active
       );
       const clientsData = clientCosts
         .map((client) => ({
@@ -1251,15 +1269,23 @@ const FacturacionContent = () => {
         .sort((a, b) => b.totalFacturado - a.totalFacturado);
       setAllClients(clientsData);
 
-      // Calculate revenue by user (top 5) - filter by client if active
+      // Calculate revenue by user (top 5) - filter by client or formaCobro if active
       const userRevenue = getRevenueByUser(
         startDate,
         endDate,
-        filters.clientName
+        filters.clientName,
+        filters.formaCobro
       );
       setAllRevenueByUsers(userRevenue);
     }
-  }, [user, startDate, endDate, filters.clientName, filters.area]);
+  }, [
+    user,
+    startDate,
+    endDate,
+    filters.clientName,
+    filters.area,
+    filters.formaCobro,
+  ]);
 
   // Scroll table to show client #10 on load
   useEffect(() => {
@@ -1556,6 +1582,17 @@ const FacturacionContent = () => {
                 <span>Cliente: {filters.clientName}</span>
                 <button
                   onClick={() => setClientFilter(null)}
+                  className="ml-1 hover:bg-primary/20 rounded p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {filters.formaCobro && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                <span>Forma de Cobro: {filters.formaCobro}</span>
+                <button
+                  onClick={() => setFormaCobroFilter(null)}
                   className="ml-1 hover:bg-primary/20 rounded p-0.5"
                 >
                   <X className="h-3 w-3" />
@@ -1992,10 +2029,10 @@ const FacturacionContent = () => {
               <Card className="border-border/50">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-foreground">
-                    Facturación por Usuario (Top 5)
+                    Facturación por Encargado Comercial
                   </CardTitle>
                   <CardDescription>
-                    Usuarios con mayor facturación en el período
+                    Encargados comerciales con mayor facturación en el período
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0 pb-0 px-0">
@@ -2121,16 +2158,37 @@ const FacturacionContent = () => {
                           outerRadius={90}
                           fill="#8884d8"
                           dataKey="value"
+                          nameKey="name"
+                          onClick={(data) => {
+                            if (data?.name) {
+                              if (filters.formaCobro === data.name) {
+                                setFormaCobroFilter(null);
+                              } else {
+                                setFormaCobroFilter(data.name);
+                              }
+                            }
+                          }}
+                          style={{ cursor: "pointer" }}
                         >
                           {transformedFormaCobroChart.map(
-                            (entry: any, index: number) => (
-                              <Cell
-                                key={`cell-${index}`}
-                                fill={
-                                  PRIMARY_COLORS[index % PRIMARY_COLORS.length]
-                                }
-                              />
-                            )
+                            (entry: any, index: number) => {
+                              const isActive =
+                                filters.formaCobro === entry.name;
+                              return (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={
+                                    PRIMARY_COLORS[
+                                      index % PRIMARY_COLORS.length
+                                    ]
+                                  }
+                                  fillOpacity={isActive ? 1 : 0.9}
+                                  stroke={isActive ? "#000" : "none"}
+                                  strokeWidth={isActive ? 2.5 : 0}
+                                  style={{ cursor: "pointer" }}
+                                />
+                              );
+                            }
                           )}
                         </Pie>
                         <ChartTooltip
