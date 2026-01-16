@@ -1356,11 +1356,29 @@ const FacturacionContent = () => {
 
   const baseFacturacionData =
     chartData || dashboardData?.facturacionPorArea || [];
-  const transformedFacturacionData = baseFacturacionData.map((item: any) => ({
-    ...item,
-    facturacion: transformFinalNumber(item.facturacion),
-    meta: transformFinalNumber(item.meta),
-  }));
+
+  // Filter out segments with 0% or very small percentages, and transform data
+  const totalFacturacion = baseFacturacionData.reduce(
+    (sum: number, item: any) =>
+      sum + (transformFinalNumber(item.facturacion) || 0),
+    0
+  );
+
+  const transformedFacturacionData = baseFacturacionData
+    .map((item: any) => ({
+      ...item,
+      facturacion: transformFinalNumber(item.facturacion),
+      meta: transformFinalNumber(item.meta),
+      // Ensure color is set - use existing color or get from getAreaColor
+      color: item.color || getAreaColor(item.area),
+    }))
+    .filter((item: any) => {
+      // Filter out segments with 0% or less than 0.5% of total
+      const percent =
+        totalFacturacion > 0 ? (item.facturacion / totalFacturacion) * 100 : 0;
+      return percent >= 0.5;
+    })
+    .sort((a: any, b: any) => b.facturacion - a.facturacion); // Sort by facturacion descending
 
   // Colors for pie charts - tones of primary color (matching Top20Clientes)
   const PRIMARY_COLORS = [
@@ -1675,7 +1693,8 @@ const FacturacionContent = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0">
-              {chartData && chartData.length > 0 ? (
+              {transformedFacturacionData &&
+              transformedFacturacionData.length > 0 ? (
                 <ChartContainer
                   config={{
                     facturacion: {
@@ -1687,22 +1706,14 @@ const FacturacionContent = () => {
                     <PieChart>
                       <Pie
                         data={transformedFacturacionData}
-                        cx="50%"
+                        cx="45%"
                         cy="50%"
                         labelLine={false}
-                        label={({ area, percent }) => {
-                          if (percent == null || isNaN(percent)) {
-                            return `${area}: 0%`;
-                          }
-                          const percentValue = percent * 100;
-                          if (percentValue < 1 && percentValue > 0) {
-                            return `${area}: <1%`;
-                          }
-                          return `${area}: ${percentValue.toFixed(0)}%`;
-                        }}
-                        outerRadius={120}
+                        label={false}
+                        outerRadius={100}
                         fill="#8884d8"
                         dataKey="facturacion"
+                        nameKey="area"
                         onClick={(data) => {
                           if (data?.area) {
                             if (filters.area === data.area) {
@@ -1717,25 +1728,18 @@ const FacturacionContent = () => {
                         {transformedFacturacionData.map(
                           (entry: any, index: number) => {
                             const isActive = filters.area === entry.area;
+                            // Use color from entry if available, otherwise get it from getAreaColor
                             const baseColor =
-                              PRIMARY_COLORS[index % PRIMARY_COLORS.length];
-                            // Make active slice brighter/more opaque
-                            const fillColor = isActive
-                              ? baseColor.replace(
-                                  /hsl\(([^)]+)\)/,
-                                  (match, content) => {
-                                    // Increase opacity/brightness for active
-                                    return `hsl(${content.replace(
-                                      /\d+%\)/,
-                                      "75%)"
-                                    )}`;
-                                  }
-                                )
-                              : baseColor;
+                              entry.color || getAreaColor(entry.area);
+
+                            // For active slices, make them brighter by adjusting opacity and adding stroke
                             return (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={fillColor}
+                                fill={baseColor}
+                                fillOpacity={isActive ? 1 : 0.9}
+                                stroke={isActive ? "#000" : "none"}
+                                strokeWidth={isActive ? 2.5 : 0}
                                 style={{ cursor: "pointer" }}
                               />
                             );
@@ -1770,6 +1774,32 @@ const FacturacionContent = () => {
                           }
                           return null;
                         }}
+                      />
+                      <Legend
+                        verticalAlign="middle"
+                        align="right"
+                        layout="vertical"
+                        formatter={(value, entry: any) => {
+                          // Get the area name from the payload
+                          const areaName = entry.payload?.area || value;
+                          const total = transformedFacturacionData.reduce(
+                            (sum: number, item: any) =>
+                              sum + (item.facturacion || 0),
+                            0
+                          );
+                          const itemValue = entry.payload?.facturacion || 0;
+                          const percent =
+                            total > 0
+                              ? ((itemValue / total) * 100).toFixed(0)
+                              : "0";
+                          return `${areaName}: ${percent}%`;
+                        }}
+                        wrapperStyle={{
+                          paddingLeft: "10px",
+                          fontSize: "12px",
+                          lineHeight: "1.5",
+                        }}
+                        iconType="circle"
                       />
                     </PieChart>
                   </ResponsiveContainer>

@@ -38,7 +38,37 @@ export const AREAS_PROFESIONALES = [
   { area: "PI, TECNOLOGÍA Y DATOS", color: "#cc9900" },
 ] as const;
 
+// Mapping from common area names to constants keys
+const AREA_NAME_MAPPING: Record<string, string> = {
+  "Consultoría": "COMPLIANCE",
+  "Corporativo": "CORPORATIVO",
+  "Laboral": "DERECHO LABORAL",
+  "Procesal": "LITIGIO",
+  "Penal": "DERECHO PENAL",
+  "Litigios": "LITIGIO",
+  "Asuntos Internos": "COMPLIANCE",
+};
+
 // Helper function to get color by area name
 export const getAreaColor = (areaProfesional: string): string => {
-  return AREA_PROFESIONAL_COLORS[areaProfesional] || "#6b7280"; // Default gray color
+  // First try direct match
+  if (AREA_PROFESIONAL_COLORS[areaProfesional]) {
+    return AREA_PROFESIONAL_COLORS[areaProfesional];
+  }
+  
+  // Try mapping
+  const mappedKey = AREA_NAME_MAPPING[areaProfesional];
+  if (mappedKey && AREA_PROFESIONAL_COLORS[mappedKey]) {
+    return AREA_PROFESIONAL_COLORS[mappedKey];
+  }
+  
+  // Try case-insensitive match
+  const upperKey = areaProfesional.toUpperCase();
+  for (const [key, color] of Object.entries(AREA_PROFESIONAL_COLORS)) {
+    if (key.toUpperCase() === upperKey) {
+      return color;
+    }
+  }
+  
+  return "#6b7280"; // Default gray color
 };
