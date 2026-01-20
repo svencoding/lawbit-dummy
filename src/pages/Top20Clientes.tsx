@@ -89,6 +89,14 @@ const transformMockData = (
     }
   });
 
+  // Create a map of client name to fee_type for filtering
+  const clientNameToFeeTypeMap = new Map<string, string>();
+  clientes.forEach((cliente) => {
+    if (cliente.name && cliente.fee_type) {
+      clientNameToFeeTypeMap.set(cliente.name, cliente.fee_type);
+    }
+  });
+
   // Create a map of user_id to usuario for category lookup
   const usuarioMap = new Map<number, Usuario>();
   usuarios.forEach((usuario) => {
@@ -286,7 +294,7 @@ const transformMockData = (
   });
 
   // Transform clientCosts to clients array
-  const clients: ClientSummary[] = clientCosts.map((client) => {
+  let clients: ClientSummary[] = clientCosts.map((client) => {
     // Calculate invoice counts (simulate based on projects)
     const invoiceCount = Math.max(1, Math.floor(client.project_count * 2.5));
     const paidInvoices = Math.floor(invoiceCount * 0.75);
@@ -317,10 +325,18 @@ const transformMockData = (
     };
   });
 
-  // Calculate hours by category level (using filtered time entries for charts)
+  // Filter clients by fee_type if filter is active
+  if (filters?.feeType) {
+    clients = clients.filter((client) => {
+      const clientFeeType = clientNameToFeeTypeMap.get(client.nombre);
+      return clientFeeType === filters.feeType;
+    });
+  }
+
+  // Calculate hours by category level (always use all unfiltered entries for display)
   const hoursByLevelMap = new Map<string, number>();
 
-  timeEntriesForCharts.forEach((entry) => {
+  allTimeEntries.forEach((entry) => {
     const usuario = usuarioMap.get(entry.user_id);
     const level = getCategoryLevel(usuario);
 
@@ -381,6 +397,9 @@ const transformMockData = (
         return;
       }
     }
+
+    // Apply fee_type filter
+    if (filters?.feeType && cliente.fee_type !== filters.feeType) return;
 
     const feeType = cliente.fee_type;
     facturacionByFeeTypeMap.set(
@@ -447,6 +466,7 @@ const Top20ClientesPageContent = () => {
     filters,
     setClientFilter,
     setCategoryFilter,
+    setFeeTypeFilter,
     clearFilters,
     hasActiveFilters,
   } = useChartFilters();
@@ -462,11 +482,11 @@ const Top20ClientesPageContent = () => {
   const [dataLoading, setDataLoading] = useState(true);
   const [isFiltering, setIsFiltering] = useState(false);
   const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2023, 0, 1)
-  ); // 1/1/2023
+    new Date(2025, 0, 1)
+  ); // 1/1/2025
   const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2023, 11, 31)
-  ); // 31/12/2023
+    new Date(2025, 11, 31)
+  ); // 31/12/2025
 
   const fetchClientsData = useCallback(
     async (isFilterChange = false) => {
@@ -698,6 +718,17 @@ const Top20ClientesPageContent = () => {
                 </button>
               </div>
             )}
+            {filters.feeType && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                <span>Forma de Cobro: {filters.feeType}</span>
+                <button
+                  onClick={() => setFeeTypeFilter(null)}
+                  className="ml-1 hover:bg-primary/20 rounded p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -727,6 +758,14 @@ const Top20ClientesPageContent = () => {
               }
             }}
             onCategoryClick={setCategoryFilter}
+            onFeeTypeClick={(feeType) => {
+              // Toggle filter: if already selected, deselect it
+              if (filters.feeType === feeType) {
+                setFeeTypeFilter(null);
+              } else {
+                setFeeTypeFilter(feeType);
+              }
+            }}
             activeFilters={filters}
             totalUnfilteredRevenue={totalUnfilteredRevenue}
           />

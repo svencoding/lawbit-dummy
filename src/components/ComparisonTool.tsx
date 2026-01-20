@@ -52,6 +52,7 @@ import {
   Check,
   ChevronsUpDown,
   ExternalLink,
+  Percent,
 } from "lucide-react";
 import {
   getClientCosts,
@@ -61,6 +62,9 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import fotoSven from "@/assets/foto-sven.png";
+import facturacionData from "@/lib/mock/facturacion.json";
+import clientesData from "@/lib/mock/clientes.json";
+import type { Payment, Cliente } from "@/lib/mock/types";
 
 type ComparisonMode = "clients" | "lawyers";
 
@@ -77,18 +81,63 @@ const ComparisonTool = () => {
   // Get data based on mode
   const clientsData = useMemo(() => {
     const clients = getClientCosts(
-      new Date(2023, 0, 1),
-      new Date(2023, 11, 31)
+      new Date(2025, 0, 1),
+      new Date(2025, 11, 31)
     );
+    const facturacion = facturacionData as Payment[];
+    const clientes = clientesData as Cliente[];
+    
+    // Create a map of cliente_id to client name
+    const clienteIdToNameMap = new Map<number, string>();
+    clientes.forEach((cliente) => {
+      if (cliente.name) {
+        clienteIdToNameMap.set(cliente.id, cliente.name);
+      }
+    });
+    
+    // Calculate revenue from facturacion for each client
+    const clientRevenueMap = new Map<string, number>();
+    facturacion.forEach((payment) => {
+      if (!payment.month || !payment.cliente_id) return;
+      
+      const paymentDate = payment.month;
+      const date = new Date(paymentDate + "T00:00:00");
+      
+      // Filter by date range
+      const startDate = new Date(2025, 0, 1);
+      const endDate = new Date(2025, 11, 31);
+      
+      if (date < startDate || date > endDate) return;
+      
+      const clientName = clienteIdToNameMap.get(payment.cliente_id);
+      if (!clientName) return;
+      
+      const revenue = payment.amount_charged || 0;
+      clientRevenueMap.set(
+        clientName,
+        (clientRevenueMap.get(clientName) || 0) + revenue
+      );
+    });
+    
     return clients
-      .map((client) => ({
-        id: client.client_name,
-        name: client.client_name,
-        hours: client.total_hours,
-        cost: client.total_cost,
-        revenue: client.total_cost, // Using cost as revenue fallback
-        projects: client.project_count,
-      }))
+      .map((client) => {
+        const revenue = clientRevenueMap.get(client.client_name) || client.total_cost;
+        const billableHours = client.billable_hours || client.total_hours;
+        const margin = revenue > 0 ? ((revenue - client.total_cost) / revenue) * 100 : 0;
+        const rate = billableHours > 0 ? revenue / billableHours : 0;
+        
+        return {
+          id: client.client_name,
+          name: client.client_name,
+          hours: client.total_hours,
+          billableHours: billableHours,
+          cost: client.total_cost,
+          revenue: revenue,
+          margin: margin,
+          rate: rate,
+          projects: client.project_count,
+        };
+      })
       .sort((a, b) => b.revenue - a.revenue);
   }, []);
 
@@ -98,8 +147,8 @@ const ComparisonTool = () => {
       .map((usuario) => {
         const profileData = getUserProfileData(
           usuario.code,
-          new Date(2023, 0, 1),
-          new Date(2023, 11, 31)
+          new Date(2025, 0, 1),
+          new Date(2025, 11, 31)
         );
         return {
           id: usuario.code,
@@ -135,12 +184,12 @@ const ComparisonTool = () => {
   // Get detailed profile data for lawyers
   const entity1Details =
     mode === "lawyers" && entity1
-      ? getUserProfileData(entity1, new Date(2023, 0, 1), new Date(2023, 11, 31))
+      ? getUserProfileData(entity1, new Date(2025, 0, 1), new Date(2025, 11, 31))
       : null;
 
   const entity2Details =
     mode === "lawyers" && entity2
-      ? getUserProfileData(entity2, new Date(2023, 0, 1), new Date(2023, 11, 31))
+      ? getUserProfileData(entity2, new Date(2025, 0, 1), new Date(2025, 11, 31))
       : null;
 
   // Calculate comparison metrics
@@ -154,6 +203,15 @@ const ComparisonTool = () => {
     return millions % 1 === 0 ? `$${millions}M` : `$${millions.toFixed(1)}M`;
   };
 
+  const formatRate = (value: number) => {
+    // Format as hourly rate: $X/h or $X.XX/h
+    if (value >= 1000) {
+      const thousands = value / 1000;
+      return thousands % 1 === 0 ? `$${thousands}k/h` : `$${thousands.toFixed(1)}k/h`;
+    }
+    return `$${Math.round(value)}/h`;
+  };
+
   const MetricCard = ({
     label,
     value1,
@@ -162,84 +220,142 @@ const ComparisonTool = () => {
     icon: Icon,
     onClick,
     clickable = false,
+    entity1Name,
+    entity2Name,
   }: {
     label: string;
     value1: number;
     value2: number;
-    format?: "number" | "currency" | "percentage";
+    format?: "number" | "currency" | "percentage" | "rate";
     icon: React.ComponentType<{ className?: string }>;
     onClick?: () => void;
     clickable?: boolean;
+    entity1Name?: string;
+    entity2Name?: string;
   }) => {
-    const diff = getPercentageDiff(value1, value2);
+    // For percentage format, calculate difference as percentage points, not percentage of percentage
+    const diff = format === "percentage" 
+      ? value1 - value2  // Direct difference in percentage points
+      : getPercentageDiff(value1, value2);
     const isPositive = diff > 0;
     const isEqual = Math.abs(diff) < 0.1;
 
     const formatValue = (val: number) => {
       if (format === "currency") return formatCurrency(val);
       if (format === "percentage") return `${val.toFixed(1)}%`;
+      if (format === "rate") return formatRate(val);
       return Math.round(val).toLocaleString();
+    };
+
+    const getDiffLabel = () => {
+      if (isEqual) return "Igual";
+      
+      if (format === "percentage") {
+        // For percentages, show difference in percentage points
+        const absDiff = Math.abs(diff);
+        if (isPositive) {
+          return `${absDiff.toFixed(1)} puntos porcentuales más que ${entity2Name || "el otro"}`;
+        } else {
+          return `${absDiff.toFixed(1)} puntos porcentuales menos que ${entity2Name || "el otro"}`;
+        }
+      }
+      
+      // For other formats, use percentage difference
+      if (isPositive) {
+        return `${Math.abs(diff).toFixed(0)}% más que ${entity2Name || "el otro"}`;
+      } else {
+        return `${Math.abs(diff).toFixed(0)}% menos que ${entity2Name || "el otro"}`;
+      }
     };
 
     return (
       <div
-        className={`relative bg-muted/30 rounded-lg p-3 border border-border/50 ${
+        className={`relative bg-muted/30 rounded-lg p-4 border border-border/50 ${
           clickable ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""
         }`}
         onClick={clickable ? onClick : undefined}
         onDoubleClick={clickable ? onClick : undefined}
       >
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-3">
           <Icon className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className="text-sm font-medium text-muted-foreground">
             {label}
           </span>
           {clickable && (
             <ExternalLink className="h-3 w-3 text-muted-foreground ml-auto" />
           )}
         </div>
-        <div className="grid grid-cols-3 gap-2 items-center">
+        <div className="grid grid-cols-3 gap-3 items-center mb-3">
           <div className="text-right">
-            <div className="text-lg font-bold text-primary">
+            <div className="text-xl font-bold text-primary">
               {formatValue(value1)}
             </div>
-          </div>
-          <div className="flex items-center justify-center">
-            {isEqual ? (
-              <Minus className="h-4 w-4 text-muted-foreground" />
-            ) : isPositive ? (
-              <TrendingUp className="h-4 w-4 text-emerald-600" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-600" />
+            {entity1Name && (
+              <div className="text-xs text-muted-foreground mt-1">
+                {entity1Name}
+              </div>
             )}
-            <span
-              className={`text-xs font-medium ml-1 ${
-                isEqual
-                  ? "text-muted-foreground"
-                  : isPositive
-                  ? "text-emerald-600"
-                  : "text-red-600"
-              }`}
-            >
-              {isEqual ? "0%" : `${Math.abs(diff).toFixed(0)}%`}
-            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1 mb-1">
+              {isEqual ? (
+                <Minus className="h-4 w-4 text-muted-foreground" />
+              ) : isPositive ? (
+                <TrendingUp className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-red-600" />
+              )}
+              <span
+                className={`text-sm font-semibold ${
+                  isEqual
+                    ? "text-muted-foreground"
+                    : isPositive
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }`}
+              >
+                {isEqual 
+                  ? (format === "percentage" ? "0 pp" : "0%")
+                  : format === "percentage"
+                  ? `${Math.abs(diff).toFixed(1)} pp`
+                  : `${Math.abs(diff).toFixed(0)}%`}
+              </span>
+            </div>
+            <div className="text-xs text-muted-foreground text-center px-2">
+              {getDiffLabel()}
+            </div>
           </div>
           <div className="text-left">
-            <div className="text-lg font-bold text-primary">
+            <div className="text-xl font-bold text-primary">
               {formatValue(value2)}
             </div>
+            {entity2Name && (
+              <div className="text-xs text-muted-foreground mt-1">
+                {entity2Name}
+              </div>
+            )}
           </div>
         </div>
         {/* Visual comparison bar */}
-        <div className="mt-2 grid grid-cols-2 gap-1">
-          <Progress
-            value={(value1 / Math.max(value1, value2)) * 100}
-            className="h-1.5"
-          />
-          <Progress
-            value={(value2 / Math.max(value1, value2)) * 100}
-            className="h-1.5"
-          />
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <div>
+            <div className="text-xs text-muted-foreground mb-1 text-right">
+              {entity1Name || "Cliente 1"}
+            </div>
+            <Progress
+              value={(value1 / Math.max(value1, value2, 1)) * 100}
+              className="h-2"
+            />
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground mb-1 text-left">
+              {entity2Name || "Cliente 2"}
+            </div>
+            <Progress
+              value={(value2 / Math.max(value1, value2, 1)) * 100}
+              className="h-2"
+            />
+          </div>
         </div>
       </div>
     );
@@ -315,6 +431,8 @@ const ComparisonTool = () => {
             value2={selectedEntity2.hours}
             format="number"
             icon={Clock}
+            entity1Name={selectedEntity1.name}
+            entity2Name={selectedEntity2.name}
           />
           <MetricCard
             label={mode === "clients" ? "Facturación" : "Ingresos"}
@@ -334,6 +452,8 @@ const ComparisonTool = () => {
             }
             format="currency"
             icon={DollarSign}
+            entity1Name={selectedEntity1.name}
+            entity2Name={selectedEntity2.name}
           />
           <MetricCard
             label="Costo Total"
@@ -341,7 +461,35 @@ const ComparisonTool = () => {
             value2={selectedEntity2.cost}
             format="currency"
             icon={DollarSign}
+            entity1Name={selectedEntity1.name}
+            entity2Name={selectedEntity2.name}
           />
+          {mode === "clients" &&
+            "margin" in selectedEntity1 &&
+            "margin" in selectedEntity2 && (
+              <MetricCard
+                label="Margen"
+                value1={Number(selectedEntity1.margin)}
+                value2={Number(selectedEntity2.margin)}
+                format="percentage"
+                icon={Percent}
+                entity1Name={selectedEntity1.name}
+                entity2Name={selectedEntity2.name}
+              />
+            )}
+          {mode === "clients" &&
+            "rate" in selectedEntity1 &&
+            "rate" in selectedEntity2 && (
+              <MetricCard
+                label="Tarifa Promedio"
+                value1={Number(selectedEntity1.rate)}
+                value2={Number(selectedEntity2.rate)}
+                format="rate"
+                icon={Clock}
+                entity1Name={selectedEntity1.name}
+                entity2Name={selectedEntity2.name}
+              />
+            )}
           <MetricCard
             label="Proyectos"
             value1={selectedEntity1.projects}
@@ -350,6 +498,8 @@ const ComparisonTool = () => {
             icon={Briefcase}
             clickable
             onClick={() => setDetailView("projects")}
+            entity1Name={selectedEntity1.name}
+            entity2Name={selectedEntity2.name}
           />
           {mode === "lawyers" &&
             "utilization" in selectedEntity1 &&
@@ -360,6 +510,8 @@ const ComparisonTool = () => {
                 value2={Number(selectedEntity2.utilization)}
                 format="percentage"
                 icon={Activity}
+                entity1Name={selectedEntity1.name}
+                entity2Name={selectedEntity2.name}
               />
             )}
           {mode === "lawyers" &&
@@ -373,6 +525,8 @@ const ComparisonTool = () => {
                 icon={Users}
                 clickable
                 onClick={() => setDetailView("clients")}
+                entity1Name={selectedEntity1.name}
+                entity2Name={selectedEntity2.name}
               />
             )}
         </div>

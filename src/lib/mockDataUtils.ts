@@ -339,7 +339,7 @@ export function getUserCosts(): Array<{
   return usuarios.map((u) => ({
     user_id: u.id,
     hourly_cost: u.hourly_cost,
-    effective_date: u.created_at || "2024-01-01",
+    effective_date: u.created_at || "2025-01-01",
   }));
 }
 

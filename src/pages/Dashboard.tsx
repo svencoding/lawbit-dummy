@@ -78,11 +78,11 @@ const Facturacion = () => {
   const [selectedArea, setSelectedArea] = useState<string>("all");
   const [availableAreas, setAvailableAreas] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2023, 0, 1)
-  ); // 1/1/2023
+    new Date(2025, 0, 1)
+  ); // 1/1/2025
   const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2023, 11, 31)
-  ); // 31/12/2023
+    new Date(2025, 11, 31)
+  ); // 31/12/2025
 
   const transformFinalNumber = (value: number | string | null | undefined) => {
     if (value === null || value === undefined) {

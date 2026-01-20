@@ -332,11 +332,11 @@ const Clientes = () => {
   >([]);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2023, 0, 1)
-  ); // 1/1/2023
+    new Date(2025, 0, 1)
+  ); // 1/1/2025
   const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2023, 11, 31)
-  ); // 31/12/2023
+    new Date(2025, 11, 31)
+  ); // 31/12/2025
   const [filteredMetrics, setFilteredMetrics] = useState({
     totalRevenue: 0,
     promedioDiasFacturacion: 0,

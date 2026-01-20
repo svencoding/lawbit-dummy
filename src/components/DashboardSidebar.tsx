@@ -116,7 +116,7 @@ export function DashboardSidebar() {
       collapsible="icon"
     >
       <SidebarContent className="bg-sidebar">
-        <div className="p-4 flex flex-col items-center gap-2">
+        <div className={`${state === "collapsed" ? "px-5 py-4" : "p-4"} flex flex-col items-center gap-2`}>
           {state === "collapsed" ? (
             // When collapsed, show initials in a circular avatar
             <div className="w-12 h-12 rounded-full bg-sidebar-accent flex items-center justify-center border-2 border-sidebar-accent/30">

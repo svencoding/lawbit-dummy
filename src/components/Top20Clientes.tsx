@@ -44,6 +44,7 @@ interface ClientSummary {
 interface ChartFilters {
   clientName: string | null;
   category: string | null;
+  feeType: string | null;
 }
 
 interface Top20ClientesProps {
@@ -53,6 +54,7 @@ interface Top20ClientesProps {
   formatDate: (dateString: string | null) => string;
   onClientClick?: (client: ClientSummary) => void;
   onCategoryClick?: (category: string | null) => void;
+  onFeeTypeClick?: (feeType: string | null) => void;
   hoursByLevel?: Array<{ name: string; value: number }>;
   facturacionByFeeType?: Array<{ name: string; value: number }>;
   activeFilters?: ChartFilters;
@@ -66,11 +68,19 @@ const Top20Clientes = ({
   formatDate,
   onClientClick,
   onCategoryClick,
+  onFeeTypeClick,
   hoursByLevel = [],
   facturacionByFeeType = [],
   activeFilters,
   totalUnfilteredRevenue = 0,
 }: Top20ClientesProps) => {
+  // Debug: Log data to console
+  console.log('Top20Clientes data:', {
+    hoursByLevel: hoursByLevel.length,
+    facturacionByFeeType: facturacionByFeeType.length,
+    hoursByLevelData: hoursByLevel,
+    facturacionByFeeTypeData: facturacionByFeeType,
+  });
   // Calculate total revenue from filtered clients
   const totalFilteredRevenue = clients.reduce(
     (sum, client) => sum + client.totalFacturado,
@@ -393,148 +403,164 @@ const Top20Clientes = ({
           </div>
 
           {/* Pie Charts on the Right */}
-          <div className="flex-1 min-w-0 flex flex-col gap-6 pl-4">
+          <div className="flex-1 min-w-0 flex flex-col gap-6 pl-4" style={{ maxHeight: "600px" }}>
             {/* Horas por Nivel Pie Chart */}
-            <div className="flex-1 bg-muted/30 rounded-lg p-4 border transition-all duration-300">
+            <div className="flex-1 bg-muted/30 rounded-lg p-4 border transition-all duration-300 min-h-0 flex flex-col">
               <h3 className="text-sm font-semibold mb-3 text-foreground">
                 Horas por Nivel
               </h3>
               {hoursByLevel.length > 0 ? (
-                <ChartContainer config={pieChartConfig}>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={hoursByLevel}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) =>
-                          `${name}: ${(percent * 100).toFixed(0)}%`
-                        }
-                        outerRadius={70}
-                        fill="#8884d8"
-                        dataKey="value"
-                        onClick={(data) => {
-                          if (onCategoryClick && data?.name) {
-                            onCategoryClick(data.name);
+                <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                  <ChartContainer 
+                    config={pieChartConfig} 
+                    className="w-full h-full"
+                    style={{ aspectRatio: 'auto' }}
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={hoursByLevel}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) =>
+                            `${name}: ${(percent * 100).toFixed(0)}%`
                           }
-                        }}
-                        style={{
-                          cursor: onCategoryClick ? "pointer" : "default",
-                        }}
-                      >
-                        {hoursByLevel.map((entry, index) => {
-                          const isActive =
-                            activeFilters?.category === entry.name;
-                          const baseColor =
-                            PRIMARY_COLORS[index % PRIMARY_COLORS.length];
-                          // Make active slice brighter/more opaque
-                          const fillColor = isActive
-                            ? baseColor.replace(
-                                /hsl\(([^)]+)\)/,
-                                (match, content) => {
-                                  // Increase opacity/brightness for active
-                                  return `hsl(${content.replace(
-                                    /\d+%\)/,
-                                    "75%)"
-                                  )}`;
-                                }
-                              )
-                            : baseColor;
-                          return (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={fillColor}
-                              style={{
-                                cursor: onCategoryClick ? "pointer" : "default",
-                              }}
-                            />
-                          );
-                        })}
-                      </Pie>
-                      <ChartTooltip
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {hoursByLevel.map((entry, index) => {
+                            const baseColor =
+                              PRIMARY_COLORS[index % PRIMARY_COLORS.length];
                             return (
-                              <div className="rounded-lg border bg-background p-2 shadow-sm">
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-sm font-medium">
-                                    {payload[0].name}
-                                  </span>
-                                  <span className="text-sm text-muted-foreground">
-                                    {payload[0].value?.toLocaleString()} horas
-                                  </span>
-                                </div>
-                              </div>
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={baseColor}
+                              />
                             );
-                          }
-                          return null;
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
+                          })}
+                        </Pie>
+                        <ChartTooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              return (
+                                <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-medium">
+                                      {payload[0].name}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      {payload[0].value?.toLocaleString()} horas
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
               ) : (
-                <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
                   No hay datos disponibles
                 </div>
               )}
             </div>
 
             {/* Facturación por Forma de Cobro Pie Chart */}
-            <div className="flex-1 bg-muted/30 rounded-lg p-4 border transition-all duration-300">
+            <div className="flex-1 bg-muted/30 rounded-lg p-4 border transition-all duration-300 min-h-0 flex flex-col">
               <h3 className="text-sm font-semibold mb-3 text-foreground">
                 Facturación por Forma de Cobro
               </h3>
               {facturacionByFeeType.length > 0 ? (
-                <ChartContainer config={pieChartConfig}>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={facturacionByFeeType}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) =>
-                          `${name}: ${(percent * 100).toFixed(0)}%`
-                        }
-                        outerRadius={70}
-                        fill="#8884d8"
-                        dataKey="value"
-                        animationDuration={300}
-                        animationBegin={0}
-                      >
-                        {facturacionByFeeType.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={PRIMARY_COLORS[index % PRIMARY_COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <ChartTooltip
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            return (
-                              <div className="rounded-lg border bg-background p-2 shadow-sm">
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-sm font-medium">
-                                    {payload[0].name}
-                                  </span>
-                                  <span className="text-sm text-muted-foreground">
-                                    ${payload[0].value?.toLocaleString()}
-                                  </span>
-                                </div>
-                              </div>
-                            );
+                <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                  <ChartContainer 
+                    config={pieChartConfig} 
+                    className="w-full h-full"
+                    style={{ aspectRatio: 'auto' }}
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={facturacionByFeeType}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) =>
+                            `${name}: ${(percent * 100).toFixed(0)}%`
                           }
-                          return null;
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          animationDuration={300}
+                          animationBegin={0}
+                          onClick={(data) => {
+                            if (onFeeTypeClick && data?.name) {
+                              onFeeTypeClick(data.name);
+                            }
+                          }}
+                          style={{
+                            cursor: onFeeTypeClick ? "pointer" : "default",
+                          }}
+                        >
+                          {facturacionByFeeType.map((entry, index) => {
+                            const isActive =
+                              activeFilters?.feeType === entry.name;
+                            const baseColor =
+                              PRIMARY_COLORS[index % PRIMARY_COLORS.length];
+                            // Make active slice brighter/more opaque
+                            const fillColor = isActive
+                              ? baseColor.replace(
+                                  /hsl\(([^)]+)\)/,
+                                  (match, content) => {
+                                    // Increase opacity/brightness for active
+                                    return `hsl(${content.replace(
+                                      /\d+%\)/,
+                                      "75%)"
+                                    )}`;
+                                  }
+                                )
+                              : baseColor;
+                            return (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={fillColor}
+                                style={{
+                                  cursor: onFeeTypeClick ? "pointer" : "default",
+                                }}
+                              />
+                            );
+                          })}
+                        </Pie>
+                        <ChartTooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              return (
+                                <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-medium">
+                                      {payload[0].name}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      ${payload[0].value?.toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
               ) : (
-                <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">
+                <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
                   No hay datos disponibles
                 </div>
               )}
