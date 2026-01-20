@@ -489,7 +489,7 @@ const UtilizacionContent = () => {
         {/* First two charts side by side */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Utilization by Seniority */}
-          <Card className="border-border/50">
+          <Card className="border-border/50 bg-muted/30 overflow-x-hidden w-full">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Activity className="h-4 w-4" />% Utilización por Nivel
@@ -498,18 +498,18 @@ const UtilizacionContent = () => {
                 Utilización promedio por nivel profesional
               </CardDescription>
             </CardHeader>
-            <CardContent className="pt-0">
-              <ChartContainer config={chartConfig} className="h-[220px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={utilizationData.seniorityChartData}
-                    layout="vertical"
-                    margin={{ top: 30, right: 50, left: 70, bottom: 5 }}
-                  >
+            <CardContent className="pt-0 w-full">
+              <ChartContainer config={chartConfig} className="min-h-[220px] h-auto w-full max-w-full">
+                  <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                    <BarChart
+                      data={utilizationData.seniorityChartData}
+                      layout="vertical"
+                      margin={{ top: 5, right: 20, left: 50, bottom: 5 }}
+                    >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       type="number"
-                      domain={[0, 150]}
+                      domain={[0, 120]}
                       tickFormatter={(value) => `${value}%`}
                       label={{
                         value: "% Utilización",
@@ -520,8 +520,8 @@ const UtilizacionContent = () => {
                     <YAxis
                       type="category"
                       dataKey="category"
-                      width={70}
-                      tick={{ fontSize: 12 }}
+                      width={60}
+                      tick={{ fontSize: 11 }}
                     />
                     <ChartTooltip
                       content={({ active, payload }) => {
@@ -569,7 +569,7 @@ const UtilizacionContent = () => {
                       {utilizationData.seniorityChartData.map(
                         (entry, index) => {
                           const isActive = filters.seniority === entry.category;
-                          // Use primary color variations similar to Top20Clientes
+                          // Use primary color variations matching Top20Clientes
                           const PRIMARY_COLORS = [
                             "hsl(210 55% 23%)", // Base primary (darkest)
                             "hsl(210 55% 35%)", // Medium-dark
@@ -579,32 +579,35 @@ const UtilizacionContent = () => {
                           ];
                           const baseColor =
                             PRIMARY_COLORS[index % PRIMARY_COLORS.length];
+                          // Make active slice brighter/more opaque like Top20Clientes
+                          const fillColor = isActive
+                            ? baseColor.replace(
+                                /hsl\(([^)]+)\)/,
+                                (match, content) => {
+                                  return `hsl(${content.replace(
+                                    /\d+%\)/,
+                                    "75%)"
+                                  )}`;
+                                }
+                              )
+                            : baseColor;
                           return (
                             <Cell
                               key={`cell-${index}`}
-                              fill={
-                                isActive
-                                  ? "hsl(var(--primary))"
-                                  : entry.utilization >= 100
-                                  ? baseColor
-                                  : entry.utilization >= 85
-                                  ? baseColor.replace(/\d+%\)/, "59%)")
-                                  : baseColor.replace(/\d+%\)/, "71%)")
-                              }
+                              fill={fillColor}
                             />
                           );
                         }
                       )}
                       <LabelList
                         dataKey="utilization"
-                        position="right"
+                        position="center"
                         formatter={(value: number) => `${value.toFixed(1)}%`}
                         style={{
                           fontSize: 11,
-                          fill: "hsl(var(--foreground))",
+                          fill: "white",
                           fontWeight: 600,
                         }}
-                        offset={8}
                       />
                     </Bar>
                     <ReferenceLine
@@ -612,8 +615,7 @@ const UtilizacionContent = () => {
                       stroke="hsl(var(--destructive))"
                       strokeWidth={2}
                       strokeDasharray="5 5"
-                      label={{ value: "Meta 100%", position: "top" }}
-                      isFront
+                      isFront={false}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -622,7 +624,7 @@ const UtilizacionContent = () => {
           </Card>
 
           {/* Utilization by Area */}
-          <Card className="border-border/50">
+          <Card className="border-border/50 bg-muted/30 overflow-x-hidden w-full">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Activity className="h-4 w-4" />% Utilización por Área
@@ -631,23 +633,23 @@ const UtilizacionContent = () => {
                 Utilización promedio por área profesional
               </CardDescription>
             </CardHeader>
-            <CardContent className="pt-0">
-              <ChartContainer config={chartConfig} className="h-[220px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={utilizationData.areaChartData}
-                    margin={{ top: 25, right: 80, left: 20, bottom: 5 }}
-                  >
+            <CardContent className="pt-0 w-full">
+              <ChartContainer config={chartConfig} className="min-h-[250px] h-auto w-full max-w-full">
+                  <ResponsiveContainer width="100%" height="100%" minHeight={250}>
+                    <BarChart
+                      data={utilizationData.areaChartData}
+                      margin={{ top: 10, right: 20, left: 15, bottom: 40 }}
+                    >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="area"
                       angle={-45}
                       textAnchor="end"
-                      height={80}
-                      tick={{ fontSize: 12 }}
+                      height={70}
+                      tick={{ fontSize: 10 }}
                     />
                     <YAxis
-                      domain={[0, 150]}
+                      domain={[0, 120]}
                       tickFormatter={(value) => `${value}%`}
                       label={{
                         value: "% Utilización",
@@ -700,7 +702,7 @@ const UtilizacionContent = () => {
                     >
                       {utilizationData.areaChartData.map((entry, index) => {
                         const isActive = filters.area === entry.area;
-                        // Use primary color variations similar to Top20Clientes
+                        // Use primary color variations matching Top20Clientes (same as Nivel chart)
                         const PRIMARY_COLORS = [
                           "hsl(210 55% 23%)", // Base primary (darkest)
                           "hsl(210 55% 35%)", // Medium-dark
@@ -709,33 +711,35 @@ const UtilizacionContent = () => {
                           "hsl(210 55% 71%)", // Light
                         ];
                         const baseColor =
-                          entry.color ||
                           PRIMARY_COLORS[index % PRIMARY_COLORS.length];
+                        // Make active slice brighter/more opaque like Top20Clientes
+                        const fillColor = isActive
+                          ? baseColor.replace(
+                              /hsl\(([^)]+)\)/,
+                              (match, content) => {
+                                return `hsl(${content.replace(
+                                  /\d+%\)/,
+                                  "75%)"
+                                )}`;
+                              }
+                            )
+                          : baseColor;
                         return (
                           <Cell
                             key={`cell-${index}`}
-                            fill={
-                              isActive
-                                ? "hsl(var(--primary))"
-                                : entry.utilization >= 100
-                                ? baseColor
-                                : entry.utilization >= 85
-                                ? baseColor.replace(/\d+%\)/, "59%)")
-                                : baseColor.replace(/\d+%\)/, "71%)")
-                            }
+                            fill={fillColor}
                           />
                         );
                       })}
                       <LabelList
                         dataKey="utilization"
-                        position="top"
+                        position="middle"
                         formatter={(value: number) => `${value.toFixed(1)}%`}
                         style={{
                           fontSize: 11,
-                          fill: "hsl(var(--foreground))",
+                          fill: "white",
                           fontWeight: 600,
                         }}
-                        offset={5}
                       />
                     </Bar>
                     <ReferenceLine
@@ -743,18 +747,17 @@ const UtilizacionContent = () => {
                       stroke="hsl(var(--destructive))"
                       strokeWidth={2}
                       strokeDasharray="5 5"
-                      label={{ value: "Meta 100%", position: "right" }}
-                      isFront
+                      isFront={false}
                     />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartContainer>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
             </CardContent>
           </Card>
         </div>
 
         {/* Utilization by Date - Full Width */}
-        <Card className="border-border/50">
+        <Card className="border-border/50 bg-muted/30 overflow-x-hidden w-full">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Activity className="h-4 w-4" />% Utilización por Fecha
@@ -763,13 +766,13 @@ const UtilizacionContent = () => {
               Evolución mensual de la utilización
             </CardDescription>
           </CardHeader>
-          <CardContent className="pt-0 px-0 w-full">
-            <ChartContainer config={chartConfig} className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={utilizationData.dateChartData}
-                  margin={{ top: 20, right: 80, left: 70, bottom: 50 }}
-                  onClick={(data) => {
+          <CardContent className="pt-0 w-full">
+            <ChartContainer config={chartConfig} className="min-h-[200px] h-auto w-full max-w-full">
+                <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                  <LineChart
+                    data={utilizationData.dateChartData}
+                    margin={{ top: 10, right: 20, left: 40, bottom: 60 }}
+                    onClick={(data) => {
                     if (data && data.activePayload && data.activePayload[0]) {
                       const clickedData = data.activePayload[0].payload;
                       if (clickedData?.date) {
@@ -784,8 +787,8 @@ const UtilizacionContent = () => {
                     dataKey="month"
                     angle={-45}
                     textAnchor="end"
-                    height={80}
-                    tick={{ fontSize: 11 }}
+                    height={70}
+                    tick={{ fontSize: 10 }}
                   />
                   <YAxis
                     domain={[0, 150]}
@@ -804,11 +807,6 @@ const UtilizacionContent = () => {
                     strokeWidth={2.5}
                     strokeDasharray="5 5"
                     strokeOpacity={0.4}
-                    label={{
-                      value: "Meta 100%",
-                      position: "right",
-                      fontSize: 11,
-                    }}
                   />
                   <ChartTooltip
                     content={({ active, payload }) => {
@@ -845,7 +843,7 @@ const UtilizacionContent = () => {
                   <Line
                     type="linear"
                     dataKey="utilization"
-                    stroke="hsl(var(--primary))"
+                    stroke="hsl(210 55% 47%)"
                     strokeWidth={3}
                     dot={(props) => {
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -856,7 +854,7 @@ const UtilizacionContent = () => {
                           cx={dotProps.cx}
                           cy={dotProps.cy}
                           r={isActive ? 7 : 5}
-                          fill="hsl(var(--primary))"
+                          fill={isActive ? "hsl(210 55% 75%)" : "hsl(210 55% 47%)"}
                           strokeWidth={2}
                           stroke="hsl(var(--background))"
                           style={{ cursor: "pointer" }}
@@ -870,7 +868,7 @@ const UtilizacionContent = () => {
                     }}
                     activeDot={{
                       r: 7,
-                      fill: "hsl(var(--primary))",
+                      fill: "hsl(210 55% 75%)",
                       strokeWidth: 2,
                       stroke: "hsl(var(--background))",
                     }}
@@ -887,9 +885,9 @@ const UtilizacionContent = () => {
                       offset={8}
                     />
                   </Line>
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartContainer>
           </CardContent>
         </Card>
       </div>

@@ -136,20 +136,11 @@ const FacturacionContent = () => {
     }
   }, [user, loading, navigate]);
 
-  // Filter clients based on active filters
+  // Don't filter clients - keep all visible but highlight the selected one
+  // Area and formaCobro filtering is already done in getClientCosts
   const clients = useMemo(() => {
-    let filtered = allClients;
-
-    // Filter by client name if filter is active
-    if (filters.clientName) {
-      filtered = filtered.filter((c) => c.nombre === filters.clientName);
-    }
-
-    // Note: Area and formaCobro filtering is already done in getClientCosts, so allClients
-    // already contains only clients with work matching the selected filters
-
-    return filtered;
-  }, [allClients, filters.clientName]);
+    return allClients;
+  }, [allClients]);
 
   // Filter revenue by users based on active filters
   // Note: For now, we show all users. In a full implementation,
@@ -1390,7 +1381,8 @@ const FacturacionContent = () => {
     0
   );
 
-  const transformedFacturacionData = baseFacturacionData
+  // Transform and calculate percentages
+  const transformedData = baseFacturacionData
     .map((item: any) => ({
       ...item,
       facturacion: transformFinalNumber(item.facturacion),
@@ -1403,8 +1395,7 @@ const FacturacionContent = () => {
       const percent =
         totalFacturacion > 0 ? (item.facturacion / totalFacturacion) * 100 : 0;
       return percent >= 0.5;
-    })
-    .sort((a: any, b: any) => b.facturacion - a.facturacion); // Sort by facturacion descending
+    });
 
   // Colors for pie charts - tones of primary color (matching Top20Clientes)
   const PRIMARY_COLORS = [
@@ -1414,16 +1405,87 @@ const FacturacionContent = () => {
     "hsl(210 55% 59%)", // Medium-light
     "hsl(210 55% 71%)", // Light
   ];
-  const transformedFormaCobroChart = (dashboardData?.formaCobroChart || []).map(
+
+  // Group small categories (< 2%) into "Other" to prevent label overlap
+  const SMALL_THRESHOLD = 2; // Percentage threshold
+  const mainCategories: any[] = [];
+  const smallCategories: any[] = [];
+  let otherTotal = 0;
+  const otherAreas: string[] = [];
+
+  transformedData.forEach((item: any) => {
+    const percent =
+      totalFacturacion > 0 ? (item.facturacion / totalFacturacion) * 100 : 0;
+    if (percent >= SMALL_THRESHOLD) {
+      mainCategories.push(item);
+    } else {
+      smallCategories.push(item);
+      otherTotal += item.facturacion;
+      otherAreas.push(item.area);
+    }
+  });
+
+  // Sort main categories by facturacion descending
+  mainCategories.sort((a: any, b: any) => b.facturacion - a.facturacion);
+
+  // Add "Other" category if there are small categories
+  const transformedFacturacionData = [...mainCategories];
+  if (smallCategories.length > 0 && otherTotal > 0) {
+    transformedFacturacionData.push({
+      area: `Otros (${smallCategories.length})`,
+      facturacion: otherTotal,
+      meta: smallCategories.reduce((sum: number, item: any) => sum + (item.meta || 0), 0),
+      color: PRIMARY_COLORS[PRIMARY_COLORS.length - 1], // Use lightest color for "Other"
+      originalAreas: otherAreas, // Store original areas for tooltip
+    });
+  }
+  // Process Forma de Cobro chart data with grouping for small categories
+  const formaCobroData = (dashboardData?.formaCobroChart || []).map(
     (item: any) => ({
       ...item,
       value: transformFinalNumber(item.value),
     })
   );
 
+  // Group small Forma de Cobro categories (< 2%) into "Other"
+  const formaCobroTotal = formaCobroData.reduce(
+    (sum: number, item: any) => sum + (item.value || 0),
+    0
+  );
+
+  const formaCobroMain: any[] = [];
+  const formaCobroSmall: any[] = [];
+  let formaCobroOtherTotal = 0;
+  const formaCobroOtherNames: string[] = [];
+
+  formaCobroData.forEach((item: any) => {
+    const percent =
+      formaCobroTotal > 0 ? (item.value / formaCobroTotal) * 100 : 0;
+    if (percent >= SMALL_THRESHOLD) {
+      formaCobroMain.push(item);
+    } else {
+      formaCobroSmall.push(item);
+      formaCobroOtherTotal += item.value;
+      formaCobroOtherNames.push(item.name);
+    }
+  });
+
+  // Sort main categories by value descending
+  formaCobroMain.sort((a: any, b: any) => b.value - a.value);
+
+  // Add "Other" category if there are small categories
+  const transformedFormaCobroChart = [...formaCobroMain];
+  if (formaCobroSmall.length > 0 && formaCobroOtherTotal > 0) {
+    transformedFormaCobroChart.push({
+      name: `Otros (${formaCobroSmall.length})`,
+      value: formaCobroOtherTotal,
+      originalNames: formaCobroOtherNames, // Store original names for tooltip
+    });
+  }
+
   return (
     <DashboardLayout>
-      <div className="space-y-4">
+      <div className="space-y-4 w-full min-w-0 max-w-full overflow-x-hidden">
         <div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div>
@@ -1652,14 +1714,16 @@ const FacturacionContent = () => {
           </div>
         </div>
 
-        {/* Clients Table and Facturación por Área Pie Chart */}
+        {/* Clients Table, Bar Chart, and Pie Charts */}
         <div
-          className={`flex gap-4 transition-opacity duration-200 ${
+          className={`flex flex-col lg:flex-row gap-4 transition-opacity duration-200 min-w-0 ${
             isRefreshing ? "opacity-60" : "opacity-100"
           }`}
         >
-          {/* Clients Table on Left */}
-          <Card className="border-border/50 w-[380px] flex-shrink-0">
+          {/* Left Column: Table and Bar Chart */}
+          <div className="flex-1 min-w-0 flex flex-col gap-4">
+            {/* Clients Table */}
+            <Card className="border-border/50 w-full">
             <CardHeader className="pb-3">
               <CardTitle className="text-foreground">
                 Todos los Clientes
@@ -1672,7 +1736,7 @@ const FacturacionContent = () => {
               <div
                 ref={tableScrollRef}
                 className="overflow-y-auto rounded-md"
-                style={{ maxHeight: "320px" }}
+                style={{ maxHeight: "400px" }}
               >
                 <Table>
                   <TableHeader>
@@ -1694,19 +1758,33 @@ const FacturacionContent = () => {
                       return (
                         <TableRow
                           key={client.nombre}
-                          className={`border-b h-7 transition-all duration-200 ${
-                            isActive ? "bg-primary/10" : "hover:bg-muted/50"
+                          className={`border-b h-7 transition-all duration-200 cursor-pointer ${
+                            isActive 
+                              ? "bg-primary/15 border-primary/40 hover:bg-primary/20" 
+                              : "hover:bg-muted/50"
                           }`}
-                          onClick={() => setClientFilter(client.nombre)}
-                          style={{ cursor: "pointer" }}
+                          onClick={() => {
+                            // Toggle filter: if already selected, deselect it
+                            if (isActive) {
+                              setClientFilter(null);
+                            } else {
+                              setClientFilter(client.nombre);
+                            }
+                          }}
                         >
-                          <TableCell className="px-1 py-0.5 text-[11px] font-medium">
+                          <TableCell className={`px-1 py-0.5 text-[11px] font-medium ${
+                            isActive ? "text-primary font-semibold" : ""
+                          }`}>
                             {index + 1}
                           </TableCell>
-                          <TableCell className="px-1 py-0.5 text-[11px] truncate max-w-[200px]">
+                          <TableCell className={`px-1 py-0.5 text-[11px] truncate max-w-[200px] ${
+                            isActive ? "text-primary font-semibold" : ""
+                          }`}>
                             {client.nombre}
                           </TableCell>
-                          <TableCell className="px-1 py-0.5 text-[11px] text-right font-medium text-emerald-600">
+                          <TableCell className={`px-1 py-0.5 text-[11px] text-right font-medium ${
+                            isActive ? "text-primary font-semibold" : "text-emerald-600"
+                          }`}>
                             $
                             {Math.round(client.totalFacturado).toLocaleString()}
                           </TableCell>
@@ -1719,17 +1797,124 @@ const FacturacionContent = () => {
             </CardContent>
           </Card>
 
-          {/* Facturación por Área Pie Chart on Right */}
-          <Card className="border-border/50 flex-1">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-foreground">
+            {/* Facturación por Encargado Comercial Bar Chart - Same width as table */}
+            {revenueByUsers && revenueByUsers.length > 0 && (
+              <Card className="border-border/50 w-full">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-foreground">
+                    Facturación por Encargado Comercial
+                  </CardTitle>
+                  <CardDescription>
+                    Encargados comerciales con mayor facturación en el período
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0 pb-0 px-0">
+                  <ChartContainer
+                    config={{
+                      revenue: {
+                        label: "Facturación",
+                      },
+                    }}
+                  >
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart
+                        data={revenueByUsers.map((user) => ({
+                          name: user.user_name,
+                          code: user.user_code,
+                          revenue: transformFinalNumber(user.revenue),
+                        }))}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 50 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fontSize: 10 }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 11 }}
+                          width={50}
+                          tickFormatter={(value) => {
+                            const millions = value / 1000000;
+                            return millions % 1 === 0
+                              ? `$${millions}M`
+                              : `$${millions.toFixed(1)}M`;
+                          }}
+                        />
+                        <ChartTooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              return (
+                                <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-medium">
+                                      {payload[0].payload.name}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      $
+                                      {Number(
+                                        payload[0].value
+                                      ).toLocaleString()}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground mt-1">
+                                      Haz clic para ver perfil
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Bar
+                          dataKey="revenue"
+                          fill="hsl(210 55% 47%)"
+                          radius={[4, 4, 0, 0]}
+                        >
+                          {revenueByUsers.map((user, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill="hsl(210 55% 47%)"
+                              style={{ cursor: "pointer" }}
+                              onClick={() => {
+                                // Pass date filters as query params
+                                const params = new URLSearchParams();
+                                if (startDate) {
+                                  params.set(
+                                    "startDate",
+                                    startDate.toISOString()
+                                  );
+                                }
+                                if (endDate) {
+                                  params.set("endDate", endDate.toISOString());
+                                }
+                                const queryString = params.toString();
+                                navigate(
+                                  `/user/${user.user_code}${
+                                    queryString ? `?${queryString}` : ""
+                                  }`
+                                );
+                              }}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Right Column: Pie Charts */}
+          <div className="w-full lg:w-[500px] lg:flex-shrink-0 flex flex-col gap-4">
+            {/* Facturación por Área Pie Chart - Fixed Width */}
+            <div className="bg-muted/30 rounded-lg p-4 border transition-all duration-300">
+              <h3 className="text-sm font-semibold mb-3 text-foreground">
                 Facturación por Área
-              </CardTitle>
-              <CardDescription>
-                Distribución de facturación por área profesional
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-0">
+              </h3>
               {transformedFacturacionData &&
               transformedFacturacionData.length > 0 ? (
                 <ChartContainer
@@ -1739,20 +1924,28 @@ const FacturacionContent = () => {
                     },
                   }}
                 >
-                  <ResponsiveContainer width="100%" height={400}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
                         data={transformedFacturacionData}
-                        cx="45%"
+                        cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={false}
-                        outerRadius={100}
+                        label={({ name, percent, payload }) => {
+                          // Only show labels for slices >= 2% to prevent overlap
+                          const slicePercent = (percent * 100);
+                          if (slicePercent >= 2) {
+                            return `${name}: ${slicePercent.toFixed(0)}%`;
+                          }
+                          return ""; // Hide labels for very small slices
+                        }}
+                        outerRadius={70}
                         fill="#8884d8"
                         dataKey="facturacion"
                         nameKey="area"
                         onClick={(data) => {
-                          if (data?.area) {
+                          if (data?.area && !data.area.startsWith("Otros")) {
+                            // Don't allow filtering by "Other" category
                             if (filters.area === data.area) {
                               setAreaFilter(null);
                             } else {
@@ -1765,19 +1958,33 @@ const FacturacionContent = () => {
                         {transformedFacturacionData.map(
                           (entry: any, index: number) => {
                             const isActive = filters.area === entry.area;
-                            // Use color from entry if available, otherwise get it from getAreaColor
+                            const isOtherCategory = entry.area?.startsWith("Otros");
+                            // Use PRIMARY_COLORS like Top20Clientes
                             const baseColor =
-                              entry.color || getAreaColor(entry.area);
-
-                            // For active slices, make them brighter by adjusting opacity and adding stroke
+                              PRIMARY_COLORS[index % PRIMARY_COLORS.length];
+                            // Make active slice brighter and add visual cues
+                            const fillColor = isActive
+                              ? baseColor.replace(
+                                  /hsl\(([^)]+)\)/,
+                                  (match, content) => {
+                                    return `hsl(${content.replace(
+                                      /\d+%\)/,
+                                      "75%)"
+                                    )}`;
+                                  }
+                                )
+                              : baseColor;
                             return (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={baseColor}
-                                fillOpacity={isActive ? 1 : 0.9}
+                                fill={fillColor}
+                                fillOpacity={isActive ? 1 : 0.85}
                                 stroke={isActive ? "#000" : "none"}
-                                strokeWidth={isActive ? 2.5 : 0}
-                                style={{ cursor: "pointer" }}
+                                strokeWidth={isActive ? 3 : 0}
+                                style={{ 
+                                  cursor: isOtherCategory ? "default" : "pointer",
+                                  filter: isActive ? "drop-shadow(0 0 4px rgba(0,0,0,0.3))" : "none"
+                                }}
                               />
                             );
                           }
@@ -1795,11 +2002,35 @@ const FacturacionContent = () => {
                               (Number(payload[0].value) / total) *
                               100
                             ).toFixed(1);
+                            const entry = payload[0].payload;
+                            
+                            // If it's the "Other" category, show breakdown
+                            if (entry.originalAreas && entry.originalAreas.length > 0) {
+                              return (
+                                <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-medium">
+                                      {entry.area}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      ${Number(payload[0].value).toLocaleString()}{" "}
+                                      ({percent}%)
+                                    </span>
+                                    <div className="mt-2 pt-2 border-t border-border">
+                                      <span className="text-xs text-muted-foreground">
+                                        Incluye: {entry.originalAreas.join(", ")}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            
                             return (
                               <div className="rounded-lg border bg-background p-2 shadow-sm">
                                 <div className="flex flex-col gap-1">
                                   <span className="text-sm font-medium">
-                                    {payload[0].payload.area}
+                                    {entry.area}
                                   </span>
                                   <span className="text-sm text-muted-foreground">
                                     ${Number(payload[0].value).toLocaleString()}{" "}
@@ -1812,42 +2043,157 @@ const FacturacionContent = () => {
                           return null;
                         }}
                       />
-                      <Legend
-                        verticalAlign="middle"
-                        align="right"
-                        layout="vertical"
-                        formatter={(value, entry: any) => {
-                          // Get the area name from the payload
-                          const areaName = entry.payload?.area || value;
-                          const total = transformedFacturacionData.reduce(
-                            (sum: number, item: any) =>
-                              sum + (item.facturacion || 0),
-                            0
-                          );
-                          const itemValue = entry.payload?.facturacion || 0;
-                          const percent =
-                            total > 0
-                              ? ((itemValue / total) * 100).toFixed(0)
-                              : "0";
-                          return `${areaName}: ${percent}%`;
-                        }}
-                        wrapperStyle={{
-                          paddingLeft: "10px",
-                          fontSize: "12px",
-                          lineHeight: "1.5",
-                        }}
-                        iconType="circle"
-                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </ChartContainer>
               ) : (
-                <div className="h-[400px] flex items-center justify-center text-sm text-muted-foreground">
+                <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground">
                   No hay datos disponibles
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* Forma de Cobro Distribution */}
+            {transformedFormaCobroChart &&
+              transformedFormaCobroChart.length > 0 && (
+                <div className="bg-muted/30 rounded-lg p-4 border transition-all duration-300">
+                  <h3 className="text-sm font-semibold mb-3 text-foreground">
+                    Facturación según Forma de Cobro
+                  </h3>
+                  <ChartContainer
+                    config={{
+                      facturacionByFeeType: {
+                        label: "Facturación por Forma de Cobro",
+                      },
+                    }}
+                  >
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={transformedFormaCobroChart}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => {
+                            // Only show labels for slices >= 2% to prevent overlap
+                            const slicePercent = (percent * 100);
+                            if (slicePercent >= 2) {
+                              return `${name}: ${slicePercent.toFixed(0)}%`;
+                            }
+                            return ""; // Hide labels for very small slices
+                          }}
+                          outerRadius={70}
+                          fill="#8884d8"
+                          dataKey="value"
+                          nameKey="name"
+                          onClick={(data) => {
+                            if (data?.name && !data.name.startsWith("Otros")) {
+                              // Don't allow filtering by "Other" category
+                              if (filters.formaCobro === data.name) {
+                                setFormaCobroFilter(null);
+                              } else {
+                                setFormaCobroFilter(data.name);
+                              }
+                            }
+                          }}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {transformedFormaCobroChart.map(
+                            (entry: any, index: number) => {
+                              const isActive =
+                                filters.formaCobro === entry.name;
+                              const isOtherCategory = entry.name?.startsWith("Otros");
+                              const baseColor =
+                                PRIMARY_COLORS[
+                                  index % PRIMARY_COLORS.length
+                                ];
+                              // Make active slice brighter and add visual cues
+                              const fillColor = isActive
+                                ? baseColor.replace(
+                                    /hsl\(([^)]+)\)/,
+                                    (match, content) => {
+                                      return `hsl(${content.replace(
+                                        /\d+%\)/,
+                                        "75%)"
+                                      )}`;
+                                    }
+                                  )
+                                : baseColor;
+                              return (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={fillColor}
+                                  fillOpacity={isActive ? 1 : 0.85}
+                                  stroke={isActive ? "#000" : "none"}
+                                  strokeWidth={isActive ? 3 : 0}
+                                  style={{ 
+                                    cursor: isOtherCategory ? "default" : "pointer",
+                                    filter: isActive ? "drop-shadow(0 0 4px rgba(0,0,0,0.3))" : "none"
+                                  }}
+                                />
+                              );
+                            }
+                          )}
+                        </Pie>
+                        <ChartTooltip
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const total = transformedFormaCobroChart.reduce(
+                                (sum: number, item: { value: number }) =>
+                                  sum + item.value,
+                                0
+                              );
+                              const percent = (
+                                (Number(payload[0].value) / total) *
+                                100
+                              ).toFixed(1);
+                              const entry = payload[0].payload;
+                              
+                              // If it's the "Other" category, show breakdown
+                              if (entry.originalNames && entry.originalNames.length > 0) {
+                                return (
+                                  <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-sm font-medium">
+                                        {entry.name}
+                                      </span>
+                                      <span className="text-sm text-muted-foreground">
+                                        ${Number(payload[0].value).toLocaleString()}{" "}
+                                        ({percent}%)
+                                      </span>
+                                      <div className="mt-2 pt-2 border-t border-border">
+                                        <span className="text-xs text-muted-foreground">
+                                          Incluye: {entry.originalNames.join(", ")}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-medium">
+                                      {entry.name}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                      ${Number(payload[0].value).toLocaleString()}{" "}
+                                      ({percent}%)
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              )}
+          </div>
         </div>
 
         {/* Gráfico Comparativo: Meta vs Facturación por Área */}
@@ -2015,242 +2361,6 @@ const FacturacionContent = () => {
           )}
         </div> */}
 
-        {/* Charts Section */}
-        {(revenueByUsers && revenueByUsers.length > 0) ||
-        (transformedFormaCobroChart &&
-          transformedFormaCobroChart.length > 0) ? (
-          <div
-            className={`grid grid-cols-1 lg:grid-cols-2 gap-4 transition-opacity duration-200 ${
-              isRefreshing ? "opacity-60" : "opacity-100"
-            }`}
-          >
-            {/* Revenue by Users (Top 5) */}
-            {revenueByUsers && revenueByUsers.length > 0 && (
-              <Card className="border-border/50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-foreground">
-                    Facturación por Encargado Comercial
-                  </CardTitle>
-                  <CardDescription>
-                    Encargados comerciales con mayor facturación en el período
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0 pb-0 px-0">
-                  <ChartContainer
-                    config={{
-                      revenue: {
-                        label: "Facturación",
-                      },
-                    }}
-                  >
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart
-                        data={revenueByUsers.map((user) => ({
-                          name: user.user_name,
-                          code: user.user_code,
-                          revenue: transformFinalNumber(user.revenue),
-                        }))}
-                        margin={{ top: 10, right: 10, left: 0, bottom: 50 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="name"
-                          tick={{ fontSize: 10 }}
-                          angle={-45}
-                          textAnchor="end"
-                          height={60}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 11 }}
-                          width={50}
-                          tickFormatter={(value) => {
-                            const millions = value / 1000000;
-                            return millions % 1 === 0
-                              ? `$${millions}M`
-                              : `$${millions.toFixed(1)}M`;
-                          }}
-                        />
-                        <ChartTooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              return (
-                                <div className="rounded-lg border bg-background p-2 shadow-sm">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-sm font-medium">
-                                      {payload[0].payload.name}
-                                    </span>
-                                    <span className="text-sm text-muted-foreground">
-                                      $
-                                      {Number(
-                                        payload[0].value
-                                      ).toLocaleString()}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground mt-1">
-                                      Haz clic para ver perfil
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <Bar
-                          dataKey="revenue"
-                          fill="hsl(210 55% 47%)"
-                          radius={[4, 4, 0, 0]}
-                        >
-                          {revenueByUsers.map((user, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill="hsl(210 55% 47%)"
-                              style={{ cursor: "pointer" }}
-                              onClick={() => {
-                                // Pass date filters as query params
-                                const params = new URLSearchParams();
-                                if (startDate) {
-                                  params.set(
-                                    "startDate",
-                                    startDate.toISOString()
-                                  );
-                                }
-                                if (endDate) {
-                                  params.set("endDate", endDate.toISOString());
-                                }
-                                const queryString = params.toString();
-                                navigate(
-                                  `/user/${user.user_code}${
-                                    queryString ? `?${queryString}` : ""
-                                  }`
-                                );
-                              }}
-                            />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Forma de Cobro Distribution */}
-            {transformedFormaCobroChart &&
-              transformedFormaCobroChart.length > 0 && (
-                <Card className="border-border/50">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-foreground">
-                      Facturación según Forma de Cobro
-                    </CardTitle>
-                    <CardDescription>
-                      Distribución de facturación por forma de cobro
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie
-                          data={transformedFormaCobroChart}
-                          cx="45%"
-                          cy="50%"
-                          labelLine={false}
-                          label={false}
-                          outerRadius={90}
-                          fill="#8884d8"
-                          dataKey="value"
-                          nameKey="name"
-                          onClick={(data) => {
-                            if (data?.name) {
-                              if (filters.formaCobro === data.name) {
-                                setFormaCobroFilter(null);
-                              } else {
-                                setFormaCobroFilter(data.name);
-                              }
-                            }
-                          }}
-                          style={{ cursor: "pointer" }}
-                        >
-                          {transformedFormaCobroChart.map(
-                            (entry: any, index: number) => {
-                              const isActive =
-                                filters.formaCobro === entry.name;
-                              return (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={
-                                    PRIMARY_COLORS[
-                                      index % PRIMARY_COLORS.length
-                                    ]
-                                  }
-                                  fillOpacity={isActive ? 1 : 0.9}
-                                  stroke={isActive ? "#000" : "none"}
-                                  strokeWidth={isActive ? 2.5 : 0}
-                                  style={{ cursor: "pointer" }}
-                                />
-                              );
-                            }
-                          )}
-                        </Pie>
-                        <ChartTooltip
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const total = transformedFormaCobroChart.reduce(
-                                (sum: number, item: { value: number }) =>
-                                  sum + item.value,
-                                0
-                              );
-                              const percent = (
-                                (Number(payload[0].value) / total) *
-                                100
-                              ).toFixed(1);
-                              return (
-                                <div className="rounded-lg border bg-background p-2 shadow-sm">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-sm font-medium">
-                                      {payload[0].name}
-                                    </span>
-                                    <span className="text-sm text-muted-foreground">
-                                      $
-                                      {Number(
-                                        payload[0].value
-                                      ).toLocaleString()}{" "}
-                                      ({percent}%)
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <Legend
-                          verticalAlign="middle"
-                          align="right"
-                          layout="vertical"
-                          formatter={(value, entry) => {
-                            const total = transformedFormaCobroChart.reduce(
-                              (sum: number, item: { value: number }) =>
-                                sum + item.value,
-                              0
-                            );
-                            const itemValue = entry.payload?.value || 0;
-                            const percent = ((itemValue / total) * 100).toFixed(
-                              0
-                            );
-                            return `${value}: ${percent}%`;
-                          }}
-                          wrapperStyle={{
-                            paddingLeft: "10px",
-                            fontSize: "11px",
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              )}
-          </div>
-        ) : null}
       </div>
     </DashboardLayout>
   );

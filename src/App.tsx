@@ -11,6 +11,7 @@ import Utilizacion from "./pages/Utilizacion";
 import Proyecciones from "./pages/Proyecciones";
 import Clientes from "./pages/Clientes";
 import Top20Clientes from "./pages/Top20Clientes";
+import Comparacion from "./pages/Comparacion";
 import Alertas from "./pages/Alertas";
 import Pricing from "./pages/Pricing";
 import Settings from "./pages/Settings";
@@ -37,6 +38,7 @@ const App = () => (
               path="/dashboard/top20-clientes"
               element={<Top20Clientes />}
             />
+            <Route path="/dashboard/comparacion" element={<Comparacion />} />
             <Route path="/dashboard/alertas" element={<Alertas />} />
             <Route path="/dashboard/pricing" element={<Pricing />} />
             <Route path="/dashboard/settings" element={<Settings />} />

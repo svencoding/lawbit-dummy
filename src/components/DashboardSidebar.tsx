@@ -22,6 +22,7 @@ import {
   Bell,
   Activity,
   Trophy,
+  GitCompare,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -30,6 +31,7 @@ const menuItems = [
   // { title: "Clientes", url: "/dashboard/clientes", icon: Users },
   { title: "Clientes", url: "/dashboard/top20-clientes", icon: Trophy },
   { title: "Utilización", url: "/facturacion/utilizacion", icon: Activity },
+  { title: "Comparación", url: "/dashboard/comparacion", icon: GitCompare },
   { title: "Alertas", url: "/dashboard/alertas", icon: Bell },
   { title: "Pricing", url: "/dashboard/pricing", icon: Calculator },
   { title: "Configuración", url: "/dashboard/settings", icon: Settings },

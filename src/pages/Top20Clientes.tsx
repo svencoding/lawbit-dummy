@@ -73,6 +73,8 @@ const transformMockData = (
   const allTimeEntries = getTransformedTimeEntries(startDate, endDate);
   // Keep original entries for cost calculation
   let filteredTimeEntries = allTimeEntries;
+  // Separate entries for client list (always unfiltered by client) and charts (filtered)
+  let entriesForCharts = allTimeEntries;
 
   const facturacion = facturacionData as Payment[];
   const clientes = clientesData as Cliente[];
@@ -108,23 +110,33 @@ const transformMockData = (
     return "Otro";
   };
 
-  // Apply filters to time entries
+  // Apply filters to entries for charts only (not for client list)
   if (filters) {
     if (filters.clientName) {
-      filteredTimeEntries = filteredTimeEntries.filter(
+      entriesForCharts = entriesForCharts.filter(
         (e) => e.client_name === filters.clientName
       );
     }
     if (filters.category) {
-      filteredTimeEntries = filteredTimeEntries.filter((e) => {
+      entriesForCharts = entriesForCharts.filter((e) => {
         const usuario = usuarioMap.get(e.user_id);
         return getCategoryLevel(usuario) === filters.category;
       });
     }
   }
+  
+  // For client costs, ALWAYS use all unfiltered entries
+  // This ensures that all clients show their actual costs/margins
+  filteredTimeEntries = allTimeEntries;
 
   // Create filtered entries without originalEntry for use in calculations
   const timeEntries = filteredTimeEntries.map((e) => {
+    const { originalEntry, ...entry } = e;
+    return entry;
+  });
+  
+  // Create entries for charts (with filters applied)
+  const timeEntriesForCharts = entriesForCharts.map((e) => {
     const { originalEntry, ...entry } = e;
     return entry;
   });
@@ -263,19 +275,8 @@ const transformMockData = (
     const clientName = clienteIdToNameMap.get(payment.cliente_id);
     if (!clientName) return;
 
-    // Apply client filter
-    if (filters?.clientName && clientName !== filters.clientName) return;
-
-    // Apply category filter (check if payment's asunto is linked to usuario with that category)
-    if (filters?.category && payment.asunto_id) {
-      const asunto = asuntoMap.get(payment.asunto_id);
-      if (asunto?.usuario_id) {
-        const usuario = usuarioMap.get(asunto.usuario_id);
-        if (getCategoryLevel(usuario) !== filters.category) return;
-      } else {
-        return; // Skip if no usuario linked
-      }
-    }
+    // DON'T apply client filter here - we want all clients to show their actual revenue
+    // Only filters should affect the pie charts, not the client list data
 
     const revenue = payment.amount_charged || 0;
     clientRevenueMap.set(
@@ -316,10 +317,10 @@ const transformMockData = (
     };
   });
 
-  // Calculate hours by category level (using filtered time entries)
+  // Calculate hours by category level (using filtered time entries for charts)
   const hoursByLevelMap = new Map<string, number>();
 
-  timeEntries.forEach((entry) => {
+  timeEntriesForCharts.forEach((entry) => {
     const usuario = usuarioMap.get(entry.user_id);
     const level = getCategoryLevel(usuario);
 
@@ -717,7 +718,14 @@ const Top20ClientesPageContent = () => {
             formatDate={formatDate}
             hoursByLevel={hoursByLevel}
             facturacionByFeeType={facturacionByFeeType}
-            onClientClick={(client) => setClientFilter(client.nombre)}
+            onClientClick={(client) => {
+              // Toggle filter: if already selected, deselect it
+              if (filters.clientName === client.nombre) {
+                setClientFilter(null);
+              } else {
+                setClientFilter(client.nombre);
+              }
+            }}
             onCategoryClick={setCategoryFilter}
             activeFilters={filters}
             totalUnfilteredRevenue={totalUnfilteredRevenue}

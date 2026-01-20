@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "./DashboardSidebar";
 import { DashboardHeader } from "./DashboardHeader";
 
@@ -9,16 +9,14 @@ interface DashboardLayoutProps {
 
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <DashboardSidebar />
-        <div className="flex-1 flex flex-col">
-          <DashboardHeader />
-          <main className="flex-1 p-6 overflow-auto">
-            {children}
-          </main>
+    <SidebarProvider className="overflow-x-hidden">
+      <DashboardSidebar />
+      <SidebarInset className="overflow-hidden w-full min-w-0">
+        <DashboardHeader />
+        <div className="flex-1 p-6 overflow-auto w-full min-w-0 max-w-full">
+          {children}
         </div>
-      </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 };

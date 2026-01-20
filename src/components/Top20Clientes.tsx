@@ -234,7 +234,6 @@ const Top20Clientes = ({
                   />
                   <Bar
                     dataKey="revenue"
-                    fill="hsl(var(--primary))"
                     radius={[0, 4, 4, 0]}
                     onClick={(data) => {
                       if (onClientClick && data?.originalClient) {
@@ -243,15 +242,38 @@ const Top20Clientes = ({
                     }}
                     style={{ cursor: onClientClick ? "pointer" : "default" }}
                   >
+                    {chartData.map((entry: any, index: number) => {
+                      const isActive = entry.isActive;
+                      return (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill="hsl(var(--primary))"
+                          fillOpacity={isActive ? 1 : 0.6}
+                          stroke={isActive ? "hsl(var(--ring))" : "none"}
+                          strokeWidth={isActive ? 2 : 0}
+                        />
+                      );
+                    })}
                     <LabelList
                       dataKey="revenue"
                       position="right"
-                      formatter={(value: number) =>
-                        `$${value.toLocaleString()}`
-                      }
-                      style={{
-                        fill: "hsl(var(--foreground))",
-                        fontSize: "11px",
+                      content={(props: any) => {
+                        const { x, y, width, height, value, index } = props;
+                        const isActive = chartData[index]?.isActive;
+                        
+                        return (
+                          <text
+                            x={x + width + 5}
+                            y={y + height / 2}
+                            fill={isActive ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))"}
+                            fontSize={isActive ? "12px" : "11px"}
+                            fontWeight={isActive ? "600" : "400"}
+                            textAnchor="start"
+                            dominantBaseline="middle"
+                          >
+                            ${value?.toLocaleString()}
+                          </text>
+                        );
                       }}
                     />
                   </Bar>
@@ -318,19 +340,27 @@ const Top20Clientes = ({
                           onClientClick
                             ? "cursor-pointer hover:bg-muted/50"
                             : ""
-                        } ${isActive ? "bg-primary/10 border-primary/30" : ""}`}
+                        } ${isActive ? "bg-primary/15 border-primary/40 hover:bg-primary/20" : ""}`}
                         onClick={() => onClientClick?.(client)}
                       >
-                        <TableCell className="px-1 py-0.5 text-[11px] font-medium">
+                        <TableCell className={`px-1 py-0.5 text-[11px] font-medium ${
+                          isActive ? "text-primary font-semibold" : ""
+                        }`}>
                           {index + 1}
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-[11px] truncate max-w-[120px]">
+                        <TableCell className={`px-1 py-0.5 text-[11px] truncate max-w-[120px] ${
+                          isActive ? "text-primary font-semibold" : ""
+                        }`}>
                           {getMaskedClientName(client.nombre)}
                         </TableCell>
                         <TableCell className="px-1 py-0.5 text-[11px] text-right">
                           <span
                             className={`font-medium ${
-                              isNegative ? "text-red-600" : "text-emerald-600"
+                              isActive 
+                                ? "text-primary font-semibold"
+                                : isNegative 
+                                  ? "text-red-600" 
+                                  : "text-emerald-600"
                             }`}
                           >
                             ${roundedMargin.toLocaleString()}
@@ -339,13 +369,19 @@ const Top20Clientes = ({
                         <TableCell className="px-1 py-0.5 text-[11px] text-right">
                           <span
                             className={`font-medium ${
-                              isNegative ? "text-red-600" : "text-emerald-600"
+                              isActive 
+                                ? "text-primary font-semibold"
+                                : isNegative 
+                                  ? "text-red-600" 
+                                  : "text-emerald-600"
                             }`}
                           >
                             {marginPercent.toFixed(1)}%
                           </span>
                         </TableCell>
-                        <TableCell className="px-1 py-0.5 text-[11px] text-right font-medium">
+                        <TableCell className={`px-1 py-0.5 text-[11px] text-right font-medium ${
+                          isActive ? "text-primary font-semibold" : ""
+                        }`}>
                           ${roundedBillingRate.toLocaleString()}/h
                         </TableCell>
                       </TableRow>
