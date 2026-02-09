@@ -43,28 +43,39 @@ const Settings = () => {
     if (!user) return;
 
     setProfileLoading(true);
+    console.log("🔍 Fetching profile for user:", user.id);
     const { data: profile, error } = await supabase
-      .from("profiles")
+      .from("organizations")
       .select("firm_name, firm_logo")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
+
+    console.log("🔍 Fetch result:", { profile, error });
 
     if (error) {
-      console.error("Error fetching profile:", error);
+      console.error(
+        "❌ Error fetching profile:",
+        error.message,
+        error.code,
+        error.details,
+      );
       toast({
         title: "Error",
         description: "No se pudo cargar el perfil",
         variant: "destructive",
       });
     } else if (profile) {
+      console.log("✅ Profile found:", profile);
       setFirmName(profile.firm_name || "");
       setLogoUrl(profile.firm_logo || "");
+    } else {
+      console.log("ℹ️ No profile row exists yet — will be created on save");
     }
     setProfileLoading(false);
   };
 
   const handleLogoUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
+    event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     if (!file || !user) {
@@ -188,13 +199,19 @@ const Settings = () => {
     setSaving(true);
 
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          firm_name: firmName,
-          firm_logo: logoUrl,
-        })
-        .eq("id", user.id);
+      const payload = {
+        id: user.id,
+        firm_name: firmName,
+        firm_logo: logoUrl,
+      };
+      console.log("💾 Saving profile with payload:", payload);
+
+      const { data, error, status, statusText } = await supabase
+        .from("organizations")
+        .upsert(payload)
+        .select();
+
+      console.log("💾 Save response:", { data, error, status, statusText });
 
       if (error) throw error;
 
@@ -214,7 +231,7 @@ const Settings = () => {
           key: "profileUpdated",
           newValue: "true",
           url: window.location.href,
-        })
+        }),
       );
     } catch (error) {
       console.error("Error saving settings:", error);

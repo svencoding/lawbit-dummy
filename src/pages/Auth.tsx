@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { signIn } from "@/lib/supabase";
+import { signIn, signUp } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -28,6 +28,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -54,28 +55,48 @@ const Auth = () => {
     }
   };
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setLoading(true);
-    const { error } = await signIn(email, password);
-    setLoading(false);
 
-    if (error) {
-      toast({
-        title: "Error al iniciar sesión",
-        description:
-          error.message === "Invalid login credentials"
-            ? "Credenciales incorrectas. Verifica tu email y contraseña."
-            : error.message,
-        variant: "destructive",
-      });
+    if (isSignUp) {
+      const { error } = await signUp(email, password);
+      setLoading(false);
+
+      if (error) {
+        toast({
+          title: "Error al registrarse",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Registro exitoso",
+          description:
+            "Se ha enviado un correo de confirmación. Revisa tu bandeja de entrada.",
+        });
+        setIsSignUp(false);
+      }
     } else {
-      navigate("/facturacion");
+      const { error } = await signIn(email, password);
+      setLoading(false);
+
+      if (error) {
+        toast({
+          title: "Error al iniciar sesión",
+          description:
+            error.message === "Invalid login credentials"
+              ? "Credenciales incorrectas. Verifica tu email y contraseña."
+              : error.message,
+          variant: "destructive",
+        });
+      } else {
+        navigate("/facturacion");
+      }
     }
   };
-
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted to-secondary p-4">
@@ -92,11 +113,13 @@ const Auth = () => {
             Lawbit Enterprise
           </CardTitle>
           <CardDescription className="text-muted-foreground">
-            Sistema de gestión para estudios de abogados
+            {isSignUp
+              ? "Crea tu cuenta para comenzar"
+              : "Sistema de gestión para estudios de abogados"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignIn} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="login-email">Correo electrónico</Label>
               <Input
@@ -131,13 +154,25 @@ const Auth = () => {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Iniciando sesión...
+                  {isSignUp ? "Registrando..." : "Iniciando sesión..."}
                 </>
+              ) : isSignUp ? (
+                "Registrarse"
               ) : (
                 "Iniciar Sesión"
               )}
             </Button>
           </form>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            {isSignUp ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?"}{" "}
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-primary hover:underline font-medium"
+            >
+              {isSignUp ? "Iniciar Sesión" : "Registrarse"}
+            </button>
+          </div>
         </CardContent>
       </Card>
     </div>

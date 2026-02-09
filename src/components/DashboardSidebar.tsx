@@ -10,8 +10,16 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import {
   Loader2,
   LayoutDashboard,
@@ -23,19 +31,24 @@ import {
   Activity,
   Trophy,
   GitCompare,
+  FileText,
+  ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-const menuItems = [
+const dashboardSubItems = [
   { title: "Facturación", url: "/facturacion", icon: LayoutDashboard },
-  // { title: "Clientes", url: "/dashboard/clientes", icon: Users },
   { title: "Clientes", url: "/dashboard/top20-clientes", icon: Trophy },
   { title: "Utilización", url: "/facturacion/utilizacion", icon: Activity },
   { title: "Comparación", url: "/dashboard/comparacion", icon: GitCompare },
+  { title: "Profesionales", url: "/dashboard/profesionales", icon: Users },
+];
+
+const menuItems = [
   { title: "Alertas", url: "/dashboard/alertas", icon: Bell },
   { title: "Pricing", url: "/dashboard/pricing", icon: Calculator },
+  { title: "Reportes", url: "/dashboard/reportes", icon: FileText },
   { title: "Configuración", url: "/dashboard/settings", icon: Settings },
-  // { title: "Proyecciones", url: "/dashboard/proyecciones", icon: TrendingUp },
 ];
 
 // Helper function to extract initials from firm name
@@ -171,6 +184,44 @@ export function DashboardSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <Collapsible defaultOpen className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton>
+                      <LayoutDashboard
+                        className={
+                          state === "collapsed" ? "h-6 w-6" : "h-5 w-5"
+                        }
+                      />
+                      {state !== "collapsed" && (
+                        <>
+                          <span>Dashboards</span>
+                          <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                        </>
+                      )}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {dashboardSubItems.map((item) => (
+                        <SidebarMenuSubItem key={item.title}>
+                          <SidebarMenuSubButton asChild>
+                            <NavLink
+                              to={item.url}
+                              end
+                              className="hover:bg-sidebar-accent transition-colors"
+                              activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            >
+                              <item.icon className="h-4 w-4" />
+                              <span>{item.title}</span>
+                            </NavLink>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
