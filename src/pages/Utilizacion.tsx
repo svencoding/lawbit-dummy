@@ -236,7 +236,7 @@ const UtilizacionContent = () => {
         category: category === "Asociado Sr" ? "Asociado Sr" : category,
         utilization:
           data.expectedHours > 0
-            ? (data.actualHours / data.expectedHours) * 100
+            ? Math.round((data.actualHours / data.expectedHours) * 1000) / 10
             : 0,
         actualHours: data.actualHours,
         expectedHours: data.expectedHours,
@@ -304,7 +304,7 @@ const UtilizacionContent = () => {
         area,
         utilization:
           data.expectedHours > 0
-            ? (data.actualHours / data.expectedHours) * 100
+            ? Math.round((data.actualHours / data.expectedHours) * 1000) / 10
             : 0,
         actualHours: data.actualHours,
         expectedHours: data.expectedHours,
@@ -369,7 +369,7 @@ const UtilizacionContent = () => {
           year: year.toString(),
           utilization:
             data.expectedHours > 0
-              ? (data.actualHours / data.expectedHours) * 100
+              ? Math.round((data.actualHours / data.expectedHours) * 1000) / 10
               : 0,
           actualHours: data.actualHours,
           expectedHours: data.expectedHours,
