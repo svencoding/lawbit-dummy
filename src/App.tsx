@@ -18,6 +18,7 @@ import Settings from "./pages/Settings";
 import UserProfile from "./pages/UserProfile";
 import ReportesPDF from "./pages/ReportesPDF";
 import Profesionales from "./pages/Profesionales";
+import Hernandez from "./pages/Hernandez";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/user/:userCode" element={<UserProfile />} />
             <Route path="/dashboard/reportes" element={<ReportesPDF />} />
             <Route path="/dashboard/profesionales" element={<Profesionales />} />
+            <Route path="/dashboard/hernandez" element={<Hernandez />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

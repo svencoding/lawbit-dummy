@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { signIn } from "@/lib/supabase";
+import { signIn, signUp } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -28,6 +28,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -60,17 +61,24 @@ const Auth = () => {
 
     setLoading(true);
 
-    const { error } = await signIn(email, password);
+    const { error } = isSignUp
+      ? await signUp(email, password)
+      : await signIn(email, password);
     setLoading(false);
 
     if (error) {
       toast({
-        title: "Error al iniciar sesión",
+        title: isSignUp ? "Error al registrarse" : "Error al iniciar sesión",
         description:
           error.message === "Invalid login credentials"
             ? "Credenciales incorrectas. Verifica tu email y contraseña."
             : error.message,
         variant: "destructive",
+      });
+    } else if (isSignUp) {
+      toast({
+        title: "Registro exitoso",
+        description: "Revisa tu correo para confirmar tu cuenta.",
       });
     } else {
       navigate("/facturacion");
@@ -131,12 +139,24 @@ const Auth = () => {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Iniciando sesión...
+                  {isSignUp ? "Registrando..." : "Iniciando sesión..."}
                 </>
+              ) : isSignUp ? (
+                "Registrarse"
               ) : (
                 "Iniciar Sesión"
               )}
             </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              {isSignUp ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?"}{" "}
+              <button
+                type="button"
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-primary underline-offset-4 hover:underline font-medium"
+              >
+                {isSignUp ? "Iniciar Sesión" : "Registrarse"}
+              </button>
+            </p>
           </form>
         </CardContent>
       </Card>

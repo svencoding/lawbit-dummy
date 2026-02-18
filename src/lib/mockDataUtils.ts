@@ -1540,3 +1540,274 @@ export function getFullPricingData(): PricingDataStructure {
   cachedFullPricingData = result;
   return result;
 }
+
+// Get client profitability data (facturacion vs costo) with project breakdown
+export function getClientProfitability(
+  startDate?: Date,
+  endDate?: Date,
+  clientName?: string | null,
+  userName?: string | null,
+): Array<{
+  client_name: string;
+  client_code: string;
+  facturacion: number;
+  costo_total: number;
+  margen: number;
+  margen_percent: number;
+  projects: Array<{
+    project_id: number;
+    project_name: string;
+    facturacion: number;
+    costo_total: number;
+    margen_percent: number;
+  }>;
+}> {
+  let entries = getTransformedTimeEntries(startDate, endDate);
+
+  if (clientName) {
+    entries = entries.filter((e) => e.client_name === clientName);
+  }
+
+  if (userName) {
+    entries = entries.filter((e) => e.user_name === userName);
+  }
+
+  // When filtering by professional, only include payments for projects they worked on
+  const userProjectIds = userName
+    ? new Set(entries.map((e) => e.project_id))
+    : null;
+
+  // Filter payments by date
+  const filteredPayments = facturacion.filter((f) => {
+    if (!f.month) return false;
+    const paymentDate = normalizeDate(f.month);
+    if (!paymentDate) return false;
+    const date = new Date(paymentDate + "T00:00:00");
+    if (startDate) {
+      const start = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+      );
+      if (compareDateOnly(date, start) < 0) return false;
+    }
+    if (endDate) {
+      const end = new Date(
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate(),
+      );
+      if (compareDateOnly(date, end) > 0) return false;
+    }
+
+    // Filter by client name
+    if (clientName) {
+      if (!f.cliente_id) return false;
+      const cliente = clientesMap.get(f.cliente_id);
+      if (!cliente || cliente.name !== clientName) return false;
+    }
+
+    // Filter payments to only projects the professional worked on
+    if (userProjectIds) {
+      if (!f.asunto_id || !userProjectIds.has(f.asunto_id)) return false;
+    }
+
+    return true;
+  });
+
+  // Build client map
+  const clientDataMap = new Map<
+    string,
+    {
+      client_name: string;
+      client_code: string;
+      facturacion: number;
+      costo_total: number;
+      projectMap: Map<
+        number,
+        {
+          project_id: number;
+          project_name: string;
+          facturacion: number;
+          costo_total: number;
+        }
+      >;
+    }
+  >();
+
+  // Add payment data (facturacion)
+  filteredPayments.forEach((payment) => {
+    if (!payment.cliente_id) return;
+    const cliente = clientesMap.get(payment.cliente_id);
+    if (!cliente) return;
+    const clientCode = payment.cliente_id.toString();
+
+    if (!clientDataMap.has(clientCode)) {
+      clientDataMap.set(clientCode, {
+        client_name: cliente.name || `Cliente ${cliente.id}`,
+        client_code: clientCode,
+        facturacion: 0,
+        costo_total: 0,
+        projectMap: new Map(),
+      });
+    }
+
+    const client = clientDataMap.get(clientCode)!;
+    client.facturacion += payment.amount_charged || 0;
+
+    if (payment.asunto_id) {
+      const asunto = asuntosMap.get(payment.asunto_id);
+      if (!client.projectMap.has(payment.asunto_id)) {
+        client.projectMap.set(payment.asunto_id, {
+          project_id: payment.asunto_id,
+          project_name: asunto?.title || `Asunto ${payment.asunto_id}`,
+          facturacion: 0,
+          costo_total: 0,
+        });
+      }
+      const project = client.projectMap.get(payment.asunto_id)!;
+      project.facturacion += payment.amount_charged || 0;
+    }
+  });
+
+  // Add cost data from time entries
+  entries.forEach((entry) => {
+    const clientCode = entry.client_code;
+    if (!clientDataMap.has(clientCode)) {
+      clientDataMap.set(clientCode, {
+        client_name: entry.client_name,
+        client_code: clientCode,
+        facturacion: 0,
+        costo_total: 0,
+        projectMap: new Map(),
+      });
+    }
+
+    const client = clientDataMap.get(clientCode)!;
+    const cost =
+      entry.originalEntry.total_cost ??
+      entry.duration * (entry.originalEntry.hourly_cost || 0);
+    client.costo_total += cost;
+
+    if (!client.projectMap.has(entry.project_id)) {
+      client.projectMap.set(entry.project_id, {
+        project_id: entry.project_id,
+        project_name: entry.project_name,
+        facturacion: 0,
+        costo_total: 0,
+      });
+    }
+    const project = client.projectMap.get(entry.project_id)!;
+    project.costo_total += cost;
+  });
+
+  return Array.from(clientDataMap.values())
+    .map((client) => {
+      const margen = client.facturacion - client.costo_total;
+      const margen_percent =
+        client.facturacion > 0 ? (margen / client.facturacion) * 100 : 0;
+
+      const projects = Array.from(client.projectMap.values())
+        .map((project) => {
+          const pMargen = project.facturacion - project.costo_total;
+          const pMargenPercent =
+            project.facturacion > 0
+              ? (pMargen / project.facturacion) * 100
+              : 0;
+          return { ...project, margen_percent: pMargenPercent };
+        })
+        .sort((a, b) => b.facturacion - a.facturacion);
+
+      return {
+        client_name: client.client_name,
+        client_code: client.client_code,
+        facturacion: client.facturacion,
+        costo_total: client.costo_total,
+        margen,
+        margen_percent,
+        projects,
+      };
+    })
+    .sort((a, b) => b.facturacion - a.facturacion);
+}
+
+// Get billable hours grouped by user category with individual user breakdown
+export function getCategoryBillableHours(
+  startDate?: Date,
+  endDate?: Date,
+  clientName?: string | null,
+  userName?: string | null,
+): Array<{
+  category: string;
+  billable_hours: number;
+  users: Array<{ name: string; code: string; billable_hours: number }>;
+}> {
+  let entries = getTransformedTimeEntries(startDate, endDate);
+
+  if (clientName) {
+    entries = entries.filter((e) => e.client_name === clientName);
+  }
+
+  if (userName) {
+    entries = entries.filter((e) => e.user_name === userName);
+  }
+
+  const categoryMap = new Map<
+    string,
+    {
+      total: number;
+      userMap: Map<
+        number,
+        { name: string; code: string; hours: number }
+      >;
+    }
+  >();
+
+  entries.forEach((entry) => {
+    const usuario = usuariosMap.get(entry.user_id);
+    if (!usuario) return;
+    const category = usuario.category || "Sin categoría";
+
+    if (!categoryMap.has(category)) {
+      categoryMap.set(category, { total: 0, userMap: new Map() });
+    }
+    const cat = categoryMap.get(category)!;
+    cat.total += entry.billable_duration;
+
+    if (!cat.userMap.has(entry.user_id)) {
+      cat.userMap.set(entry.user_id, {
+        name: usuario.name,
+        code: usuario.code,
+        hours: 0,
+      });
+    }
+    cat.userMap.get(entry.user_id)!.hours += entry.billable_duration;
+  });
+
+  const categoryOrder = [
+    "Socio",
+    "Asociado Sr",
+    "Asociado",
+    "Asociado Junior",
+  ];
+
+  return categoryOrder
+    .map((category) => {
+      const data = categoryMap.get(category);
+      const users = data
+        ? Array.from(data.userMap.values())
+            .map((u) => ({
+              name: u.name,
+              code: u.code,
+              billable_hours: u.hours,
+            }))
+            .sort((a, b) => b.billable_hours - a.billable_hours)
+        : [];
+      return {
+        category,
+        billable_hours: data?.total || 0,
+        users,
+      };
+    })
+    .filter((item) => item.billable_hours > 0);
+}

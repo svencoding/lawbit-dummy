@@ -33,11 +33,12 @@ import {
   GitCompare,
   FileText,
   ChevronRight,
+  BarChart3,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-const dashboardSubItems = [
-  { title: "Facturación", url: "/facturacion", icon: LayoutDashboard },
+const getDashboardSubItems = (userEmail: string) => [
+  { title: "Facturación", url: userEmail === "hernandez@lawbit.com.pe" ? "/dashboard/hernandez" : "/facturacion", icon: LayoutDashboard },
   { title: "Clientes", url: "/dashboard/top20-clientes", icon: Trophy },
   { title: "Utilización", url: "/facturacion/utilizacion", icon: Activity },
   { title: "Comparación", url: "/dashboard/comparacion", icon: GitCompare },
@@ -71,6 +72,9 @@ export function DashboardSidebar() {
   const [logoUrl, setLogoUrl] = useState<string>(() => {
     return sessionStorage.getItem("logoUrl") || "";
   });
+  const [userEmail, setUserEmail] = useState<string>(() => {
+    return sessionStorage.getItem("userEmail") || "";
+  });
   const [isLoading, setIsLoading] = useState(!logoUrl && !firmName);
 
   useEffect(() => {
@@ -79,6 +83,10 @@ export function DashboardSidebar() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
+        if (user.email) {
+          setUserEmail(user.email);
+          sessionStorage.setItem("userEmail", user.email);
+        }
         const { data: profile } = await supabase
           .from("profiles")
           .select("firm_name, firm_logo")
@@ -129,7 +137,9 @@ export function DashboardSidebar() {
       collapsible="icon"
     >
       <SidebarContent className="bg-sidebar">
-        <div className={`${state === "collapsed" ? "px-5 py-4" : "p-4"} flex flex-col items-center gap-2`}>
+        <div
+          className={`${state === "collapsed" ? "px-5 py-4" : "p-4"} flex flex-col items-center gap-2`}
+        >
           {state === "collapsed" ? (
             // When collapsed, show initials in a circular avatar
             <div className="w-12 h-12 rounded-full bg-sidebar-accent flex items-center justify-center border-2 border-sidebar-accent/30">
@@ -203,7 +213,7 @@ export function DashboardSidebar() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      {dashboardSubItems.map((item) => (
+                      {getDashboardSubItems(userEmail).map((item) => (
                         <SidebarMenuSubItem key={item.title}>
                           <SidebarMenuSubButton asChild>
                             <NavLink
