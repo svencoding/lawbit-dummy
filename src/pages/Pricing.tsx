@@ -37,6 +37,8 @@ import {
   TrendingDown,
   ChevronDown,
   ChevronUp,
+  Scale,
+  Briefcase,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAreaColor } from "@/lib/constants";
@@ -50,6 +52,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import {
@@ -57,6 +65,8 @@ import {
   getFullPricingData,
   getAsuntos,
 } from "@/lib/mockDataUtils";
+import type { HistoricalProject } from "@/lib/mockDataUtils";
+import CasosPrecedentes from "@/components/CasosPrecedentes";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
@@ -197,6 +207,7 @@ const Pricing = () => {
   const [useTargetMargin, setUseTargetMargin] = useState<boolean>(false);
   const [showSeniorityCosts, setShowSeniorityCosts] = useState<boolean>(false);
   const [showCostBreakdown, setShowCostBreakdown] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<string>("parametros");
 
   // State for historical data
   const [pricingData, setPricingData] = useState<PricingData | null>(null);
@@ -693,6 +704,36 @@ const Pricing = () => {
     fullPricingData,
   ]);
 
+  const handleApplyProject = useCallback((project: HistoricalProject) => {
+    setEstimatedHours(Math.round(project.total_hours));
+
+    if (project.charge_type === "TASA") {
+      setBillingMethod("hourly");
+    } else if (project.charge_type === "HITOS") {
+      setBillingMethod("fixed");
+    }
+
+    if (project.team.length > 1) {
+      setUseSeniorityAllocation(true);
+      const categoryToLevel: Record<string, string> = {
+        Socio: "partner",
+        "Asociado Sr": "senior",
+        Asociado: "associate",
+        "Asociado Junior": "junior",
+      };
+      const newSeniorityHours: SeniorityHours = {};
+      project.team.forEach((member) => {
+        const level = categoryToLevel[member.category] || "associate";
+        newSeniorityHours[level] =
+          (newSeniorityHours[level] || 0) + member.hours;
+      });
+      setSeniorityHours(newSeniorityHours);
+    }
+
+    setComplexityFactor(1);
+    setActiveTab("parametros");
+  }, []);
+
   const getComplexityLabel = (factor: number): string => {
     if (factor <= 0.7) return "Muy Baja";
     if (factor <= 0.9) return "Baja";
@@ -766,9 +807,9 @@ const Pricing = () => {
 
       // Billing Method
       const billingMethodLabels: Record<string, string> = {
-        hourly: "Por Hora",
-        fixed: "Precio Fijo",
-        "value-based": "Por Valor",
+        hourly: "Tarifa Horaria",
+        fixed: "Suma Alzada",
+        "value-based": "Honorario de Éxito",
       };
       doc.setFont("helvetica", "bold");
       doc.text("Método de Facturación:", margin, yPosition);
@@ -792,7 +833,7 @@ const Pricing = () => {
       // Details Section
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
-      doc.text("DETALLE DE SERVICIOS", margin, yPosition);
+      doc.text("DESGLOSE DE HONORARIOS", margin, yPosition);
       yPosition += 8;
 
       if (useSeniorityAllocation && pricingData.seniorityLevels.length > 0) {
@@ -885,7 +926,7 @@ const Pricing = () => {
 
       doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
-      doc.text("TOTAL ESTIMADO:", margin, yPosition);
+      doc.text("HONORARIO TOTAL ESTIMADO:", margin, yPosition);
       doc.text(
         "$" + calculatedPrice.toLocaleString(),
         pageWidth - margin,
@@ -965,34 +1006,59 @@ const Pricing = () => {
         {/* Header */}
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <Calculator className="h-8 w-8 text-primary" />
+            <Scale className="h-8 w-8 text-primary" />
             <h1 className="text-3xl font-bold text-foreground">
-              Calculadora de Precios
+              Cotizador de Honorarios
             </h1>
           </div>
           <p className="text-muted-foreground">
-            Estima el precio de tus servicios legales basándose en datos
-            históricos y variables personalizables
+            Determine los honorarios adecuados para su asunto legal con base en
+            el historial de la firma y parámetros ajustables
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Input Form */}
+          {/* Left Column - Tabs */}
           <div className="lg:col-span-2 space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="parametros" className="gap-2">
+                  <Calculator className="h-4 w-4" />
+                  Parámetros
+                </TabsTrigger>
+                <TabsTrigger
+                  value="historico"
+                  className="gap-2"
+                  disabled={!selectedArea}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Referencia Histórica
+                </TabsTrigger>
+                <TabsTrigger
+                  value="precedentes"
+                  className="gap-2"
+                  disabled={!selectedArea}
+                >
+                  <Briefcase className="h-4 w-4" />
+                  Casos Precedentes
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="parametros">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calculator className="h-5 w-5" />
-                  Parámetros de Cotización
+                  Configuración del Asunto
                 </CardTitle>
                 <CardDescription>
-                  Configure los parámetros para calcular el precio estimado
+                  Defina las características del servicio legal a cotizar
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Area Selection */}
                 <div className="space-y-2">
-                  <Label htmlFor="area">Área de Práctica</Label>
+                  <Label htmlFor="area">Área de Práctica Legal</Label>
                   <Select value={selectedArea} onValueChange={setSelectedArea}>
                     <SelectTrigger id="area">
                       <SelectValue placeholder="Selecciona un área de práctica" />
@@ -1015,7 +1081,7 @@ const Pricing = () => {
 
                 {/* Billing Method */}
                 <div className="space-y-2">
-                  <Label htmlFor="billing-method">Método de Facturación</Label>
+                  <Label htmlFor="billing-method">Modalidad de Cobro</Label>
                   <Select
                     value={billingMethod}
                     onValueChange={setBillingMethod}
@@ -1024,18 +1090,18 @@ const Pricing = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="hourly">Por Hora</SelectItem>
-                      <SelectItem value="fixed">Precio Fijo</SelectItem>
-                      <SelectItem value="value-based">Por Valor</SelectItem>
+                      <SelectItem value="hourly">Tarifa Horaria</SelectItem>
+                      <SelectItem value="fixed">Suma Alzada</SelectItem>
+                      <SelectItem value="value-based">Honorario de Éxito</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     {billingMethod === "hourly" &&
-                      "Facturación basada en horas trabajadas"}
+                      "Se cobra en función de las horas efectivamente dedicadas al asunto"}
                     {billingMethod === "fixed" &&
-                      "Precio fijo basado en promedios históricos"}
+                      "Monto fijo determinado con base en asuntos comparables"}
                     {billingMethod === "value-based" &&
-                      "Precio basado en el valor entregado (premium)"}
+                      "Honorario vinculado al resultado o valor generado para el cliente"}
                   </p>
                 </div>
 
@@ -1050,7 +1116,7 @@ const Pricing = () => {
                         className="flex items-center gap-2"
                       >
                         <Users className="h-4 w-4" />
-                        Asignación por Nivel de Senioridad
+                        Composición del Equipo por Senioridad
                       </Label>
                       <Switch
                         id="seniority-allocation"
@@ -1059,14 +1125,14 @@ const Pricing = () => {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Distribuye las horas entre diferentes niveles de
-                      senioridad para un cálculo más preciso
+                      Asigne horas por nivel profesional para un costeo más
+                      preciso del equipo
                     </p>
                   </div>
                 )}
 
-                {/* Estimated Hours - Show only if not using seniority allocation and not using target price */}
-                {!useSeniorityAllocation && !useTargetPrice && (
+                {/* Estimated Hours - Show unless using target price */}
+                {!useTargetPrice && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label
@@ -1074,11 +1140,23 @@ const Pricing = () => {
                         className="flex items-center gap-2"
                       >
                         <Clock className="h-4 w-4" />
-                        Horas Estimadas
+                        Horas de Dedicación Estimadas
                       </Label>
-                      <span className="text-sm font-medium">
-                        {estimatedHours}h
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={500}
+                          step={1}
+                          value={estimatedHours}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!isNaN(v)) setEstimatedHours(Math.max(1, Math.min(500, v)));
+                          }}
+                          className="w-20 h-7 text-sm font-medium text-right"
+                        />
+                        <span className="text-sm text-muted-foreground">h</span>
+                      </div>
                     </div>
                     <Slider
                       id="hours"
@@ -1259,9 +1337,33 @@ const Pricing = () => {
                                   </TooltipContent>
                                 </Tooltip>
                               </div>
-                              <span className="text-sm font-medium">
-                                {hours}h
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={useTargetPrice ? 1000 : estimatedHours}
+                                  step={0.5}
+                                  value={hours}
+                                  onChange={(e) => {
+                                    const v = parseFloat(e.target.value);
+                                    if (!isNaN(v)) {
+                                      const maxVal = useTargetPrice ? 1000 : estimatedHours;
+                                      const clamped = Math.max(0, Math.min(maxVal, v));
+                                      const newHours = { ...seniorityHours };
+                                      newHours[level.level] = clamped;
+                                      if (!useTargetPrice) {
+                                        const newTotal = Object.values(newHours).reduce((sum, h) => sum + h, 0);
+                                        if (newTotal !== estimatedHours) {
+                                          setEstimatedHours(Math.round(newTotal));
+                                        }
+                                      }
+                                      setSeniorityHours(newHours);
+                                    }
+                                  }}
+                                  className="w-20 h-7 text-sm font-medium text-right"
+                                />
+                                <span className="text-sm text-muted-foreground">h</span>
+                              </div>
                             </div>
                             <Slider
                               min={0}
@@ -1496,7 +1598,7 @@ const Pricing = () => {
                       className="flex items-center gap-2"
                     >
                       <TrendingUp className="h-4 w-4" />
-                      Factor de Complejidad
+                      Factor de Complejidad del Asunto
                       <Tooltip>
                         <TooltipTrigger>
                           <Info className="h-3 w-3 text-muted-foreground" />
@@ -1510,13 +1612,29 @@ const Pricing = () => {
                         </TooltipContent>
                       </Tooltip>
                     </Label>
-                    <Badge
-                      className={getComplexityColor(complexityFactor)}
-                      variant="secondary"
-                    >
-                      {getComplexityLabel(complexityFactor)} (
-                      {complexityFactor.toFixed(1)}x)
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        className={getComplexityColor(complexityFactor)}
+                        variant="secondary"
+                      >
+                        {getComplexityLabel(complexityFactor)}
+                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min={0.5}
+                          max={2}
+                          step={0.1}
+                          value={complexityFactor}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            if (!isNaN(v)) setComplexityFactor(Math.max(0.5, Math.min(2, Math.round(v * 10) / 10)));
+                          }}
+                          className="w-20 h-7 text-sm font-medium text-right"
+                        />
+                        <span className="text-sm text-muted-foreground">x</span>
+                      </div>
+                    </div>
                   </div>
                   <Slider
                     id="complexity"
@@ -1536,7 +1654,7 @@ const Pricing = () => {
                   <div className="flex items-center justify-between mb-2">
                     <Label className="text-sm font-semibold flex items-center gap-2">
                       <TrendingUp className="h-4 w-4" />
-                      Controles Avanzados de Precio
+                      Parámetros Avanzados de Honorarios
                     </Label>
                   </div>
 
@@ -1548,7 +1666,7 @@ const Pricing = () => {
                         className="flex items-center gap-2 text-sm"
                       >
                         <DollarSign className="h-4 w-4" />
-                        Precio Total Objetivo
+                        Honorario Total Objetivo
                       </Label>
                       <Switch
                         id="use-target-price"
@@ -1608,7 +1726,7 @@ const Pricing = () => {
                         className="flex items-center gap-2 text-sm"
                       >
                         <TrendingUp className="h-4 w-4" />
-                        Margen de Ganancia Objetivo
+                        Margen de Rentabilidad Objetivo
                       </Label>
                       <Switch
                         id="use-target-margin"
@@ -1630,9 +1748,21 @@ const Pricing = () => {
                             }
                             className="flex-1"
                           />
-                          <span className="text-sm font-medium w-16 text-right">
-                            {targetProfitMargin}%
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={80}
+                              step={1}
+                              value={targetProfitMargin}
+                              onChange={(e) => {
+                                const v = parseInt(e.target.value, 10);
+                                if (!isNaN(v)) setTargetProfitMargin(Math.max(0, Math.min(80, v)));
+                              }}
+                              className="w-16 h-7 text-sm font-medium text-right"
+                            />
+                            <span className="text-sm text-muted-foreground">%</span>
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           El precio se ajustará automáticamente para alcanzar
@@ -1650,7 +1780,7 @@ const Pricing = () => {
                         className="flex items-center gap-2 text-sm"
                       >
                         <DollarSign className="h-4 w-4" />
-                        Tarifa por Hora Personalizada (Opcional)
+                        Tarifa Horaria Manual (Opcional)
                       </Label>
                       <div className="flex gap-2">
                         <div className="relative flex-1">
@@ -1696,14 +1826,15 @@ const Pricing = () => {
                 </div>
               </CardContent>
             </Card>
+              </TabsContent>
 
-            {/* Historical Data Card */}
-            {selectedArea && pricingData && (
+              <TabsContent value="historico">
+            {selectedArea && pricingData ? (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="h-5 w-5" />
-                    Datos Históricos - {selectedArea}
+                    Referencia Histórica — {selectedArea}
                   </CardTitle>
                   <CardDescription>
                     Estadísticas basadas en {pricingData.totalCases} casos
@@ -1884,7 +2015,49 @@ const Pricing = () => {
                   )}
                 </CardContent>
               </Card>
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-sm text-muted-foreground">
+                    Seleccione un área de práctica para ver datos históricos
+                  </p>
+                </CardContent>
+              </Card>
             )}
+              </TabsContent>
+
+              <TabsContent value="precedentes">
+                {selectedArea ? (
+                  <CasosPrecedentes
+                    selectedArea={selectedArea}
+                    currentEstimate={{
+                      totalPrice: calculatedPrice,
+                      totalHours: useSeniorityAllocation
+                        ? Object.values(seniorityHours).reduce(
+                            (s, h) => s + h,
+                            0,
+                          )
+                        : estimatedHours,
+                      avgRate: pricingData?.avgHourlyRate || 0,
+                      billingMethod,
+                      complexityFactor,
+                    }}
+                    onApplyProject={handleApplyProject}
+                  />
+                ) : (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <Briefcase className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-sm text-muted-foreground">
+                        Seleccione un área de práctica para ver casos
+                        precedentes
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+            </Tabs>
           </div>
 
           {/* Right Column - Price Result */}
@@ -1893,7 +2066,7 @@ const Pricing = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
-                  Precio Estimado
+                  Honorario Estimado
                 </CardTitle>
                 <CardDescription>
                   Basado en los parámetros seleccionados
@@ -1902,9 +2075,15 @@ const Pricing = () => {
               <CardContent className="space-y-6">
                 {!selectedArea ? (
                   <div className="text-center py-12">
-                    <Calculator className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-sm text-muted-foreground">
-                      Selecciona un área de práctica para comenzar
+                    <div className="bg-muted/30 rounded-full p-6 mb-4 mx-auto w-fit">
+                      <Scale className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                    <p className="text-base font-medium text-muted-foreground mb-1">
+                      Sin área seleccionada
+                    </p>
+                    <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                      Seleccione un área de práctica legal en la pestaña de
+                      parámetros para generar una estimación de honorarios
                     </p>
                   </div>
                 ) : dataLoading ? (
@@ -1918,8 +2097,8 @@ const Pricing = () => {
                     <div className="text-center p-6 bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg border-2 border-primary/20">
                       <p className="text-sm text-muted-foreground mb-2">
                         {useTargetPrice
-                          ? "Precio Objetivo Establecido"
-                          : "Precio Total Estimado"}
+                          ? "Honorario Objetivo Establecido"
+                          : "Honorario Total Estimado"}
                       </p>
                       <p className="text-4xl font-bold text-primary mb-2">
                         ${calculatedPrice.toLocaleString()}
@@ -1955,12 +2134,12 @@ const Pricing = () => {
                       <Separator />
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
-                          Método de facturación:
+                          Modalidad de cobro:
                         </span>
                         <span className="font-medium">
-                          {billingMethod === "hourly" && "Por Hora"}
-                          {billingMethod === "fixed" && "Precio Fijo"}
-                          {billingMethod === "value-based" && "Por Valor"}
+                          {billingMethod === "hourly" && "Tarifa Horaria"}
+                          {billingMethod === "fixed" && "Suma Alzada"}
+                          {billingMethod === "value-based" && "Honorario de Éxito"}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
@@ -2193,7 +2372,7 @@ const Pricing = () => {
                             Generando PDF...
                           </>
                         ) : (
-                          "Exportar Cotización"
+                          "Generar Propuesta de Honorarios (PDF)"
                         )}
                       </Button>
                       <Button
@@ -2213,9 +2392,10 @@ const Pricing = () => {
                           setTargetTotalPrice("");
                           setUseTargetPrice(false);
                           setUseTargetMargin(false);
+                          setActiveTab("parametros");
                         }}
                       >
-                        Reiniciar
+                        Limpiar y Comenzar de Nuevo
                       </Button>
                     </div>
 

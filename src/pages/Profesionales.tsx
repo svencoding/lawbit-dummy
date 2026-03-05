@@ -477,7 +477,7 @@ const Profesionales = () => {
                       {chartData.map((_, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill="hsl(210 55% 47%)"
+                          fill="hsl(var(--chart-5))"
                           fillOpacity={0.8}
                         />
                       ))}

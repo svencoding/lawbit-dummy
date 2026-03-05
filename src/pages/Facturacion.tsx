@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -23,6 +22,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { getAreaColor, AREAS_PROFESIONALES } from "@/lib/constants";
+import { getChartColor } from "@/lib/chartColors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { dashboardCache } from "@/lib/dashboardCache";
@@ -92,6 +92,7 @@ const FacturacionContent = () => {
     setAreaFilter,
     setClientFilter,
     setFormaCobroFilter,
+    setEncargadoFilter,
     clearFilters,
     hasActiveFilters,
   } = useFacturacionFilters();
@@ -195,38 +196,42 @@ const FacturacionContent = () => {
           await new Promise((resolve) => setTimeout(resolve, 500));
 
           // Get dashboard data from relational data
-          const allAreasData = getDashboardData("all", startDate, endDate);
+          const encargadoCode = filters.encargado?.code || undefined;
+          const allAreasData = getDashboardData("all", startDate, endDate, undefined, undefined, encargadoCode);
           const filteredData = getDashboardData(
             selectedArea,
             startDate,
             endDate,
             filters.clientName,
-            filters.formaCobro
+            filters.formaCobro,
+            encargadoCode
           );
 
-          // Get pie chart data - filter by client if client filter is active
+          // Get pie chart data - filter by client and encargado if active
           // But keep formaCobro unfiltered for the chart (only filter by client, not formaCobro)
           const pieChartData =
-            filters.clientName
+            filters.clientName || encargadoCode
               ? getDashboardData(
                   "all",
                   startDate,
                   endDate,
                   filters.clientName,
-                  undefined // Don't filter by formaCobro for the area chart
+                  undefined, // Don't filter by formaCobro for the area chart
+                  encargadoCode
                 ).facturacionPorArea
               : allAreasData.facturacionPorArea;
 
-          // Get forma cobro chart data - filter by client or area if those filters are active
+          // Get forma cobro chart data - filter by client, area, or encargado if active
           // But keep formaCobro unfiltered for the chart
           const formaCobroChartDataUnfiltered =
-            filters.clientName || filters.area
+            filters.clientName || filters.area || encargadoCode
               ? getDashboardData(
                   filters.area || "all",
                   startDate,
                   endDate,
                   filters.clientName,
-                  undefined // Don't filter by formaCobro for the chart
+                  undefined, // Don't filter by formaCobro for the chart
+                  encargadoCode
                 ).formaCobroChart
               : allAreasData.formaCobroChart;
 
@@ -399,6 +404,7 @@ const FacturacionContent = () => {
       filters.area,
       filters.clientName,
       filters.formaCobro,
+      filters.encargado?.code,
     ]
   );
 
@@ -416,13 +422,14 @@ const FacturacionContent = () => {
   // Fetch clients data
   useEffect(() => {
     if (user && USE_MOCK_DATA) {
-      // Fetch clients filtered by area or formaCobro if those filters are active
+      // Fetch clients filtered by area, formaCobro, or encargado if those filters are active
       const clientCosts = getClientCosts(
         startDate,
         endDate,
         null, // Don't filter by client name here - we want all clients for the table
         filters.area || undefined, // Filter by area if active
-        filters.formaCobro || undefined // Filter by formaCobro if active
+        filters.formaCobro || undefined, // Filter by formaCobro if active
+        filters.encargado?.code || undefined // Filter by encargado if active
       );
       const clientsData = clientCosts
         .map((client) => ({
@@ -432,7 +439,13 @@ const FacturacionContent = () => {
         .sort((a, b) => b.totalFacturado - a.totalFacturado);
       setAllClients(clientsData);
 
-      // Calculate revenue by user (top 5) - filter by client or formaCobro if active
+      // Reset table scroll to top when filters change (not on initial load)
+      if (!isInitialTableLoadRef.current && tableScrollRef.current) {
+        tableScrollRef.current.scrollTop = 0;
+      }
+
+      // Calculate revenue by user (top 5) - filter by client, formaCobro, or encargado if active
+      // Don't filter by encargado here so the chart shows all users for cross-filtering
       const userRevenue = getRevenueByUser(
         startDate,
         endDate,
@@ -448,28 +461,24 @@ const FacturacionContent = () => {
     filters.clientName,
     filters.area,
     filters.formaCobro,
+    filters.encargado?.code,
   ]);
 
-  // Scroll table to show client #10 on initial load only
+  // Mark initial load as complete once data is ready and table is visible
   useEffect(() => {
-    if (tableScrollRef.current && clients.length >= 10 && isInitialTableLoadRef.current) {
-      // Calculate scroll position: each row is approximately h-7 (28px) + border
-      // Scroll to show row 10 (index 9) at the top
-      const rowHeight = 28; // h-7 = 28px
-      const scrollPosition = rowHeight * 9; // Scroll to position of 10th client (index 9)
-      tableScrollRef.current.scrollTop = scrollPosition;
+    if (!dataLoading && clients.length > 0 && isInitialTableLoadRef.current) {
       isInitialTableLoadRef.current = false;
     }
-  }, [clients]);
+  }, [clients, dataLoading]);
 
   if (loading || dataLoading) {
     return (
       <DashboardLayout>
-        <div className="space-y-6">
-          <Skeleton className="h-12 w-64" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <Skeleton key={i} className="h-32" />
+        <div className="space-y-3">
+          <Skeleton className="h-8 w-64" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-16" />
             ))}
           </div>
         </div>
@@ -576,14 +585,7 @@ const FacturacionContent = () => {
       return percent >= 0.5;
     });
 
-  // Colors for pie charts - tones of primary color (matching Top20Clientes)
-  const PRIMARY_COLORS = [
-    "hsl(210 55% 23%)", // Base primary (darkest)
-    "hsl(210 55% 35%)", // Medium-dark
-    "hsl(210 55% 47%)", // Medium
-    "hsl(210 55% 59%)", // Medium-light
-    "hsl(210 55% 71%)", // Light
-  ];
+  // Colors for pie charts - tones of primary color via CSS variables
 
   // Group small categories (< 2%) into "Other" to prevent label overlap
   const SMALL_THRESHOLD = 2; // Percentage threshold
@@ -614,7 +616,7 @@ const FacturacionContent = () => {
       area: `Otros (${smallCategories.length})`,
       facturacion: otherTotal,
       meta: smallCategories.reduce((sum: number, item: any) => sum + (item.meta || 0), 0),
-      color: PRIMARY_COLORS[PRIMARY_COLORS.length - 1], // Use lightest color for "Other"
+      color: getChartColor(9), // Use lightest color for "Other"
       originalAreas: otherAreas, // Store original areas for tooltip
     });
   }
@@ -665,38 +667,33 @@ const FacturacionContent = () => {
 
   return (
     <DashboardLayout>
-      <div className="space-y-4 w-full min-w-0 max-w-full overflow-x-hidden">
+      <div className="space-y-2 w-full min-w-0 max-w-full overflow-x-hidden">
         <div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-foreground">
-                  Resumen de Facturación
-                </h1>
-                {isRefreshing && (
-                  <Badge
-                    variant="secondary"
-                    className="flex items-center gap-1.5"
-                  >
-                    <RefreshCw className="h-3 w-3 animate-spin" />
-                    Actualizando...
-                  </Badge>
-                )}
-              </div>
-              <p className="text-muted-foreground">
-                Resumen de facturación para el período y área seleccionada
-              </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-foreground">
+                Resumen de Facturación
+              </h1>
+              {isRefreshing && (
+                <Badge
+                  variant="secondary"
+                  className="flex items-center gap-1.5"
+                >
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  Actualizando...
+                </Badge>
+              )}
             </div>
           </div>
 
           {/* Filters Row */}
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="flex flex-col lg:flex-row gap-2 items-start lg:items-center justify-between">
             {/* Date Filters */}
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-1">
-              <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-                Filtrar por fecha:
+            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center flex-1">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                Fecha:
               </span>
-              <div className="flex flex-wrap gap-3 items-center">
+              <div className="flex flex-wrap gap-2 items-center">
                 {/* Start Date */}
                 <Popover>
                   <PopoverTrigger asChild>
@@ -841,6 +838,17 @@ const FacturacionContent = () => {
                 </button>
               </div>
             )}
+            {filters.encargado && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                <span>Encargado: {filters.encargado.name}</span>
+                <button
+                  onClick={() => setEncargadoFilter(null)}
+                  className="ml-1 hover:bg-primary/20 rounded p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -864,7 +872,7 @@ const FacturacionContent = () => {
             </div>
           )}
           <div
-            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 transition-opacity duration-200 ${
+            className={`grid grid-cols-1 md:grid-cols-3 gap-3 transition-opacity duration-200 ${
               isRefreshing ? "opacity-60" : "opacity-100"
             }`}
           >
@@ -873,21 +881,18 @@ const FacturacionContent = () => {
                 key={stat.title}
                 className="border-border/50 hover:shadow-md transition-shadow"
               >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {stat.title}
-                  </CardTitle>
-                  <div className={`${stat.bgColor} p-2 rounded-lg`}>
+                <CardContent className="p-3 flex items-center gap-3">
+                  <div className={`${stat.bgColor} p-1.5 rounded-md`}>
                     <stat.icon className={`h-4 w-4 ${stat.color}`} />
                   </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="text-2xl font-bold text-foreground">
-                    {stat.value}
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-muted-foreground truncate">
+                      {stat.title}
+                    </p>
+                    <div className="text-lg font-bold text-foreground">
+                      {stat.value}
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stat.description}
-                  </p>
                 </CardContent>
               </Card>
             ))}
@@ -896,27 +901,24 @@ const FacturacionContent = () => {
 
         {/* Clients Table, Bar Chart, and Pie Charts */}
         <div
-          className={`flex flex-col gap-4 transition-opacity duration-200 min-w-0 ${
+          className={`flex flex-col gap-3 transition-opacity duration-200 min-w-0 ${
             isRefreshing ? "opacity-60" : "opacity-100"
           }`}
         >
           {/* Row 1: Todos los Clientes Table and Facturación por Área Chart */}
-          <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex flex-col lg:flex-row gap-3">
             {/* Clients Table */}
             <Card className="flex-1 border-border/50 w-full">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-foreground">
+            <CardHeader className="pb-1 pt-3 px-3">
+              <CardTitle className="text-sm text-foreground">
                 Todos los Clientes
               </CardTitle>
-              <CardDescription>
-                Lista completa de clientes ordenados por facturación
-              </CardDescription>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 px-3 pb-2">
               <div
                 ref={tableScrollRef}
                 className="overflow-y-auto rounded-md"
-                style={{ height: "300px" }}
+                style={{ height: "280px", overflowAnchor: "none" as const }}
               >
                 <Table>
                   <TableHeader>
@@ -978,9 +980,9 @@ const FacturacionContent = () => {
           </Card>
 
             {/* Facturación por Área Pie Chart */}
-            <div className="w-full lg:w-[500px] lg:flex-shrink-0">
-              <div className="bg-muted/30 rounded-lg p-4 border transition-all duration-300 h-full flex flex-col">
-                <h3 className="text-sm font-semibold mb-3 text-foreground">
+            <div className="w-full lg:w-[450px] lg:flex-shrink-0">
+              <div className="bg-muted/30 rounded-lg p-3 border transition-all duration-300 h-full flex flex-col">
+                <h3 className="text-sm font-semibold mb-1 text-foreground">
                   Facturación por Área
                 </h3>
                 {transformedFacturacionData &&
@@ -992,7 +994,7 @@ const FacturacionContent = () => {
                       },
                     }}
                   >
-                    <ResponsiveContainer width="100%" height={300}>
+                    <ResponsiveContainer width="100%" height={260}>
                       <PieChart>
                         <Pie
                           data={transformedFacturacionData}
@@ -1008,7 +1010,7 @@ const FacturacionContent = () => {
                             return ""; // Hide labels for very small slices
                           }}
                           outerRadius={70}
-                          fill="#8884d8"
+                          fill="hsl(var(--chart-5))"
                           dataKey="facturacion"
                           nameKey="area"
                           onClick={(data) => {
@@ -1027,29 +1029,14 @@ const FacturacionContent = () => {
                             (entry: any, index: number) => {
                               const isActive = filters.area === entry.area;
                               const isOtherCategory = entry.area?.startsWith("Otros");
-                              // Use PRIMARY_COLORS like Top20Clientes
-                              const baseColor =
-                                PRIMARY_COLORS[index % PRIMARY_COLORS.length];
-                              // Make active slice brighter and add visual cues
-                              const fillColor = isActive
-                                ? baseColor.replace(
-                                    /hsl\(([^)]+)\)/,
-                                    (match, content) => {
-                                      return `hsl(${content.replace(
-                                        /\d+%\)/,
-                                        "75%)"
-                                      )}`;
-                                    }
-                                  )
-                                : baseColor;
                               return (
                                 <Cell
                                   key={`cell-${index}`}
-                                  fill={fillColor}
+                                  fill={getChartColor(index)}
                                   fillOpacity={isActive ? 1 : 0.85}
                                   stroke={isActive ? "#000" : "none"}
                                   strokeWidth={isActive ? 3 : 0}
-                                  style={{ 
+                                  style={{
                                     cursor: isOtherCategory ? "default" : "pointer",
                                     filter: isActive ? "drop-shadow(0 0 4px rgba(0,0,0,0.3))" : "none"
                                   }}
@@ -1115,7 +1102,7 @@ const FacturacionContent = () => {
                     </ResponsiveContainer>
                   </ChartContainer>
                 ) : (
-                  <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground">
+                  <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">
                     No hay datos disponibles
                   </div>
                 )}
@@ -1124,17 +1111,33 @@ const FacturacionContent = () => {
           </div>
 
           {/* Row 2: Facturación por Encargado Comercial and Facturación según Forma de Cobro */}
-          <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex flex-col lg:flex-row gap-3">
             {/* Facturación por Encargado Comercial Bar Chart */}
             {revenueByUsers && revenueByUsers.length > 0 && (
               <Card className="flex-1 border-border/50 w-full min-w-0">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-foreground">
-                    Facturación por Encargado Comercial
-                  </CardTitle>
-                  <CardDescription>
-                    Encargados comerciales con mayor facturación en el período
-                  </CardDescription>
+                <CardHeader className="pb-1 pt-3 px-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm text-foreground">
+                      Facturación por Encargado Comercial
+                    </CardTitle>
+                    {filters.encargado && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs gap-1.5"
+                        onClick={() => {
+                          const params = new URLSearchParams();
+                          if (startDate) params.set("startDate", startDate.toISOString());
+                          if (endDate) params.set("endDate", endDate.toISOString());
+                          const queryString = params.toString();
+                          navigate(`/user/${filters.encargado!.code}${queryString ? `?${queryString}` : ""}`);
+                        }}
+                      >
+                        <Users className="h-3 w-3" />
+                        Ver perfil de {filters.encargado.name}
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-0 pb-0 px-0 min-w-0">
                   <div className="w-full min-w-0">
@@ -1146,14 +1149,14 @@ const FacturacionContent = () => {
                       }}
                       className="w-full min-w-0"
                     >
-                      <ResponsiveContainer width="100%" height={200} minWidth={0}>
+                      <ResponsiveContainer width="100%" height={190} minWidth={0}>
                       <BarChart
                         data={revenueByUsers.map((user) => ({
                           name: user.user_name,
                           code: user.user_code,
                           revenue: transformFinalNumber(user.revenue),
                         }))}
-                        margin={{ top: 10, right: 10, left: 0, bottom: 50 }}
+                        margin={{ top: 5, right: 10, left: 0, bottom: 45 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis
@@ -1189,7 +1192,7 @@ const FacturacionContent = () => {
                                       ).toLocaleString()}
                                     </span>
                                     <span className="text-xs text-muted-foreground mt-1">
-                                      Haz clic para ver perfil
+                                      Haz clic para filtrar
                                     </span>
                                   </div>
                                 </div>
@@ -1200,35 +1203,31 @@ const FacturacionContent = () => {
                         />
                         <Bar
                           dataKey="revenue"
-                          fill="hsl(210 55% 47%)"
+                          fill="hsl(var(--chart-5))"
                           radius={[4, 4, 0, 0]}
                         >
-                          {revenueByUsers.map((user, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill="hsl(210 55% 47%)"
-                              style={{ cursor: "pointer" }}
-                              onClick={() => {
-                                // Pass date filters as query params
-                                const params = new URLSearchParams();
-                                if (startDate) {
-                                  params.set(
-                                    "startDate",
-                                    startDate.toISOString()
-                                  );
-                                }
-                                if (endDate) {
-                                  params.set("endDate", endDate.toISOString());
-                                }
-                                const queryString = params.toString();
-                                navigate(
-                                  `/user/${user.user_code}${
-                                    queryString ? `?${queryString}` : ""
-                                  }`
-                                );
-                              }}
-                            />
-                          ))}
+                          {revenueByUsers.map((user, index) => {
+                            const isActive = filters.encargado?.code === user.user_code;
+                            return (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill="hsl(var(--chart-5))"
+                                fillOpacity={isActive ? 1 : 0.85}
+                                stroke={isActive ? "#000" : "none"}
+                                strokeWidth={isActive ? 2 : 0}
+                                style={{
+                                  cursor: "pointer",
+                                  filter: isActive ? "drop-shadow(0 0 4px rgba(0,0,0,0.3))" : "none",
+                                }}
+                                onClick={() => {
+                                  setEncargadoFilter({
+                                    code: user.user_code,
+                                    name: user.user_name,
+                                  });
+                                }}
+                              />
+                            );
+                          })}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -1241,9 +1240,9 @@ const FacturacionContent = () => {
             {/* Forma de Cobro Distribution */}
             {transformedFormaCobroChart &&
               transformedFormaCobroChart.length > 0 && (
-                <div className="w-full lg:w-[500px] lg:flex-shrink-0">
-                  <div className="bg-muted/30 rounded-lg p-4 border transition-all duration-300 h-full flex flex-col">
-                    <h3 className="text-sm font-semibold mb-3 text-foreground">
+                <div className="w-full lg:w-[450px] lg:flex-shrink-0">
+                  <div className="bg-muted/30 rounded-lg p-3 border transition-all duration-300 h-full flex flex-col">
+                    <h3 className="text-sm font-semibold mb-1 text-foreground">
                       Facturación según Forma de Cobro
                     </h3>
                     <ChartContainer
@@ -1253,7 +1252,7 @@ const FacturacionContent = () => {
                         },
                       }}
                     >
-                      <ResponsiveContainer width="100%" height={200}>
+                      <ResponsiveContainer width="100%" height={190}>
                         <PieChart>
                         <Pie
                           data={transformedFormaCobroChart}
@@ -1269,7 +1268,7 @@ const FacturacionContent = () => {
                             return ""; // Hide labels for very small slices
                           }}
                           outerRadius={70}
-                          fill="#8884d8"
+                          fill="hsl(var(--chart-5))"
                           dataKey="value"
                           nameKey="name"
                           onClick={(data) => {
@@ -1289,30 +1288,14 @@ const FacturacionContent = () => {
                               const isActive =
                                 filters.formaCobro === entry.name;
                               const isOtherCategory = entry.name?.startsWith("Otros");
-                              const baseColor =
-                                PRIMARY_COLORS[
-                                  index % PRIMARY_COLORS.length
-                                ];
-                              // Make active slice brighter and add visual cues
-                              const fillColor = isActive
-                                ? baseColor.replace(
-                                    /hsl\(([^)]+)\)/,
-                                    (match, content) => {
-                                      return `hsl(${content.replace(
-                                        /\d+%\)/,
-                                        "75%)"
-                                      )}`;
-                                    }
-                                  )
-                                : baseColor;
                               return (
                                 <Cell
                                   key={`cell-${index}`}
-                                  fill={fillColor}
+                                  fill={getChartColor(index)}
                                   fillOpacity={isActive ? 1 : 0.85}
                                   stroke={isActive ? "#000" : "none"}
                                   strokeWidth={isActive ? 3 : 0}
-                                  style={{ 
+                                  style={{
                                     cursor: isOtherCategory ? "default" : "pointer",
                                     filter: isActive ? "drop-shadow(0 0 4px rgba(0,0,0,0.3))" : "none"
                                   }}

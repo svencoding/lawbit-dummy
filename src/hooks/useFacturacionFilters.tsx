@@ -10,6 +10,7 @@ export interface FacturacionFilters {
   area: string | null; // e.g., "Corporativo", "Laboral", "Litigios", "Procesal"
   clientName: string | null; // Client name filter
   formaCobro: string | null; // Forma de cobro filter (e.g., "Honorarios Fijos", "Por Hora")
+  encargado: { code: string; name: string } | null; // Encargado comercial filter
 }
 
 interface FacturacionFiltersContextType {
@@ -17,6 +18,7 @@ interface FacturacionFiltersContextType {
   setAreaFilter: (area: string | null) => void;
   setClientFilter: (clientName: string | null) => void;
   setFormaCobroFilter: (formaCobro: string | null) => void;
+  setEncargadoFilter: (encargado: { code: string; name: string } | null) => void;
   clearFilters: () => void;
   hasActiveFilters: boolean;
 }
@@ -34,56 +36,55 @@ export function FacturacionFiltersProvider({
     area: null,
     clientName: null,
     formaCobro: null,
+    encargado: null,
   });
 
   const setAreaFilter = useCallback((area: string | null) => {
-    setFilters((prev) => {
-      // If clicking the same area, clear it. Otherwise, set area and clear other filters
-      const newArea = prev.area === area ? null : area;
-      return {
-        area: newArea,
-        clientName: null, // Clear client when setting area
-        formaCobro: null, // Clear formaCobro when setting area
-      };
-    });
+    setFilters((prev) => ({
+      ...prev,
+      area: prev.area === area ? null : area,
+    }));
   }, []);
 
   const setClientFilter = useCallback((clientName: string | null) => {
-    setFilters((prev) => {
-      // If clicking the same client, clear it. Otherwise, set client and clear other filters
-      const newClientName = prev.clientName === clientName ? null : clientName;
-      return {
-        area: null, // Clear area when setting client
-        clientName: newClientName,
-        formaCobro: null, // Clear formaCobro when setting client
-      };
-    });
+    setFilters((prev) => ({
+      ...prev,
+      clientName: prev.clientName === clientName ? null : clientName,
+    }));
   }, []);
 
   const setFormaCobroFilter = useCallback((formaCobro: string | null) => {
-    setFilters((prev) => {
-      // If clicking the same formaCobro, clear it. Otherwise, set formaCobro and clear other filters
-      const newFormaCobro = prev.formaCobro === formaCobro ? null : formaCobro;
-      return {
-        area: null, // Clear area when setting formaCobro
-        clientName: null, // Clear client when setting formaCobro
-        formaCobro: newFormaCobro,
-      };
-    });
+    setFilters((prev) => ({
+      ...prev,
+      formaCobro: prev.formaCobro === formaCobro ? null : formaCobro,
+    }));
   }, []);
+
+  const setEncargadoFilter = useCallback(
+    (encargado: { code: string; name: string } | null) => {
+      setFilters((prev) => ({
+        ...prev,
+        encargado:
+          prev.encargado?.code === encargado?.code ? null : encargado,
+      }));
+    },
+    []
+  );
 
   const clearFilters = useCallback(() => {
     setFilters({
       area: null,
       clientName: null,
       formaCobro: null,
+      encargado: null,
     });
   }, []);
 
   const hasActiveFilters =
     filters.area !== null ||
     filters.clientName !== null ||
-    filters.formaCobro !== null;
+    filters.formaCobro !== null ||
+    filters.encargado !== null;
 
   return (
     <FacturacionFiltersContext.Provider
@@ -92,6 +93,7 @@ export function FacturacionFiltersProvider({
         setAreaFilter,
         setClientFilter,
         setFormaCobroFilter,
+        setEncargadoFilter,
         clearFilters,
         hasActiveFilters,
       }}

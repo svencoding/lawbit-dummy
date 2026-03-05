@@ -63,6 +63,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { getDashboardData } from "@/lib/mockDataUtils";
+import { getChartColor } from "@/lib/chartColors";
 import { formatDateLocal } from "@/lib/utils";
 
 // Set to true to use mock data for presentations (no database calls)
@@ -1222,16 +1223,7 @@ const Facturacion = () => {
     // },
   ];
 
-  const COLORS = [
-    "#0088FE",
-    "#00C49F",
-    "#FFBB28",
-    "#FF8042",
-    "#8884d8",
-    "#82ca9d",
-    "#ffc658",
-    "#ff7c7c",
-  ];
+  // Chart colors derived from primary color via CSS variables
 
   const baseFacturacionData =
     chartData || dashboardData?.facturacionPorArea || [];
@@ -1575,9 +1567,9 @@ const Facturacion = () => {
                     <Line
                       type="monotone"
                       dataKey="meta"
-                      stroke="#9333ea"
+                      stroke="hsl(var(--chart-8))"
                       strokeWidth={3}
-                      dot={{ r: 5, fill: "#9333ea" }}
+                      dot={{ r: 5, fill: "hsl(var(--chart-8))" }}
                       activeDot={{ r: 7 }}
                       name="meta"
                     />
@@ -1619,14 +1611,14 @@ const Facturacion = () => {
                           labelLine={false}
                           label={false}
                           outerRadius={90}
-                          fill="#8884d8"
+                          fill="hsl(var(--chart-5))"
                           dataKey="value"
                         >
                           {dashboardData.statusChart.map(
                             (entry: any, index: number) => (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={COLORS[index % COLORS.length]}
+                                fill={getChartColor(index)}
                               />
                             )
                           )}
@@ -1707,14 +1699,14 @@ const Facturacion = () => {
                           labelLine={false}
                           label={false}
                           outerRadius={90}
-                          fill="#8884d8"
+                          fill="hsl(var(--chart-5))"
                           dataKey="value"
                         >
                           {transformedFormaCobroChart.map(
                             (entry: any, index: number) => (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={COLORS[index % COLORS.length]}
+                                fill={getChartColor(index)}
                               />
                             )
                           )}

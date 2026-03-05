@@ -13,7 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trophy } from "lucide-react";
+import { BarChart3 } from "lucide-react";
+import { getChartColor } from "@/lib/chartColors";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import {
   Bar,
@@ -47,6 +48,8 @@ interface ChartFilters {
   feeType: string | null;
 }
 
+export type TopNOption = number;
+
 interface Top20ClientesProps {
   clients: ClientSummary[];
   getMaskedClientName: (name: string) => string;
@@ -59,7 +62,11 @@ interface Top20ClientesProps {
   facturacionByFeeType?: Array<{ name: string; value: number }>;
   activeFilters?: ChartFilters;
   totalUnfilteredRevenue?: number;
+  topN?: TopNOption;
+  onTopNChange?: (value: TopNOption) => void;
 }
+
+const TOP_N_PRESETS = [5, 10, 20, 30];
 
 const Top20Clientes = ({
   clients,
@@ -73,27 +80,22 @@ const Top20Clientes = ({
   facturacionByFeeType = [],
   activeFilters,
   totalUnfilteredRevenue = 0,
+  topN = 20,
+  onTopNChange,
 }: Top20ClientesProps) => {
-  // Debug: Log data to console
-  console.log('Top20Clientes data:', {
-    hoursByLevel: hoursByLevel.length,
-    facturacionByFeeType: facturacionByFeeType.length,
-    hoursByLevelData: hoursByLevel,
-    facturacionByFeeTypeData: facturacionByFeeType,
-  });
   // Calculate total revenue from filtered clients
   const totalFilteredRevenue = clients.reduce(
     (sum, client) => sum + client.totalFacturado,
     0
   );
 
-  // Sort by totalFacturado descending and take top 20
-  const top20Clients = [...clients]
+  // Sort by totalFacturado descending and take top N
+  const topClients = [...clients]
     .sort((a, b) => b.totalFacturado - a.totalFacturado)
-    .slice(0, 20);
+    .slice(0, topN);
 
-  // Calculate top 20 revenue
-  const top20Revenue = top20Clients.reduce(
+  // Calculate top N revenue
+  const topNRevenue = topClients.reduce(
     (sum, client) => sum + client.totalFacturado,
     0
   );
@@ -116,11 +118,11 @@ const Top20Clientes = ({
         ? totalUnfilteredRevenue
         : totalFilteredRevenue;
     revenuePercentage =
-      denominator > 0 ? (top20Revenue / denominator) * 100 : 0;
+      denominator > 0 ? (topNRevenue / denominator) * 100 : 0;
   }
 
   // Prepare chart data for horizontal bar chart (largest at top)
-  const chartData = top20Clients.map((client, index) => ({
+  const chartData = topClients.map((client, index) => ({
     name: getMaskedClientName(client.nombre),
     revenue: getRoundedTableNumber(client.totalFacturado),
     originalRevenue: client.totalFacturado,
@@ -128,7 +130,7 @@ const Top20Clientes = ({
     isActive: activeFilters?.clientName === client.nombre,
   }));
 
-  if (top20Clients.length === 0) {
+  if (topClients.length === 0) {
     return null;
   }
 
@@ -139,10 +141,10 @@ const Top20Clientes = ({
     },
   };
 
-  // Calculate heights: show 10 bars initially, make scrollable for all 20
-  const barHeight = 25; // Reduced bar height
-  const visibleBars = 10;
-  const visibleHeight = visibleBars * barHeight + 50; // +50 for margins and padding
+  // Calculate heights: show up to 10 bars initially, make scrollable if more
+  const barHeight = 25;
+  const visibleBars = Math.min(10, chartData.length);
+  const visibleHeight = visibleBars * barHeight + 50;
   const totalHeight = chartData.length * barHeight + 50;
 
   // Calculate net margin for each client
@@ -153,15 +155,7 @@ const Top20Clientes = ({
     return { margin, marginPercent };
   };
 
-  // Colors for pie charts - tones of primary color
-  // Creating variations by adjusting lightness: darker to lighter tones
-  const PRIMARY_COLORS = [
-    "hsl(210 55% 23%)", // Base primary (darkest)
-    "hsl(210 55% 35%)", // Medium-dark
-    "hsl(210 55% 47%)", // Medium
-    "hsl(210 55% 59%)", // Medium-light
-    "hsl(210 55% 71%)", // Light
-  ];
+  // Colors for pie charts - tones of primary color via CSS variables
 
   const pieChartConfig = {
     hoursByLevel: {
@@ -174,21 +168,56 @@ const Top20Clientes = ({
 
   return (
     <Card className="border-border/50">
-      <CardHeader>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Trophy className="h-5 w-5 text-yellow-500" />
-          <CardTitle className="text-foreground">
-            Top 20 Clientes
-            {revenuePercentage > 0 && (
-              <span className="ml-2 text-lg font-normal text-muted-foreground">
-                ({revenuePercentage.toFixed(1)}%)
-              </span>
-            )}
-          </CardTitle>
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary/10">
+              <BarChart3 className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-foreground flex items-center gap-2">
+                Top {topN} Clientes
+                {revenuePercentage > 0 && (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {revenuePercentage.toFixed(1)}% del total
+                  </span>
+                )}
+              </CardTitle>
+              <CardDescription className="mt-0.5">
+                Clientes con mayor facturación
+              </CardDescription>
+            </div>
+          </div>
+          {onTopNChange && (
+            <div className="flex items-center gap-1.5">
+              {TOP_N_PRESETS.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => onTopNChange(n)}
+                  className={`h-7 px-2.5 rounded-md text-xs font-medium transition-colors ${
+                    topN === n
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+              <input
+                type="number"
+                min={1}
+                max={clients.length}
+                placeholder="#"
+                value={TOP_N_PRESETS.includes(topN) ? "" : topN}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (val > 0) onTopNChange(Math.min(val, clients.length));
+                }}
+                className="h-7 w-12 rounded-md border bg-background px-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          )}
         </div>
-        <CardDescription>
-          Los 20 clientes con mayor facturación total
-        </CardDescription>
       </CardHeader>
       <CardContent className="p-4">
         {/* Horizontal Bar Chart at the Top */}
@@ -322,7 +351,7 @@ const Top20Clientes = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {top20Clients.map((client, index) => {
+                  {topClients.map((client, index) => {
                     const { margin, marginPercent } = calculateNetMargin(
                       client.totalFacturado,
                       client.totalCost || 0
@@ -427,19 +456,15 @@ const Top20Clientes = ({
                             `${name}: ${(percent * 100).toFixed(0)}%`
                           }
                           outerRadius={80}
-                          fill="#8884d8"
+                          fill="hsl(var(--chart-5))"
                           dataKey="value"
                         >
-                          {hoursByLevel.map((entry, index) => {
-                            const baseColor =
-                              PRIMARY_COLORS[index % PRIMARY_COLORS.length];
-                            return (
+                          {hoursByLevel.map((entry, index) => (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={baseColor}
+                                fill={getChartColor(index)}
                               />
-                            );
-                          })}
+                          ))}
                         </Pie>
                         <ChartTooltip
                           content={({ active, payload }) => {
@@ -494,7 +519,7 @@ const Top20Clientes = ({
                             `${name}: ${(percent * 100).toFixed(0)}%`
                           }
                           outerRadius={80}
-                          fill="#8884d8"
+                          fill="hsl(var(--chart-5))"
                           dataKey="value"
                           animationDuration={300}
                           animationBegin={0}
@@ -510,25 +535,11 @@ const Top20Clientes = ({
                           {facturacionByFeeType.map((entry, index) => {
                             const isActive =
                               activeFilters?.feeType === entry.name;
-                            const baseColor =
-                              PRIMARY_COLORS[index % PRIMARY_COLORS.length];
-                            // Make active slice brighter/more opaque
-                            const fillColor = isActive
-                              ? baseColor.replace(
-                                  /hsl\(([^)]+)\)/,
-                                  (match, content) => {
-                                    // Increase opacity/brightness for active
-                                    return `hsl(${content.replace(
-                                      /\d+%\)/,
-                                      "75%)"
-                                    )}`;
-                                  }
-                                )
-                              : baseColor;
                             return (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={fillColor}
+                                fill={getChartColor(index)}
+                                fillOpacity={isActive ? 1 : 0.85}
                                 style={{
                                   cursor: onFeeTypeClick ? "pointer" : "default",
                                 }}

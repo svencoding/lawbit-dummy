@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,16 +12,17 @@ import {
 import { Activity, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
-  Line,
-  LineChart,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -36,6 +37,7 @@ import type {
   TimeEntry as RelationalTimeEntry,
 } from "@/lib/mock/types";
 import { getAreaColor } from "@/lib/constants";
+import { getChartColor } from "@/lib/chartColors";
 import {
   UtilizationFiltersProvider,
   useUtilizationFilters,
@@ -86,6 +88,14 @@ function getMonthName(month: number): string {
   return months[month];
 }
 
+function getMonthNameShort(month: number): string {
+  const months = [
+    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+  ];
+  return months[month];
+}
+
 // Helper function to get billable hours from time entry (handles both field names)
 function getBillableHours(entry: RelationalTimeEntry): number {
   // Handle both billable_hours (plural) and billable_hour (singular) field names
@@ -104,6 +114,13 @@ const UtilizacionContent = () => {
     clearFilters,
     hasActiveFilters,
   } = useUtilizationFilters();
+
+  const [showIndividual, setShowIndividual] = useState(false);
+
+  // Reset individual view when filters change
+  useEffect(() => {
+    setShowIndividual(false);
+  }, [filters.seniority, filters.area]);
 
   // Load data
   const usuarios = useMemo(() => getUsuarios(), []);
@@ -366,6 +383,7 @@ const UtilizacionContent = () => {
         return {
           date: dateKey,
           month: getMonthName(month - 1),
+          monthShort: `${getMonthNameShort(month - 1)} '${year.toString().slice(-2)}`,
           year: year.toString(),
           utilization:
             data.expectedHours > 0
@@ -377,10 +395,76 @@ const UtilizacionContent = () => {
       })
       .sort((a, b) => a.date.localeCompare(b.date));
 
+    // Calculate individual user utilization for drill-down
+    const individualSeniorityData = filters.seniority
+      ? filteredUsuarios
+          .map((usuario) => {
+            let actualHours = 0;
+            let expectedHours = 0;
+            dateSet.forEach((dateKey) => {
+              if (filters.month && dateKey !== filters.month) return;
+              const [year, month] = dateKey.split("-").map(Number);
+              const workingDays = getWorkingDaysInMonth(year, month - 1);
+              expectedHours += (usuario.daily_goal * workingDays) / 7;
+            });
+            const userDates = userBillableHoursByDate.get(usuario.code);
+            if (userDates) {
+              userDates.forEach((billableHours, dateKey) => {
+                if (filters.month && dateKey !== filters.month) return;
+                actualHours += billableHours;
+              });
+            }
+            return {
+              category: usuario.name,
+              utilization:
+                expectedHours > 0
+                  ? Math.round((actualHours / expectedHours) * 1000) / 10
+                  : 0,
+              actualHours,
+              expectedHours,
+            };
+          })
+          .sort((a, b) => b.utilization - a.utilization)
+      : [];
+
+    const individualAreaData = filters.area
+      ? filteredUsuarios
+          .map((usuario) => {
+            let actualHours = 0;
+            let expectedHours = 0;
+            dateSet.forEach((dateKey) => {
+              if (filters.month && dateKey !== filters.month) return;
+              const [year, month] = dateKey.split("-").map(Number);
+              const workingDays = getWorkingDaysInMonth(year, month - 1);
+              expectedHours += (usuario.daily_goal * workingDays) / 7;
+            });
+            const userDates = userBillableHoursByDate.get(usuario.code);
+            if (userDates) {
+              userDates.forEach((billableHours, dateKey) => {
+                if (filters.month && dateKey !== filters.month) return;
+                actualHours += billableHours;
+              });
+            }
+            return {
+              area: usuario.name,
+              utilization:
+                expectedHours > 0
+                  ? Math.round((actualHours / expectedHours) * 1000) / 10
+                  : 0,
+              actualHours,
+              expectedHours,
+              color: getAreaColor(filters.area || ""),
+            };
+          })
+          .sort((a, b) => b.utilization - a.utilization)
+      : [];
+
     return {
       seniorityChartData,
       areaChartData,
       dateChartData,
+      individualSeniorityData,
+      individualAreaData,
     };
   }, [usuarios, timeEntries, filters]);
 
@@ -414,6 +498,22 @@ const UtilizacionContent = () => {
       label: "% Utilización",
     },
   };
+
+  const showIndSeniority = showIndividual && !!filters.seniority;
+  const seniorityDisplayData = showIndSeniority
+    ? utilizationData.individualSeniorityData
+    : utilizationData.seniorityChartData;
+  const seniorityMinHeight = showIndSeniority
+    ? Math.max(220, seniorityDisplayData.length * 35)
+    : 220;
+
+  const showIndArea = showIndividual && !!filters.area;
+  const areaDisplayData = showIndArea
+    ? utilizationData.individualAreaData
+    : utilizationData.areaChartData;
+  const areaMinHeight = showIndArea
+    ? Math.max(250, areaDisplayData.length * 40)
+    : 250;
 
   return (
     <DashboardLayout>
@@ -491,20 +591,41 @@ const UtilizacionContent = () => {
           {/* Utilization by Seniority */}
           <Card className="border-border/50 bg-muted/30 overflow-x-hidden w-full">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Activity className="h-4 w-4" />% Utilización por Nivel
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Utilización promedio por nivel profesional
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Activity className="h-4 w-4" />% Utilización por Nivel
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    {showIndSeniority
+                      ? `Detalle individual — ${filters.seniority}`
+                      : "Utilización promedio por nivel profesional"}
+                  </CardDescription>
+                </div>
+                {filters.seniority && (
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="ind-seniority"
+                      className="text-xs text-muted-foreground cursor-pointer"
+                    >
+                      Individual
+                    </label>
+                    <Switch
+                      id="ind-seniority"
+                      checked={showIndividual}
+                      onCheckedChange={setShowIndividual}
+                    />
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="pt-0 w-full">
-              <ChartContainer config={chartConfig} className="min-h-[220px] h-auto w-full max-w-full">
-                  <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+              <ChartContainer config={chartConfig} className="h-auto w-full max-w-full" style={{ minHeight: seniorityMinHeight }}>
+                  <ResponsiveContainer width="100%" height="100%" minHeight={seniorityMinHeight}>
                     <BarChart
-                      data={utilizationData.seniorityChartData}
+                      data={seniorityDisplayData}
                       layout="vertical"
-                      margin={{ top: 5, right: 20, left: 50, bottom: 5 }}
+                      margin={{ top: 5, right: 20, left: 5, bottom: 5 }}
                     >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
@@ -520,8 +641,8 @@ const UtilizacionContent = () => {
                     <YAxis
                       type="category"
                       dataKey="category"
-                      width={60}
-                      tick={{ fontSize: 11 }}
+                      width={showIndSeniority ? 100 : 60}
+                      tick={{ fontSize: showIndSeniority ? 10 : 11 }}
                     />
                     <ChartTooltip
                       content={({ active, payload }) => {
@@ -560,41 +681,22 @@ const UtilizacionContent = () => {
                       fill="hsl(var(--primary))"
                       radius={[0, 4, 4, 0]}
                       onClick={(data) => {
-                        if (data && data.category) {
+                        if (!showIndSeniority && data && data.category) {
                           setSeniorityFilter(data.category);
                         }
                       }}
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: showIndSeniority ? "default" : "pointer" }}
                     >
-                      {utilizationData.seniorityChartData.map(
+                      {seniorityDisplayData.map(
                         (entry, index) => {
-                          const isActive = filters.seniority === entry.category;
-                          // Use primary color variations matching Top20Clientes
-                          const PRIMARY_COLORS = [
-                            "hsl(210 55% 23%)", // Base primary (darkest)
-                            "hsl(210 55% 35%)", // Medium-dark
-                            "hsl(210 55% 47%)", // Medium
-                            "hsl(210 55% 59%)", // Medium-light
-                            "hsl(210 55% 71%)", // Light
-                          ];
-                          const baseColor =
-                            PRIMARY_COLORS[index % PRIMARY_COLORS.length];
-                          // Make active slice brighter/more opaque like Top20Clientes
-                          const fillColor = isActive
-                            ? baseColor.replace(
-                                /hsl\(([^)]+)\)/,
-                                (match, content) => {
-                                  return `hsl(${content.replace(
-                                    /\d+%\)/,
-                                    "75%)"
-                                  )}`;
-                                }
-                              )
-                            : baseColor;
+                          const isActive =
+                            !showIndSeniority &&
+                            filters.seniority === entry.category;
                           return (
                             <Cell
                               key={`cell-${index}`}
-                              fill={fillColor}
+                              fill={getChartColor(index)}
+                              fillOpacity={isActive ? 1 : 0.85}
                             />
                           );
                         }
@@ -626,27 +728,48 @@ const UtilizacionContent = () => {
           {/* Utilization by Area */}
           <Card className="border-border/50 bg-muted/30 overflow-x-hidden w-full">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Activity className="h-4 w-4" />% Utilización por Área
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Utilización promedio por área profesional
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Activity className="h-4 w-4" />% Utilización por Área
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    {showIndArea
+                      ? `Detalle individual — ${filters.area}`
+                      : "Utilización promedio por área profesional"}
+                  </CardDescription>
+                </div>
+                {filters.area && (
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="ind-area"
+                      className="text-xs text-muted-foreground cursor-pointer"
+                    >
+                      Individual
+                    </label>
+                    <Switch
+                      id="ind-area"
+                      checked={showIndividual}
+                      onCheckedChange={setShowIndividual}
+                    />
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="pt-0 w-full">
-              <ChartContainer config={chartConfig} className="min-h-[250px] h-auto w-full max-w-full">
-                  <ResponsiveContainer width="100%" height="100%" minHeight={250}>
+              <ChartContainer config={chartConfig} className="h-auto w-full max-w-full" style={{ minHeight: areaMinHeight }}>
+                  <ResponsiveContainer width="100%" height="100%" minHeight={areaMinHeight}>
                     <BarChart
-                      data={utilizationData.areaChartData}
+                      data={areaDisplayData}
                       margin={{ top: 10, right: 20, left: 15, bottom: 40 }}
                     >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="area"
-                      angle={-45}
+                      angle={showIndArea ? -45 : -45}
                       textAnchor="end"
-                      height={70}
-                      tick={{ fontSize: 10 }}
+                      height={showIndArea ? 90 : 70}
+                      tick={{ fontSize: showIndArea ? 9 : 10 }}
                     />
                     <YAxis
                       domain={[0, 120]}
@@ -694,40 +817,20 @@ const UtilizacionContent = () => {
                       fill="hsl(var(--primary))"
                       radius={[4, 4, 0, 0]}
                       onClick={(data) => {
-                        if (data && data.area) {
+                        if (!showIndArea && data && data.area) {
                           setAreaFilter(data.area);
                         }
                       }}
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: showIndArea ? "default" : "pointer" }}
                     >
-                      {utilizationData.areaChartData.map((entry, index) => {
-                        const isActive = filters.area === entry.area;
-                        // Use primary color variations matching Top20Clientes (same as Nivel chart)
-                        const PRIMARY_COLORS = [
-                          "hsl(210 55% 23%)", // Base primary (darkest)
-                          "hsl(210 55% 35%)", // Medium-dark
-                          "hsl(210 55% 47%)", // Medium
-                          "hsl(210 55% 59%)", // Medium-light
-                          "hsl(210 55% 71%)", // Light
-                        ];
-                        const baseColor =
-                          PRIMARY_COLORS[index % PRIMARY_COLORS.length];
-                        // Make active slice brighter/more opaque like Top20Clientes
-                        const fillColor = isActive
-                          ? baseColor.replace(
-                              /hsl\(([^)]+)\)/,
-                              (match, content) => {
-                                return `hsl(${content.replace(
-                                  /\d+%\)/,
-                                  "75%)"
-                                )}`;
-                              }
-                            )
-                          : baseColor;
+                      {areaDisplayData.map((entry, index) => {
+                        const isActive =
+                          !showIndArea && filters.area === entry.area;
                         return (
                           <Cell
                             key={`cell-${index}`}
-                            fill={fillColor}
+                            fill={getChartColor(index)}
+                            fillOpacity={isActive ? 1 : 0.85}
                           />
                         );
                       })}
@@ -758,7 +861,7 @@ const UtilizacionContent = () => {
 
         {/* Utilization by Date - Full Width */}
         <Card className="border-border/50 bg-muted/30 overflow-x-hidden w-full">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Activity className="h-4 w-4" />% Utilización por Fecha
             </CardTitle>
@@ -767,46 +870,50 @@ const UtilizacionContent = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0 w-full">
-            <ChartContainer config={chartConfig} className="min-h-[200px] h-auto w-full max-w-full">
-                <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-                  <LineChart
+            <ChartContainer config={chartConfig} className="h-[180px] w-full max-w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
                     data={utilizationData.dateChartData}
-                    margin={{ top: 10, right: 20, left: 40, bottom: 60 }}
+                    margin={{ top: 20, right: 15, left: 5, bottom: 5 }}
                     onClick={(data) => {
-                    if (data && data.activePayload && data.activePayload[0]) {
-                      const clickedData = data.activePayload[0].payload;
-                      if (clickedData?.date) {
-                        setMonthFilter(clickedData.date);
+                      if (data && data.activePayload && data.activePayload[0]) {
+                        const clickedData = data.activePayload[0].payload;
+                        if (clickedData?.date) {
+                          setMonthFilter(clickedData.date);
+                        }
                       }
-                    }
-                  }}
-                  style={{ cursor: "pointer" }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
+                    }}
+                    style={{ cursor: "pointer" }}
+                  >
+                  <defs>
+                    <linearGradient id="utilizationGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--chart-5))" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="hsl(var(--chart-5))" stopOpacity={0.03} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis
-                    dataKey="month"
-                    angle={-45}
-                    textAnchor="end"
-                    height={70}
+                    dataKey="monthShort"
                     tick={{ fontSize: 10 }}
+                    interval={0}
+                    height={25}
+                    tickLine={false}
+                    axisLine={false}
                   />
                   <YAxis
                     domain={[0, 150]}
                     tickFormatter={(value) => `${value}%`}
-                    tick={{ fontSize: 11 }}
-                    label={{
-                      value: "% Utilización",
-                      angle: -90,
-                      position: "insideLeft",
-                      style: { textAnchor: "middle", fontSize: 12 },
-                    }}
+                    tick={{ fontSize: 10 }}
+                    width={38}
+                    tickLine={false}
+                    axisLine={false}
                   />
                   <ReferenceLine
                     y={100}
                     stroke="hsl(var(--destructive))"
-                    strokeWidth={2.5}
-                    strokeDasharray="5 5"
-                    strokeOpacity={0.4}
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    strokeOpacity={0.5}
                   />
                   <ChartTooltip
                     content={({ active, payload }) => {
@@ -814,25 +921,16 @@ const UtilizacionContent = () => {
                         const data = payload[0].payload;
                         return (
                           <div className="rounded-lg border bg-background p-2 shadow-sm">
-                            <div className="grid gap-2">
-                              <div className="flex flex-col">
-                                <span className="text-[0.70rem] uppercase text-muted-foreground">
-                                  {data.month} {data.year}
-                                </span>
-                                <span className="font-bold text-emerald-600">
-                                  {data.utilization.toFixed(1)}%
-                                </span>
-                                <span className="text-[0.70rem] text-muted-foreground">
-                                  Utilización: {data.utilization.toFixed(1)}%
-                                </span>
-                                <span className="text-[0.70rem] text-muted-foreground">
-                                  Horas reales: {data.actualHours.toFixed(1)}h
-                                </span>
-                                <span className="text-[0.70rem] text-muted-foreground">
-                                  Horas esperadas:{" "}
-                                  {data.expectedHours.toFixed(1)}h
-                                </span>
-                              </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs font-medium">
+                                {data.month} {data.year}
+                              </span>
+                              <span className="font-bold text-base">
+                                {data.utilization.toFixed(1)}%
+                              </span>
+                              <span className="text-[0.70rem] text-muted-foreground">
+                                {data.actualHours.toFixed(1)}h / {data.expectedHours.toFixed(1)}h
+                              </span>
                             </div>
                           </div>
                         );
@@ -840,11 +938,12 @@ const UtilizacionContent = () => {
                       return null;
                     }}
                   />
-                  <Line
-                    type="linear"
+                  <Area
+                    type="monotone"
                     dataKey="utilization"
-                    stroke="hsl(210 55% 47%)"
-                    strokeWidth={3}
+                    stroke="hsl(var(--chart-5))"
+                    strokeWidth={2.5}
+                    fill="url(#utilizationGradient)"
                     dot={(props) => {
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       const dotProps = props as any;
@@ -853,8 +952,8 @@ const UtilizacionContent = () => {
                         <circle
                           cx={dotProps.cx}
                           cy={dotProps.cy}
-                          r={isActive ? 7 : 5}
-                          fill={isActive ? "hsl(210 55% 75%)" : "hsl(210 55% 47%)"}
+                          r={isActive ? 6 : 4}
+                          fill={isActive ? "hsl(var(--chart-8))" : "hsl(var(--chart-5))"}
                           strokeWidth={2}
                           stroke="hsl(var(--background))"
                           style={{ cursor: "pointer" }}
@@ -867,8 +966,8 @@ const UtilizacionContent = () => {
                       );
                     }}
                     activeDot={{
-                      r: 7,
-                      fill: "hsl(210 55% 75%)",
+                      r: 6,
+                      fill: "hsl(var(--chart-8))",
                       strokeWidth: 2,
                       stroke: "hsl(var(--background))",
                     }}
@@ -878,14 +977,14 @@ const UtilizacionContent = () => {
                       position="top"
                       formatter={(value: number) => `${value.toFixed(1)}%`}
                       style={{
-                        fontSize: 11,
+                        fontSize: 10,
                         fill: "hsl(var(--foreground))",
                         fontWeight: 600,
                       }}
-                      offset={8}
+                      offset={6}
                     />
-                  </Line>
-                  </LineChart>
+                  </Area>
+                  </AreaChart>
                 </ResponsiveContainer>
               </ChartContainer>
           </CardContent>

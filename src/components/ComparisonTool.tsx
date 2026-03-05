@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import {
   getClientCosts,
+  getProjectCosts,
   getUsuarios,
   getUserProfileData,
 } from "@/lib/mockDataUtils";
@@ -64,9 +65,10 @@ import { cn } from "@/lib/utils";
 import fotoSven from "@/assets/foto-sven.png";
 import facturacionData from "@/lib/mock/facturacion.json";
 import clientesData from "@/lib/mock/clientes.json";
-import type { Payment, Cliente } from "@/lib/mock/types";
+import asuntosData from "@/lib/mock/asuntos.json";
+import type { Payment, Cliente, Asunto } from "@/lib/mock/types";
 
-type ComparisonMode = "clients" | "lawyers";
+type ComparisonMode = "clients" | "lawyers" | "projects";
 
 type DetailView = "projects" | "clients" | null;
 
@@ -168,18 +170,79 @@ const ComparisonTool = () => {
       .sort((a, b) => b.revenue - a.revenue);
   }, []);
 
-  const entities = mode === "clients" ? clientsData : lawyersData;
+  const projectsComparisonData = useMemo(() => {
+    const projects = getProjectCosts(
+      new Date(2025, 0, 1),
+      new Date(2025, 11, 31)
+    );
+    const facturacion = facturacionData as Payment[];
+    const asuntos = asuntosData as Asunto[];
+
+    // Create a map of asunto_id to asunto metadata
+    const asuntoMap = new Map<number, Asunto>();
+    asuntos.forEach((a) => asuntoMap.set(a.id, a));
+
+    // Calculate revenue from facturacion for each project
+    const projectRevenueMap = new Map<number, number>();
+    facturacion.forEach((payment) => {
+      if (!payment.month || !payment.asunto_id) return;
+
+      const date = new Date(payment.month + "T00:00:00");
+      const startDate = new Date(2025, 0, 1);
+      const endDate = new Date(2025, 11, 31);
+
+      if (date < startDate || date > endDate) return;
+
+      const revenue = payment.amount_charged || 0;
+      projectRevenueMap.set(
+        payment.asunto_id,
+        (projectRevenueMap.get(payment.asunto_id) || 0) + revenue
+      );
+    });
+
+    return projects
+      .map((project) => {
+        const revenue = projectRevenueMap.get(project.project_id) || project.total_cost;
+        const billableHours = project.billable_hours || project.total_hours;
+        const margin = revenue > 0 ? ((revenue - project.total_cost) / revenue) * 100 : 0;
+        const rate = billableHours > 0 ? revenue / billableHours : 0;
+        const asunto = asuntoMap.get(project.project_id);
+
+        return {
+          id: project.project_id.toString(),
+          name: project.project_name,
+          clientName: project.client_name,
+          practiceArea: asunto?.practice_area || null,
+          projectType: asunto?.project_type || null,
+          chargeType: asunto?.charge_type || null,
+          hours: project.total_hours,
+          billableHours: billableHours,
+          cost: project.total_cost,
+          revenue: revenue,
+          margin: margin,
+          rate: rate,
+          projects: 0, // Not applicable for projects
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue);
+  }, []);
+
+  const entities = mode === "clients" ? clientsData : mode === "lawyers" ? lawyersData : projectsComparisonData;
 
   // Get selected entities data
   const selectedEntity1 =
     mode === "clients"
       ? clientsData.find((c) => c.id === entity1)
-      : lawyersData.find((l) => l.id === entity1);
+      : mode === "lawyers"
+      ? lawyersData.find((l) => l.id === entity1)
+      : projectsComparisonData.find((p) => p.id === entity1);
 
   const selectedEntity2 =
     mode === "clients"
       ? clientsData.find((c) => c.id === entity2)
-      : lawyersData.find((l) => l.id === entity2);
+      : mode === "lawyers"
+      ? lawyersData.find((l) => l.id === entity2)
+      : projectsComparisonData.find((p) => p.id === entity2);
 
   // Get detailed profile data for lawyers
   const entity1Details =
@@ -368,12 +431,14 @@ const ComparisonTool = () => {
           <div className="bg-muted/30 rounded-full p-6 mb-4">
             {mode === "clients" ? (
               <Users className="h-12 w-12 text-muted-foreground" />
-            ) : (
+            ) : mode === "lawyers" ? (
               <UserCircle className="h-12 w-12 text-muted-foreground" />
+            ) : (
+              <Briefcase className="h-12 w-12 text-muted-foreground" />
             )}
           </div>
           <p className="text-sm text-muted-foreground max-w-sm">
-            Selecciona dos {mode === "clients" ? "clientes" : "abogados"} para
+            Selecciona dos {mode === "clients" ? "clientes" : mode === "lawyers" ? "abogados" : "asuntos"} para
             comparar sus métricas
           </p>
         </div>
@@ -399,6 +464,11 @@ const ComparisonTool = () => {
                 {String(selectedEntity1.category)}
               </Badge>
             )}
+            {mode === "projects" && "clientName" in selectedEntity1 && (
+              <span className="text-sm text-muted-foreground mt-1">
+                {String(selectedEntity1.clientName)}
+              </span>
+            )}
           </div>
           <div className="flex items-center justify-center">
             <div className="bg-primary/10 rounded-full p-2">
@@ -420,6 +490,11 @@ const ComparisonTool = () => {
                 {String(selectedEntity2.category)}
               </Badge>
             )}
+            {mode === "projects" && "clientName" in selectedEntity2 && (
+              <span className="text-sm text-muted-foreground mt-1">
+                {String(selectedEntity2.clientName)}
+              </span>
+            )}
           </div>
         </div>
 
@@ -435,18 +510,14 @@ const ComparisonTool = () => {
             entity2Name={selectedEntity2.name}
           />
           <MetricCard
-            label={mode === "clients" ? "Facturación" : "Ingresos"}
+            label={mode === "lawyers" ? "Ingresos" : "Facturación"}
             value1={
-              mode === "clients"
-                ? selectedEntity1.revenue
-                : "revenue" in selectedEntity1
+              "revenue" in selectedEntity1
                 ? Number(selectedEntity1.revenue)
                 : 0
             }
             value2={
-              mode === "clients"
-                ? selectedEntity2.revenue
-                : "revenue" in selectedEntity2
+              "revenue" in selectedEntity2
                 ? Number(selectedEntity2.revenue)
                 : 0
             }
@@ -464,7 +535,7 @@ const ComparisonTool = () => {
             entity1Name={selectedEntity1.name}
             entity2Name={selectedEntity2.name}
           />
-          {mode === "clients" &&
+          {(mode === "clients" || mode === "projects") &&
             "margin" in selectedEntity1 &&
             "margin" in selectedEntity2 && (
               <MetricCard
@@ -477,7 +548,7 @@ const ComparisonTool = () => {
                 entity2Name={selectedEntity2.name}
               />
             )}
-          {mode === "clients" &&
+          {(mode === "clients" || mode === "projects") &&
             "rate" in selectedEntity1 &&
             "rate" in selectedEntity2 && (
               <MetricCard
@@ -490,17 +561,19 @@ const ComparisonTool = () => {
                 entity2Name={selectedEntity2.name}
               />
             )}
-          <MetricCard
-            label="Proyectos"
-            value1={selectedEntity1.projects}
-            value2={selectedEntity2.projects}
-            format="number"
-            icon={Briefcase}
-            clickable
-            onClick={() => setDetailView("projects")}
-            entity1Name={selectedEntity1.name}
-            entity2Name={selectedEntity2.name}
-          />
+          {mode !== "projects" && (
+            <MetricCard
+              label="Proyectos"
+              value1={selectedEntity1.projects}
+              value2={selectedEntity2.projects}
+              format="number"
+              icon={Briefcase}
+              clickable
+              onClick={() => setDetailView("projects")}
+              entity1Name={selectedEntity1.name}
+              entity2Name={selectedEntity2.name}
+            />
+          )}
           {mode === "lawyers" &&
             "utilization" in selectedEntity1 &&
             "utilization" in selectedEntity2 && (
@@ -541,7 +614,7 @@ const ComparisonTool = () => {
           Comparación
         </h1>
         <p className="text-muted-foreground">
-          Compara métricas de rendimiento entre clientes o abogados
+          Compara métricas de rendimiento entre clientes, abogados o asuntos
         </p>
       </div>
 
@@ -558,7 +631,7 @@ const ComparisonTool = () => {
             setOpen2(false);
           }}
         >
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="clients">
               <Users className="h-4 w-4 mr-2" />
               Clientes
@@ -567,6 +640,10 @@ const ComparisonTool = () => {
               <UserCircle className="h-4 w-4 mr-2" />
               Abogados
             </TabsTrigger>
+            <TabsTrigger value="projects">
+              <Briefcase className="h-4 w-4 mr-2" />
+              Asuntos
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -574,7 +651,7 @@ const ComparisonTool = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="text-sm font-medium mb-2 block">
-              {mode === "clients" ? "Cliente" : "Abogado"} #1
+              {mode === "clients" ? "Cliente" : mode === "lawyers" ? "Abogado" : "Asunto"} #1
             </label>
             <Popover open={open1} onOpenChange={setOpen1}>
               <PopoverTrigger asChild>
@@ -586,7 +663,7 @@ const ComparisonTool = () => {
                 >
                   {entity1
                     ? entities.find((entity) => entity.id === entity1)?.name
-                    : `Seleccionar ${mode === "clients" ? "cliente" : "abogado"}...`}
+                    : `Seleccionar ${mode === "clients" ? "cliente" : mode === "lawyers" ? "abogado" : "asunto"}...`}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -617,6 +694,11 @@ const ComparisonTool = () => {
                               • {String(entity.category)}
                             </span>
                           )}
+                          {mode === "projects" && "clientName" in entity && entity.clientName && (
+                            <span className="text-muted-foreground ml-2 text-xs">
+                              • {String(entity.clientName)}
+                            </span>
+                          )}
                         </CommandItem>
                       ))}
                     </CommandGroup>
@@ -628,7 +710,7 @@ const ComparisonTool = () => {
 
           <div>
             <label className="text-sm font-medium mb-2 block">
-              {mode === "clients" ? "Cliente" : "Abogado"} #2
+              {mode === "clients" ? "Cliente" : mode === "lawyers" ? "Abogado" : "Asunto"} #2
             </label>
             <Popover open={open2} onOpenChange={setOpen2}>
               <PopoverTrigger asChild>
@@ -640,7 +722,7 @@ const ComparisonTool = () => {
                 >
                   {entity2
                     ? entities.find((entity) => entity.id === entity2)?.name
-                    : `Seleccionar ${mode === "clients" ? "cliente" : "abogado"}...`}
+                    : `Seleccionar ${mode === "clients" ? "cliente" : mode === "lawyers" ? "abogado" : "asunto"}...`}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -669,6 +751,11 @@ const ComparisonTool = () => {
                           {mode === "lawyers" && "category" in entity && entity.category && (
                             <span className="text-muted-foreground ml-2 text-xs">
                               • {String(entity.category)}
+                            </span>
+                          )}
+                          {mode === "projects" && "clientName" in entity && entity.clientName && (
+                            <span className="text-muted-foreground ml-2 text-xs">
+                              • {String(entity.clientName)}
                             </span>
                           )}
                         </CommandItem>

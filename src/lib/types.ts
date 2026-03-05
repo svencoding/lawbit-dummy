@@ -68,30 +68,66 @@ export interface ClientCost {
 
 export type ViewType = "clients" | "projects" | "professionals" | null;
 
-export const COLORS = [
-  "hsl(210, 55%, 50%)",
-  "hsl(43, 74%, 52%)",
-  "hsl(142, 71%, 45%)",
-  "hsl(280, 65%, 60%)",
-  "hsl(12, 76%, 61%)",
-  "hsl(200, 70%, 55%)",
-  "hsl(30, 80%, 55%)",
-  "hsl(160, 60%, 50%)",
-  "hsl(320, 70%, 65%)",
-  "hsl(15, 75%, 58%)",
-];
+// Budget / Strategic Planning types
+export interface BudgetEntry {
+  id: string;
+  practice_area: string;
+  year: number;
+  month: number; // 1-12
+  planned_revenue: number;
+  planned_cost: number;
+  target_utilization: number; // 0-100
+}
+
+export interface BudgetNote {
+  practice_area: string;
+  year: number;
+  month: number;
+  note: string;
+}
+
+export interface BudgetBreakdownRow {
+  practice_area: string;
+  professional_count: number;
+  planned_revenue: number;
+  actual_revenue: number;
+  revenue_variance: number;
+  revenue_pct: number;
+  planned_cost: number;
+  actual_cost: number;
+  cost_variance: number;
+  target_utilization: number;
+  actual_utilization: number;
+  profit_margin: number;
+}
+
+export interface BudgetTimelinePoint {
+  month: string; // "2025-02"
+  monthLabel: string; // "Feb"
+  planned_revenue: number;
+  actual_revenue: number;
+  planned_cost: number;
+  actual_cost: number;
+  cumulative_planned_revenue: number;
+  cumulative_actual_revenue: number;
+}
+
+/** @deprecated Use getChartColor() from @/lib/chartColors instead */
+export { getChartColor as COLORS_FN } from "@/lib/chartColors";
+import { getChartColor } from "@/lib/chartColors";
+export const COLORS = Array.from({ length: 10 }, (_, i) => getChartColor(i));
 
 export const chartConfig = {
   cost: {
     label: "Costo (Millones)",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(var(--chart-2))",
   },
   hours: {
     label: "Horas",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(var(--chart-4))",
   },
   projects: {
     label: "Proyectos",
-    color: "hsl(var(--chart-3))",
+    color: "hsl(var(--chart-6))",
   },
 } as const;

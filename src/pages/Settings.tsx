@@ -15,7 +15,50 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Building2, Save } from "lucide-react";
+import { Upload, Building2, Save, Palette, Check } from "lucide-react";
+import { usePrimaryColor } from "@/hooks/usePrimaryColor";
+import { COLOR_PRESETS } from "@/lib/chartColors";
+
+const ColorPicker = () => {
+  const { primaryColor, setPrimaryColor } = usePrimaryColor();
+
+  return (
+    <div className="flex flex-wrap gap-3">
+      {COLOR_PRESETS.map((preset) => {
+        const isSelected =
+          primaryColor.h === preset.hsl.h && primaryColor.s === preset.hsl.s;
+        return (
+          <button
+            key={preset.label}
+            onClick={() => setPrimaryColor(preset.hsl)}
+            className={`relative flex flex-col items-center gap-1.5 group`}
+            title={preset.label}
+          >
+            <div
+              className={`w-10 h-10 rounded-full border-2 transition-all ${
+                isSelected
+                  ? "border-foreground scale-110 shadow-md"
+                  : "border-transparent hover:scale-105 hover:shadow-sm"
+              }`}
+              style={{
+                backgroundColor: `hsl(${preset.hsl.h} ${preset.hsl.s}% 35%)`,
+              }}
+            >
+              {isSelected && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Check className="h-5 w-5 text-white" />
+                </div>
+              )}
+            </div>
+            <span className="text-[10px] text-muted-foreground group-hover:text-foreground transition-colors">
+              {preset.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 const Settings = () => {
   const { user, loading } = useAuth();
@@ -271,6 +314,21 @@ const Settings = () => {
             Administra la información de tu firma
           </p>
         </div>
+
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle className="text-foreground flex items-center gap-2">
+              <Palette className="h-5 w-5" />
+              Color Principal
+            </CardTitle>
+            <CardDescription>
+              Selecciona el color principal para gráficos y elementos de la interfaz
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ColorPicker />
+          </CardContent>
+        </Card>
 
         <Card className="border-border/50">
           <CardHeader>

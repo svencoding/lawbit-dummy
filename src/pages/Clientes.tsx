@@ -902,7 +902,7 @@ const Clientes = () => {
                       labelLine={false}
                       label={false}
                       outerRadius={90}
-                      fill="#8884d8"
+                      fill="hsl(var(--chart-5))"
                       dataKey="value"
                     >
                       {areasChart.map((entry, index) => (
@@ -1004,10 +1004,10 @@ const Clientes = () => {
                       x2="0"
                       y2="1"
                     >
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                      <stop offset="5%" stopColor="hsl(var(--chart-5))" stopOpacity={0.8} />
                       <stop
                         offset="95%"
-                        stopColor="#10b981"
+                        stopColor="hsl(var(--chart-5))"
                         stopOpacity={0.1}
                       />
                     </linearGradient>
@@ -1056,7 +1056,7 @@ const Clientes = () => {
                   <Area
                     type="monotone"
                     dataKey="revenue"
-                    stroke="#10b981"
+                    stroke="hsl(var(--chart-5))"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorRevenue)"

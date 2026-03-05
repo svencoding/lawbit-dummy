@@ -32,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import resumenData from "@/Resumen_Agrupado.json";
+// import resumenData from "@/Resumen_Agrupado.json";
 
 // --- Data types & processing (reads from Resumen_Agrupado.json) ---
 
@@ -62,13 +62,13 @@ const VALID_CATEGORIES = new Set([
 ]);
 
 // Ajuste de datos: facturación baja 16% (×0.84), costos totales suben 10% (×1.10)
-const rawData = (resumenData as ResumenRecord[])
+const rawData = ([] as ResumenRecord[])
   .filter((r) => r.Cliente !== "VARIOS")
   .map((r) => ({
     ...r,
     "Facturación Asunto": (r["Facturación Asunto"] || 0) * 0.84,
     "Producción RAC": (r["Producción RAC"] || 0) * 0.84,
-    "Costo Total": (r["Costo Total"] || 0) * 1.10,
+    "Costo Total": (r["Costo Total"] || 0) * 1.1,
   }));
 
 function filterByDateRange(
@@ -98,10 +98,15 @@ function getClientProfitability(
   endDate?: Date,
   clientName?: string | null,
   userName?: string | null,
+  projectId?: number | null,
 ) {
   let filtered = filterByDateRange(rawData, startDate, endDate);
   if (clientName) filtered = filtered.filter((r) => r.Cliente === clientName);
   if (userName) filtered = filtered.filter((r) => r.Usuario === userName);
+  if (projectId != null)
+    filtered = filtered.filter(
+      (r) => Math.round(r["Codigo Asunto"] ?? 0) === projectId,
+    );
 
   const clientMap = new Map<
     string,
@@ -190,9 +195,14 @@ function getCategoryBillableHours(
   startDate?: Date,
   endDate?: Date,
   clientName?: string | null,
+  projectId?: number | null,
 ) {
   let filtered = filterByDateRange(rawData, startDate, endDate);
   if (clientName) filtered = filtered.filter((r) => r.Cliente === clientName);
+  if (projectId != null)
+    filtered = filtered.filter(
+      (r) => Math.round(r["Codigo Asunto"] ?? 0) === projectId,
+    );
 
   const categoryMap = new Map<
     string,
@@ -251,6 +261,7 @@ const Hernandez = () => {
   const [selectedProfessional, setSelectedProfessional] = useState<
     string | null
   >(null);
+  const [selectedProject, setSelectedProject] = useState<number | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Date | undefined>(
     new Date(2025, 0, 1),
@@ -277,19 +288,41 @@ const Hernandez = () => {
     return found?.client_name ?? null;
   }, [selectedClient, allClientsData]);
 
-  // Filtered data for KPIs, chart, categories (reacts to selectedClient + selectedProfessional)
+  // Resolve selected project name from allClientsData
+  const selectedProjectName = useMemo(() => {
+    if (selectedProject == null) return null;
+    for (const c of allClientsData) {
+      const found = c.projects.find((p) => p.project_id === selectedProject);
+      if (found) return found.project_name;
+    }
+    return null;
+  }, [selectedProject, allClientsData]);
+
+  // Filtered data for KPIs, chart, categories (reacts to selectedClient + selectedProfessional + selectedProject)
   const filteredClientsData = useMemo(() => {
     return getClientProfitability(
       startDate,
       endDate,
       selectedClientName,
       selectedProfessional,
+      selectedProject,
     );
-  }, [startDate, endDate, selectedClientName, selectedProfessional]);
+  }, [
+    startDate,
+    endDate,
+    selectedClientName,
+    selectedProfessional,
+    selectedProject,
+  ]);
 
   const categoryHours = useMemo(() => {
-    return getCategoryBillableHours(startDate, endDate, selectedClientName);
-  }, [startDate, endDate, selectedClientName]);
+    return getCategoryBillableHours(
+      startDate,
+      endDate,
+      selectedClientName,
+      selectedProject,
+    );
+  }, [startDate, endDate, selectedClientName, selectedProject]);
 
   // Simulate loading
   useEffect(() => {
@@ -463,7 +496,9 @@ const Hernandez = () => {
         </div>
 
         {/* Active Filters */}
-        {(selectedClient || selectedProfessional) && (
+        {(selectedClient ||
+          selectedProfessional ||
+          selectedProject != null) && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-muted-foreground">
               Filtros activos:
@@ -490,12 +525,24 @@ const Hernandez = () => {
                 </button>
               </div>
             )}
+            {selectedProject != null && selectedProjectName && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                <span>Proyecto: {selectedProjectName}</span>
+                <button
+                  onClick={() => setSelectedProject(null)}
+                  className="ml-1 hover:bg-primary/20 rounded p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
                 setSelectedClient(null);
                 setSelectedProfessional(null);
+                setSelectedProject(null);
               }}
               className="h-8 text-xs"
             >
@@ -644,7 +691,18 @@ const Hernandez = () => {
                             client.projects.map((project) => (
                               <TableRow
                                 key={`${client.client_code}-${project.project_id}`}
-                                className="border-b h-7 bg-muted/30"
+                                className={`border-b h-7 cursor-pointer transition-all duration-150 ${
+                                  selectedProject === project.project_id
+                                    ? "bg-primary/15 font-semibold"
+                                    : "bg-muted/30 hover:bg-muted/50"
+                                }`}
+                                onClick={() =>
+                                  setSelectedProject((prev) =>
+                                    prev === project.project_id
+                                      ? null
+                                      : project.project_id,
+                                  )
+                                }
                               >
                                 <TCell className="px-1 py-0.5 text-[10px]" />
                                 <TCell className="px-1 py-0.5 text-[10px] pl-6 truncate max-w-[250px] text-muted-foreground">
@@ -917,14 +975,14 @@ const Hernandez = () => {
                       <Bar
                         yAxisId="left"
                         dataKey="facturacion"
-                        fill="hsl(210 55% 47%)"
+                        fill="hsl(var(--chart-4))"
                         radius={[4, 4, 0, 0]}
                         barSize={60}
                       />
                       <Bar
                         yAxisId="left"
                         dataKey="costo"
-                        fill="hsl(142 71% 45%)"
+                        fill="hsl(var(--chart-7))"
                         radius={[4, 4, 0, 0]}
                         barSize={60}
                       />
@@ -951,14 +1009,14 @@ const Hernandez = () => {
                   <div className="flex items-center gap-1">
                     <div
                       className="w-3 h-3 rounded-sm"
-                      style={{ background: "hsl(210 55% 47%)" }}
+                      style={{ background: "hsl(var(--chart-4))" }}
                     />
                     Facturación
                   </div>
                   <div className="flex items-center gap-1">
                     <div
                       className="w-3 h-3 rounded-sm"
-                      style={{ background: "hsl(142 71% 45%)" }}
+                      style={{ background: "hsl(var(--chart-7))" }}
                     />
                     Costo Total
                   </div>

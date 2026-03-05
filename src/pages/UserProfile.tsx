@@ -15,7 +15,6 @@ import {
   DollarSign,
   Briefcase,
   ArrowLeft,
-  Loader2,
   ArrowUpDown,
   Search,
   Activity,
@@ -144,15 +143,15 @@ const UserProfile = () => {
   // Projects table state
   const [projectsSearchTerm, setProjectsSearchTerm] = useState("");
   const [projectsSortField, setProjectsSortField] =
-    useState<ProjectSortField>("project_name");
-  const [projectsSortOrder, setProjectsSortOrder] = useState<SortOrder>("asc");
+    useState<ProjectSortField>("total_hours");
+  const [projectsSortOrder, setProjectsSortOrder] = useState<SortOrder>("desc");
   const [projectsCurrentPage, setProjectsCurrentPage] = useState(1);
 
   // Clients table state
   const [clientsSearchTerm, setClientsSearchTerm] = useState("");
   const [clientsSortField, setClientsSortField] =
-    useState<ClientSortField>("client_name");
-  const [clientsSortOrder, setClientsSortOrder] = useState<SortOrder>("asc");
+    useState<ClientSortField>("total_hours");
+  const [clientsSortOrder, setClientsSortOrder] = useState<SortOrder>("desc");
   const [clientsCurrentPage, setClientsCurrentPage] = useState(1);
 
   useEffect(() => {
@@ -317,9 +316,10 @@ const UserProfile = () => {
       setProjectsSortOrder(projectsSortOrder === "asc" ? "desc" : "asc");
     } else {
       setProjectsSortField(field);
-      setProjectsSortOrder("asc");
+      const isNumeric = ["total_hours", "total_cost", "revenue"].includes(field);
+      setProjectsSortOrder(isNumeric ? "desc" : "asc");
     }
-    setProjectsCurrentPage(1); // Reset to first page when sorting changes
+    setProjectsCurrentPage(1);
   };
 
   const handleClientsSort = (field: ClientSortField) => {
@@ -327,9 +327,10 @@ const UserProfile = () => {
       setClientsSortOrder(clientsSortOrder === "asc" ? "desc" : "asc");
     } else {
       setClientsSortField(field);
-      setClientsSortOrder("asc");
+      const isNumeric = ["total_hours", "total_cost", "revenue", "project_count"].includes(field);
+      setClientsSortOrder(isNumeric ? "desc" : "asc");
     }
-    setClientsCurrentPage(1); // Reset to first page when sorting changes
+    setClientsCurrentPage(1);
   };
 
   // Reset to page 1 when search changes
@@ -470,7 +471,6 @@ const UserProfile = () => {
       description: "Horas totales trabajadas",
       icon: Clock,
       color: "text-blue-600",
-      bgColor: "bg-blue-100",
     },
     {
       title: "Ingresos Totales",
@@ -478,7 +478,6 @@ const UserProfile = () => {
       description: "Ingresos generados",
       icon: DollarSign,
       color: "text-emerald-600",
-      bgColor: "bg-emerald-100",
     },
     {
       title: "Costo Total",
@@ -486,7 +485,6 @@ const UserProfile = () => {
       description: "Costo total incurrido",
       icon: DollarSign,
       color: "text-amber-600",
-      bgColor: "bg-amber-100",
     },
     {
       title: "Utilización",
@@ -504,13 +502,6 @@ const UserProfile = () => {
           ? "text-amber-600"
           : "text-red-600"
         : "text-gray-600",
-      bgColor: userInfo
-        ? userInfo.utilizationRate >= 100
-          ? "bg-emerald-100"
-          : userInfo.utilizationRate >= 85
-          ? "bg-amber-100"
-          : "bg-red-100"
-        : "bg-gray-100",
     },
     {
       title: "Proyectos",
@@ -518,7 +509,6 @@ const UserProfile = () => {
       description: "Proyectos trabajados",
       icon: Briefcase,
       color: "text-purple-600",
-      bgColor: "bg-purple-100",
     },
     {
       title: "Clientes",
@@ -526,95 +516,84 @@ const UserProfile = () => {
       description: "Clientes atendidos",
       icon: Users,
       color: "text-indigo-600",
-      bgColor: "bg-indigo-100",
     },
   ];
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/facturacion")}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Volver
-            </Button>
-            <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16">
-                <AvatarImage src={fotoSven} alt={profileData.user_name} />
-                <AvatarFallback>
-                  {profileData.user_name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h1 className="text-3xl font-bold text-foreground">
-                    {profileData.user_name}
-                  </h1>
-                  {userInfo && (
-                    <Badge variant="outline" className="text-sm">
-                      {userInfo.category}
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 flex-wrap">
-                  <p className="text-muted-foreground">
-                    Código: {profileData.user_code}
-                  </p>
-                  {userInfo && (
-                    <>
-                      <span className="text-muted-foreground">•</span>
-                      <p className="text-muted-foreground">
-                        Área: {userInfo.practiceArea}
-                      </p>
-                      <span className="text-muted-foreground">•</span>
-                      <p className="text-muted-foreground">
-                        Utilización:{" "}
-                        <span
-                          className={`font-semibold ${
-                            userInfo.utilizationRate >= 100
-                              ? "text-emerald-600"
-                              : userInfo.utilizationRate >= 85
-                              ? "text-amber-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {userInfo.utilizationRate.toFixed(1)}%
-                        </span>
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/facturacion")}
+            className="h-8 w-8 shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Avatar className="h-12 w-12 shrink-0">
+            <AvatarImage src={fotoSven} alt={profileData.user_name} />
+            <AvatarFallback>
+              {profileData.user_name.charAt(0)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 mb-0.5">
+              <h1 className="text-2xl font-semibold text-foreground truncate">
+                {profileData.user_name}
+              </h1>
+              {userInfo && (
+                <Badge variant="secondary" className="text-xs shrink-0">
+                  {userInfo.category}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+              <span>{profileData.user_code}</span>
+              {userInfo && (
+                <>
+                  <span className="text-border">|</span>
+                  <span>{userInfo.practiceArea}</span>
+                  <span className="text-border">|</span>
+                  <span>
+                    Utilización{" "}
+                    <span
+                      className={`font-medium ${
+                        userInfo.utilizationRate >= 100
+                          ? "text-emerald-600"
+                          : userInfo.utilizationRate >= 85
+                          ? "text-amber-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {userInfo.utilizationRate.toFixed(1)}%
+                    </span>
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {stats.map((stat) => (
             <Card
               key={stat.title}
-              className="border-border/50 hover:shadow-md transition-shadow"
+              className="border-border/40 shadow-sm"
             >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.title}
-                </CardTitle>
-                <div className={`${stat.bgColor} p-2 rounded-lg`}>
-                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              <CardContent className="pt-4 pb-3 px-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {stat.title}
+                  </p>
+                  <stat.icon className={`h-3.5 w-3.5 ${stat.color} opacity-70`} />
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-2xl font-bold text-foreground">
+                <div className="text-xl font-semibold text-foreground">
                   {stat.value}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">
                   {stat.description}
                 </p>
               </CardContent>
@@ -623,22 +602,22 @@ const UserProfile = () => {
         </div>
 
         {/* Projects Table */}
-        <Card className="border-border/50">
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <Card className="border-border/40 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <CardTitle className="text-foreground">Proyectos</CardTitle>
-                <CardDescription>
-                  Proyectos en los que ha trabajado este usuario
+                <CardTitle className="text-foreground text-base">Proyectos</CardTitle>
+                <CardDescription className="text-xs">
+                  {filteredAndSortedProjects.length} proyectos
                 </CardDescription>
               </div>
-              <div className="relative flex-1 sm:flex-initial sm:w-64">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="relative flex-1 sm:flex-initial sm:w-56">
+                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Buscar proyectos..."
                   value={projectsSearchTerm}
                   onChange={(e) => setProjectsSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className="pl-8 h-8 text-sm"
                 />
               </div>
             </div>
@@ -649,66 +628,60 @@ const UserProfile = () => {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleProjectsSort("project_name")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto"
-                          >
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead
+                          onClick={() => handleProjectsSort("project_name")}
+                          className="cursor-pointer select-none text-xs"
+                        >
+                          <span className="inline-flex items-center gap-1">
                             Proyecto
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead>
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleProjectsSort("project_code")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleProjectsSort("project_code")}
+                          className="cursor-pointer select-none text-xs"
+                        >
+                          <span className="inline-flex items-center gap-1">
                             Código
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead>
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleProjectsSort("client_name")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleProjectsSort("client_name")}
+                          className="cursor-pointer select-none text-xs"
+                        >
+                          <span className="inline-flex items-center gap-1">
                             Cliente
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead className="text-right">
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleProjectsSort("total_hours")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto ml-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleProjectsSort("total_hours")}
+                          className="cursor-pointer select-none text-xs text-right"
+                        >
+                          <span className="inline-flex items-center gap-1 justify-end">
                             Horas
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead className="text-right">
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleProjectsSort("total_cost")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto ml-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleProjectsSort("total_cost")}
+                          className="cursor-pointer select-none text-xs text-right"
+                        >
+                          <span className="inline-flex items-center gap-1 justify-end">
                             Costo
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead className="text-right">
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleProjectsSort("revenue")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto ml-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleProjectsSort("revenue")}
+                          className="cursor-pointer select-none text-xs text-right"
+                        >
+                          <span className="inline-flex items-center gap-1 justify-end">
                             Ingresos
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
                       </TableRow>
                     </TableHeader>
@@ -724,23 +697,23 @@ const UserProfile = () => {
                         </TableRow>
                       ) : (
                         paginatedProjects.map((project) => (
-                          <TableRow key={project.project_id}>
-                            <TableCell className="font-medium">
+                          <TableRow key={project.project_id} className="h-10">
+                            <TableCell className="font-medium text-sm">
                               {project.project_name}
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">
+                              <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-1.5 py-0.5 rounded">
                                 {project.project_code}
-                              </Badge>
+                              </span>
                             </TableCell>
-                            <TableCell>{project.client_name}</TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-sm text-muted-foreground">{project.client_name}</TableCell>
+                            <TableCell className="text-right text-sm tabular-nums">
                               {Math.round(project.total_hours).toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-right text-amber-600">
+                            <TableCell className="text-right text-sm tabular-nums text-amber-600">
                               {formatMillions(project.total_cost)}
                             </TableCell>
-                            <TableCell className="text-right text-emerald-600 font-medium">
+                            <TableCell className="text-right text-sm tabular-nums text-emerald-600 font-medium">
                               {formatMillions(project.revenue)}
                             </TableCell>
                           </TableRow>
@@ -809,22 +782,22 @@ const UserProfile = () => {
         </Card>
 
         {/* Clients Table */}
-        <Card className="border-border/50">
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <Card className="border-border/40 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <CardTitle className="text-foreground">Clientes</CardTitle>
-                <CardDescription>
-                  Clientes con los que ha trabajado este usuario
+                <CardTitle className="text-foreground text-base">Clientes</CardTitle>
+                <CardDescription className="text-xs">
+                  {filteredAndSortedClients.length} clientes
                 </CardDescription>
               </div>
-              <div className="relative flex-1 sm:flex-initial sm:w-64">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="relative flex-1 sm:flex-initial sm:w-56">
+                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Buscar clientes..."
                   value={clientsSearchTerm}
                   onChange={(e) => setClientsSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className="pl-8 h-8 text-sm"
                 />
               </div>
             </div>
@@ -835,66 +808,60 @@ const UserProfile = () => {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleClientsSort("client_name")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto"
-                          >
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead
+                          onClick={() => handleClientsSort("client_name")}
+                          className="cursor-pointer select-none text-xs"
+                        >
+                          <span className="inline-flex items-center gap-1">
                             Cliente
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead>
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleClientsSort("client_code")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleClientsSort("client_code")}
+                          className="cursor-pointer select-none text-xs"
+                        >
+                          <span className="inline-flex items-center gap-1">
                             Código
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead className="text-right">
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleClientsSort("project_count")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto ml-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleClientsSort("project_count")}
+                          className="cursor-pointer select-none text-xs text-right"
+                        >
+                          <span className="inline-flex items-center gap-1 justify-end">
                             Proyectos
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead className="text-right">
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleClientsSort("total_hours")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto ml-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleClientsSort("total_hours")}
+                          className="cursor-pointer select-none text-xs text-right"
+                        >
+                          <span className="inline-flex items-center gap-1 justify-end">
                             Horas
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead className="text-right">
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleClientsSort("total_cost")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto ml-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleClientsSort("total_cost")}
+                          className="cursor-pointer select-none text-xs text-right"
+                        >
+                          <span className="inline-flex items-center gap-1 justify-end">
                             Costo
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
-                        <TableHead className="text-right">
-                          <Button
-                            variant="ghost"
-                            onClick={() => handleClientsSort("revenue")}
-                            className="flex items-center gap-1 p-0 hover:bg-transparent h-auto ml-auto"
-                          >
+                        <TableHead
+                          onClick={() => handleClientsSort("revenue")}
+                          className="cursor-pointer select-none text-xs text-right"
+                        >
+                          <span className="inline-flex items-center gap-1 justify-end">
                             Ingresos
-                            <ArrowUpDown className="h-4 w-4" />
-                          </Button>
+                            <ArrowUpDown className="h-3 w-3 opacity-40" />
+                          </span>
                         </TableHead>
                       </TableRow>
                     </TableHeader>
@@ -910,25 +877,25 @@ const UserProfile = () => {
                         </TableRow>
                       ) : (
                         paginatedClients.map((client) => (
-                          <TableRow key={client.client_code}>
-                            <TableCell className="font-medium">
+                          <TableRow key={client.client_code} className="h-10">
+                            <TableCell className="font-medium text-sm">
                               {client.client_name}
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">
+                              <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-1.5 py-0.5 rounded">
                                 {client.client_code}
-                              </Badge>
+                              </span>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right text-sm tabular-nums">
                               {client.project_count}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right text-sm tabular-nums">
                               {Math.round(client.total_hours).toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-right text-amber-600">
+                            <TableCell className="text-right text-sm tabular-nums text-amber-600">
                               {formatMillions(client.total_cost)}
                             </TableCell>
-                            <TableCell className="text-right text-emerald-600 font-medium">
+                            <TableCell className="text-right text-sm tabular-nums text-emerald-600 font-medium">
                               {formatMillions(client.revenue)}
                             </TableCell>
                           </TableRow>

@@ -51,9 +51,6 @@ import {
   Activity,
   CalendarIcon,
   Loader2,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   Mail,
   Send,
   X,
@@ -62,6 +59,10 @@ import {
   BarChart3,
   Target,
   Eye,
+  TrendingUp,
+  Percent,
+  Scale,
+  FileText,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -74,6 +75,10 @@ import {
   getDashboardData,
   getClientCosts,
   getRevenueByUser,
+  getTransformedTimeEntries,
+  getClientProfitability,
+  getCategoryBillableHours,
+  getProjectCosts,
 } from "@/lib/mockDataUtils";
 import type {
   TimeEntry as RelationalTimeEntry,
@@ -160,21 +165,50 @@ interface GerencialReportData {
   totalFacturado: number;
   totalHorasFacturables: number;
   metaFacturacion: number;
+  totalHours: number;
+  utilizationRate: number;
+  avgMarginPercent: number;
+  totalCost: number;
+  totalProjects: number;
   topClients: Array<{
     name: string;
     hours: number;
     revenue: number;
     projects: number;
+    margin?: number;
   }>;
   topProfessionals: Array<{
     name: string;
     code: string;
     revenue: number;
+    hours?: number;
+    category?: string;
   }>;
   areaBreakdown: Array<{
     area: string;
     facturacion: number;
     meta: number;
+  }>;
+  topProjects: Array<{
+    name: string;
+    clientName: string;
+    hours: number;
+    revenue: number;
+  }>;
+  categoryBreakdown: Array<{
+    category: string;
+    billableHours: number;
+    userCount: number;
+  }>;
+  monthlyRevenue: Array<{
+    month: string;
+    revenue: number;
+  }>;
+  clientProfitability: Array<{
+    name: string;
+    facturacion: number;
+    costo: number;
+    margin: number;
   }>;
   prevPeriod: {
     totalFacturado: number;
@@ -255,15 +289,73 @@ function computeGerencialData(
   const dashboard = getDashboardData("all", start, end);
   const clients = getClientCosts(start, end);
   const topPros = getRevenueByUser(start, end);
+  const profitability = getClientProfitability(start, end);
+  const categoryHours = getCategoryBillableHours(start, end);
+  const projectCosts = getProjectCosts(start, end);
+  const allEntries = getTransformedTimeEntries(start, end);
+
+  // Total hours (all time entries)
+  const totalHours = allEntries.reduce((sum, e) => sum + e.duration, 0);
+  const totalBillableHours = dashboard.totalHorasFacturables || 0;
+  const utilizationRate = totalHours > 0 ? (totalBillableHours / totalHours) * 100 : 0;
+
+  // Average margin from profitability data
+  const totalFacturacion = profitability.reduce((s, c) => s + c.facturacion, 0);
+  const totalCost = profitability.reduce((s, c) => s + c.costo_total, 0);
+  const avgMarginPercent = totalFacturacion > 0
+    ? ((totalFacturacion - totalCost) / totalFacturacion) * 100
+    : 0;
+
+  // Total unique projects
+  const totalProjects = new Set(allEntries.map((e) => e.project_id)).size;
 
   const topClients = clients
     .sort((a, b) => b.billable_hours - a.billable_hours)
     .slice(0, 10)
+    .map((c) => {
+      const prof = profitability.find((p) => p.client_code === c.client_code);
+      return {
+        name: c.client_name,
+        hours: c.total_hours,
+        revenue: c.billable_hours * 500,
+        projects: c.project_count,
+        margin: prof?.margen_percent,
+      };
+    });
+
+  // Top projects by revenue
+  const topProjects = projectCosts
+    .sort((a, b) => (b.billable_hours * 500) - (a.billable_hours * 500))
+    .slice(0, 8)
+    .map((p) => ({
+      name: p.project_name,
+      clientName: p.client_name,
+      hours: p.total_hours,
+      revenue: p.billable_hours * 500,
+    }));
+
+  // Category breakdown
+  const categoryBreakdown = categoryHours.map((c) => ({
+    category: c.category,
+    billableHours: c.billable_hours,
+    userCount: c.users.length,
+  }));
+
+  // Monthly revenue from dashboard
+  const monthlyRevenue = dashboard.revenueChart.map((r) => ({
+    month: r.month,
+    revenue: r.revenue,
+  }));
+
+  // Client profitability (top 8)
+  const clientProfitability = profitability
+    .filter((c) => c.facturacion > 0)
+    .slice(0, 8)
     .map((c) => ({
       name: c.client_name,
-      hours: c.total_hours,
-      revenue: c.billable_hours * 500,
-      projects: c.project_count,
+      facturacion: c.facturacion,
+      costo: c.costo_total,
+      margin: c.margen_percent,
     }));
 
   let prevPeriod: GerencialReportData["prevPeriod"] = null;
@@ -277,22 +369,40 @@ function computeGerencialData(
     };
   }
 
+  // Get usuarios for category info on professionals
+  const allUsuarios = getUsuarios();
+  const usuarioMap = new Map(allUsuarios.map((u) => [u.code, u]));
+
   return {
     clientesUnicos: dashboard.clientesUnicos,
     totalFacturado: dashboard.totalFacturado,
-    totalHorasFacturables: dashboard.totalHorasFacturables || 0,
+    totalHorasFacturables: totalBillableHours,
     metaFacturacion: dashboard.metaFacturacion,
+    totalHours,
+    utilizationRate,
+    avgMarginPercent,
+    totalCost,
+    totalProjects,
     topClients,
-    topProfessionals: topPros.map((p) => ({
-      name: p.user_name,
-      code: p.user_code,
-      revenue: p.revenue,
-    })),
+    topProfessionals: topPros.map((p) => {
+      const usr = usuarioMap.get(p.user_code);
+      return {
+        name: p.user_name,
+        code: p.user_code,
+        revenue: p.revenue,
+        hours: allEntries.filter((e) => e.user_id === p.user_id).reduce((s, e) => s + e.duration, 0),
+        category: usr?.category,
+      };
+    }),
     areaBreakdown: dashboard.facturacionPorArea.map((a) => ({
       area: a.area,
       facturacion: a.facturacion,
       meta: a.meta,
     })),
+    topProjects,
+    categoryBreakdown,
+    monthlyRevenue,
+    clientProfitability,
     prevPeriod,
   };
 }
@@ -463,32 +573,31 @@ function DeltaBadge({
   hasPeriod: boolean;
 }) {
   if (delta && delta.direction !== "neutral") {
+    const isUp = delta.direction === "up";
     return (
       <div
-        className={`flex items-center gap-1 mt-1 text-xs font-medium ${
-          delta.direction === "up" ? "text-emerald-600" : "text-red-500"
+        className={`inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
+          isUp
+            ? "text-emerald-700 bg-emerald-50"
+            : "text-red-600 bg-red-50"
         }`}
       >
-        {delta.direction === "up" ? (
-          <TrendingUp className="h-3 w-3" />
-        ) : (
-          <TrendingDown className="h-3 w-3" />
-        )}
-        <span>{Math.abs(delta.percent).toFixed(1)}% vs periodo anterior</span>
+        <span>{isUp ? "↑" : "↓"}</span>
+        <span>{Math.abs(delta.percent).toFixed(1)}%</span>
       </div>
     );
   }
   if (delta && delta.direction === "neutral") {
     return (
-      <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-        <Minus className="h-3 w-3" />
+      <div className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded-full text-[11px] font-medium text-muted-foreground bg-muted/50 whitespace-nowrap">
+        <span>—</span>
         <span>Sin cambio</span>
       </div>
     );
   }
   if (hasPeriod) {
     return (
-      <p className="text-xs text-muted-foreground mt-1">Sin datos anteriores</p>
+      <p className="text-[11px] text-muted-foreground mt-1.5">Sin datos ant.</p>
     );
   }
   return null;
@@ -638,15 +747,15 @@ function GerencialPreviewContent({
   }>;
   hasPeriodGer: boolean;
 }) {
+  const maxAreaRevenue = Math.max(...gerData.areaBreakdown.map((a) => a.facturacion), 1);
+  const maxCategoryHours = Math.max(...gerData.categoryBreakdown.map((c) => c.billableHours), 1);
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {gerStats.map((stat) => (
-          <Card
-            key={stat.title}
-            className="border-border/50"
-          >
+          <Card key={stat.title} className="border-border/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3">
               <CardTitle className="text-xs font-medium text-muted-foreground">
                 {stat.title}
@@ -665,7 +774,89 @@ function GerencialPreviewContent({
         ))}
       </div>
 
-      {/* Top Clients */}
+      {/* Secondary Insights Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-muted/40 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Percent className="h-3 w-3" />
+            Utilizacion
+          </div>
+          <div className="text-lg font-bold text-foreground">
+            {gerData.utilizationRate.toFixed(1)}%
+          </div>
+          <div className="w-full bg-muted rounded-full h-1.5 mt-1.5">
+            <div
+              className={`h-1.5 rounded-full ${gerData.utilizationRate >= 80 ? "bg-emerald-500" : gerData.utilizationRate >= 60 ? "bg-amber-500" : "bg-red-500"}`}
+              style={{ width: `${Math.min(gerData.utilizationRate, 100)}%` }}
+            />
+          </div>
+        </div>
+        <div className="bg-muted/40 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Scale className="h-3 w-3" />
+            Margen Promedio
+          </div>
+          <div className={`text-lg font-bold ${gerData.avgMarginPercent >= 30 ? "text-emerald-600" : gerData.avgMarginPercent >= 15 ? "text-amber-600" : "text-red-600"}`}>
+            {gerData.avgMarginPercent.toFixed(1)}%
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Facturacion vs costo</p>
+        </div>
+        <div className="bg-muted/40 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Clock className="h-3 w-3" />
+            Horas Totales
+          </div>
+          <div className="text-lg font-bold text-foreground">
+            {Math.round(gerData.totalHours).toLocaleString()}h
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {Math.round(gerData.totalHorasFacturables).toLocaleString()}h facturables
+          </p>
+        </div>
+        <div className="bg-muted/40 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <FileText className="h-3 w-3" />
+            Proyectos Activos
+          </div>
+          <div className="text-lg font-bold text-foreground">
+            {gerData.totalProjects}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {gerData.clientesUnicos} clientes
+          </p>
+        </div>
+      </div>
+
+      {/* Revenue by Practice Area */}
+      {gerData.areaBreakdown.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" /> Facturacion por Area
+          </h4>
+          <div className="space-y-2.5">
+            {gerData.areaBreakdown
+              .sort((a, b) => b.facturacion - a.facturacion)
+              .map((area) => (
+                <div key={area.area}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-medium text-foreground">{area.area}</span>
+                    <span className="text-muted-foreground font-medium">
+                      {formatCurrency(area.facturacion)}
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-primary/80 transition-all"
+                      style={{ width: `${(area.facturacion / maxAreaRevenue) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top Clients with margin */}
       <div>
         <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
           <Users className="h-4 w-4" /> Top Clientes
@@ -676,44 +867,187 @@ function GerencialPreviewContent({
               <TableHead>Cliente</TableHead>
               <TableHead className="text-right">Horas</TableHead>
               <TableHead className="text-right">Proyectos</TableHead>
+              <TableHead className="text-right">Margen</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {gerData.topClients.slice(0, 5).map((c) => (
+            {gerData.topClients.slice(0, 7).map((c) => (
               <TableRow key={c.name}>
                 <TableCell className="font-medium text-sm">{c.name}</TableCell>
                 <TableCell className="text-right text-sm">{Math.round(c.hours)}h</TableCell>
                 <TableCell className="text-right text-sm">{c.projects}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Top Professionals */}
-      <div>
-        <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-          <Briefcase className="h-4 w-4" /> Top Profesionales
-        </h4>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Profesional</TableHead>
-              <TableHead className="text-right">Ingresos</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {gerData.topProfessionals.slice(0, 5).map((p) => (
-              <TableRow key={p.code}>
-                <TableCell className="font-medium text-sm">{p.name}</TableCell>
-                <TableCell className="text-right text-sm text-emerald-600 font-medium">
-                  {formatCurrency(p.revenue)}
+                <TableCell className="text-right text-sm">
+                  {c.margin != null ? (
+                    <span className={`font-medium ${c.margin >= 30 ? "text-emerald-600" : c.margin >= 0 ? "text-amber-600" : "text-red-600"}`}>
+                      {c.margin.toFixed(0)}%
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      {/* Client Profitability */}
+      {gerData.clientProfitability.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" /> Rentabilidad por Cliente
+          </h4>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cliente</TableHead>
+                <TableHead className="text-right">Facturado</TableHead>
+                <TableHead className="text-right">Costo</TableHead>
+                <TableHead className="text-right">Margen</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {gerData.clientProfitability.slice(0, 6).map((c) => (
+                <TableRow key={c.name}>
+                  <TableCell className="font-medium text-sm">{c.name}</TableCell>
+                  <TableCell className="text-right text-sm text-emerald-600 font-medium">
+                    {formatCurrency(c.facturacion)}
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-red-500">
+                    {formatCurrency(c.costo)}
+                  </TableCell>
+                  <TableCell className="text-right text-sm">
+                    <span className={`font-semibold ${c.margin >= 30 ? "text-emerald-600" : c.margin >= 0 ? "text-amber-600" : "text-red-600"}`}>
+                      {c.margin.toFixed(1)}%
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Two-column: Professionals + Category Breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Professionals */}
+        <div>
+          <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <Briefcase className="h-4 w-4" /> Top Profesionales
+          </h4>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Profesional</TableHead>
+                <TableHead className="text-right">Ingresos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {gerData.topProfessionals.slice(0, 5).map((p) => (
+                <TableRow key={p.code}>
+                  <TableCell>
+                    <div className="font-medium text-sm">{p.name}</div>
+                    {p.category && (
+                      <div className="text-[10px] text-muted-foreground">{p.category}</div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-emerald-600 font-medium">
+                    {formatCurrency(p.revenue)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Hours by Seniority */}
+        {gerData.categoryBreakdown.length > 0 && (
+          <div>
+            <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Activity className="h-4 w-4" /> Horas por Categoria
+            </h4>
+            <div className="space-y-3">
+              {gerData.categoryBreakdown.map((cat) => (
+                <div key={cat.category}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-medium text-foreground">{cat.category}</span>
+                    <span className="text-muted-foreground">
+                      {Math.round(cat.billableHours).toLocaleString()}h · {cat.userCount} prof.
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-blue-500/80 transition-all"
+                      style={{ width: `${(cat.billableHours / maxCategoryHours) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Top Projects */}
+      {gerData.topProjects.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <FileText className="h-4 w-4" /> Top Proyectos
+          </h4>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Proyecto</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead className="text-right">Horas</TableHead>
+                <TableHead className="text-right">Ingresos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {gerData.topProjects.slice(0, 6).map((p, i) => (
+                <TableRow key={`${p.name}-${i}`}>
+                  <TableCell className="font-medium text-sm max-w-[180px] truncate">{p.name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[140px] truncate">{p.clientName}</TableCell>
+                  <TableCell className="text-right text-sm">{Math.round(p.hours)}h</TableCell>
+                  <TableCell className="text-right text-sm text-emerald-600 font-medium">
+                    {formatCurrency(p.revenue)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Monthly Revenue Trend */}
+      {gerData.monthlyRevenue.length > 1 && (
+        <div>
+          <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" /> Tendencia Mensual de Ingresos
+          </h4>
+          <div className="flex items-end gap-1 h-24">
+            {(() => {
+              const maxRev = Math.max(...gerData.monthlyRevenue.map((m) => m.revenue), 1);
+              return gerData.monthlyRevenue.map((m, i) => (
+                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
+                  <div
+                    className={`w-full rounded-t transition-all ${i === gerData.monthlyRevenue.length - 1 ? "bg-primary" : "bg-primary/40"}`}
+                    style={{ height: `${Math.max((m.revenue / maxRev) * 80, 4)}px` }}
+                    title={`${m.month}: ${formatCurrency(m.revenue)}`}
+                  />
+                  <span className="text-[9px] text-muted-foreground leading-none">
+                    {m.month.split("-")[1]}
+                  </span>
+                </div>
+              ));
+            })()}
+          </div>
+          <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+            <span>{gerData.monthlyRevenue[0]?.month}</span>
+            <span>{gerData.monthlyRevenue[gerData.monthlyRevenue.length - 1]?.month}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1020,15 +1354,20 @@ async function generatePDFDoc(opts: {
         const clr = isUp
           ? { r: 16, g: 185, b: 129 }
           : { r: 239, g: 68, b: 68 };
-        doc.setFontSize(7);
+        const pctText = `${isUp ? "+" : "-"}${Math.abs(kpi.delta.percent).toFixed(1)}%`;
+        // Draw a small colored pill background
+        const pillW = doc.getTextWidth(pctText) * 0.75 + 6;
+        const pillX = x + (boxW - pillW) / 2;
+        doc.setFillColor(
+          isUp ? 236 : 254,
+          isUp ? 253 : 226,
+          isUp ? 245 : 226,
+        );
+        doc.roundedRect(pillX, y + 23, pillW, 5.5, 1.5, 1.5, "F");
+        doc.setFontSize(6.5);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(clr.r, clr.g, clr.b);
-        doc.text(
-          `${isUp ? "▲" : "▼"} ${Math.abs(kpi.delta.percent).toFixed(1)}% vs ant.`,
-          x + boxW / 2,
-          y + 27,
-          { align: "center" },
-        );
+        doc.text(pctText, x + boxW / 2, y + 27, { align: "center" });
       }
     });
     y += boxH + 14;
@@ -1128,6 +1467,7 @@ async function generatePDFDoc(opts: {
     const data = opts.gerencial;
     const prev = data.prevPeriod;
 
+    // Primary KPIs
     drawKPIBoxes([
       {
         label: "Total Facturado",
@@ -1156,24 +1496,75 @@ async function generatePDFDoc(opts: {
       },
     ]);
 
+    // Secondary KPIs
+    drawKPIBoxes([
+      {
+        label: "Utilizacion",
+        value: `${data.utilizationRate.toFixed(1)}%`,
+        accent: data.utilizationRate >= 80
+          ? { r: 16, g: 185, b: 129 }
+          : { r: 245, g: 158, b: 11 },
+      },
+      {
+        label: "Margen Promedio",
+        value: `${data.avgMarginPercent.toFixed(1)}%`,
+        accent: data.avgMarginPercent >= 30
+          ? { r: 16, g: 185, b: 129 }
+          : { r: 239, g: 68, b: 68 },
+      },
+      {
+        label: "Horas Totales",
+        value: `${Math.round(data.totalHours).toLocaleString()}h`,
+        accent: { r: 59, g: 130, b: 246 },
+      },
+      {
+        label: "Proyectos Activos",
+        value: data.totalProjects.toString(),
+        accent: { r: 168, g: 85, b: 247 },
+      },
+    ]);
+
+    // Top Clients with margin
     drawTable(
       "Top Clientes",
-      ["Cliente", "Horas", "Proyectos"],
-      [3, 110, 145],
+      ["Cliente", "Horas", "Proyectos", "Margen"],
+      [3, 95, 125, 155],
       data.topClients.map((c) => [
-        c.name.length > 50 ? c.name.substring(0, 47) + "..." : c.name,
+        c.name.length > 42 ? c.name.substring(0, 39) + "..." : c.name,
         `${Math.round(c.hours)}h`,
         c.projects.toString(),
+        c.margin != null ? `${c.margin.toFixed(0)}%` : "—",
       ]),
     );
 
+    // Client Profitability
+    if (data.clientProfitability.length > 0) {
+      drawTable(
+        "Rentabilidad por Cliente",
+        ["Cliente", "Facturado", "Costo", "Margen"],
+        [3, 85, 120, 155],
+        data.clientProfitability.map((c) => [
+          c.name.length > 38 ? c.name.substring(0, 35) + "..." : c.name,
+          formatCurrency(c.facturacion),
+          formatCurrency(c.costo),
+          `${c.margin.toFixed(1)}%`,
+        ]),
+      );
+    }
+
+    // Top Professionals
     drawTable(
       "Top Profesionales por Ingresos",
-      ["Profesional", "Codigo", "Ingresos"],
-      [3, 80, 120],
-      data.topProfessionals.map((p) => [p.name, p.code, formatCurrency(p.revenue)]),
+      ["Profesional", "Categoria", "Ingresos"],
+      [3, 75, 130],
+      data.topProfessionals.map((p) => [
+        p.name,
+        p.category || p.code,
+        formatCurrency(p.revenue),
+      ]),
     );
 
+    // Area Breakdown
     if (data.areaBreakdown.length > 0) {
       drawTable(
         "Facturacion por Area de Practica",
@@ -1181,11 +1572,41 @@ async function generatePDFDoc(opts: {
         [3, 100, 145],
         data.areaBreakdown
           .filter((a) => a.facturacion > 0)
+          .sort((a, b) => b.facturacion - a.facturacion)
           .map((a) => [
             a.area.length > 40 ? a.area.substring(0, 37) + "..." : a.area,
             formatCurrency(a.facturacion),
             formatCurrency(a.meta),
           ]),
+      );
+    }
+
+    // Hours by Category
+    if (data.categoryBreakdown.length > 0) {
+      drawTable(
+        "Horas Facturables por Categoria",
+        ["Categoria", "Horas", "Profesionales"],
+        [3, 100, 145],
+        data.categoryBreakdown.map((c) => [
+          c.category,
+          `${Math.round(c.billableHours).toLocaleString()}h`,
+          c.userCount.toString(),
+        ]),
+      );
+    }
+
+    // Top Projects
+    if (data.topProjects.length > 0) {
+      drawTable(
+        "Top Proyectos por Ingresos",
+        ["Proyecto", "Cliente", "Horas", "Ingresos"],
+        [3, 68, 128, 150],
+        data.topProjects.slice(0, 10).map((p) => [
+          p.name.length > 30 ? p.name.substring(0, 27) + "..." : p.name,
+          p.clientName.length > 28 ? p.clientName.substring(0, 25) + "..." : p.clientName,
+          `${Math.round(p.hours)}h`,
+          formatCurrency(p.revenue),
+        ]),
       );
     }
   }

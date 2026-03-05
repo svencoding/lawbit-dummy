@@ -221,6 +221,7 @@ export function getClientCosts(
   clientName?: string | null,
   area?: string | null,
   formaCobro?: string | null,
+  userCode?: string | null,
 ): ClientCost[] {
   let transformedEntries = getTransformedTimeEntries(startDate, endDate);
 
@@ -244,6 +245,14 @@ export function getClientCosts(
     transformedEntries = transformedEntries.filter((entry) => {
       const asunto = asuntosMap.get(entry.project_id);
       return asunto && asunto.charge_type === formaCobro;
+    });
+  }
+
+  // Filter by encargado (user code) if provided
+  if (userCode) {
+    transformedEntries = transformedEntries.filter((entry) => {
+      const usuario = usuariosMap.get(entry.user_id);
+      return usuario && usuario.code === userCode;
     });
   }
 
@@ -388,6 +397,7 @@ export function getRevenueByUser(
   endDate?: Date,
   clientName?: string | null,
   formaCobro?: string | null,
+  userCode?: string | null,
 ): Array<{
   user_id: number;
   user_name: string;
@@ -408,6 +418,14 @@ export function getRevenueByUser(
     transformedEntries = transformedEntries.filter((entry) => {
       const asunto = asuntosMap.get(entry.project_id);
       return asunto && asunto.charge_type === formaCobro;
+    });
+  }
+
+  // Filter by encargado (user code) if provided
+  if (userCode) {
+    transformedEntries = transformedEntries.filter((entry) => {
+      const usuario = usuariosMap.get(entry.user_id);
+      return usuario && usuario.code === userCode;
     });
   }
 
@@ -703,6 +721,7 @@ export function getDashboardData(
   endDate?: Date,
   clientName?: string | null,
   formaCobro?: string | null,
+  userCode?: string | null,
 ): DashboardData {
   const transformedEntries = getTransformedTimeEntries(startDate, endDate);
 
@@ -726,6 +745,14 @@ export function getDashboardData(
     filteredEntries = filteredEntries.filter((entry) => {
       const asunto = asuntosMap.get(entry.project_id);
       return asunto && asunto.charge_type === formaCobro;
+    });
+  }
+
+  // Filter entries by encargado (user code) if needed
+  if (userCode) {
+    filteredEntries = filteredEntries.filter((entry) => {
+      const usuario = usuariosMap.get(entry.user_id);
+      return usuario && usuario.code === userCode;
     });
   }
 
@@ -1810,4 +1837,229 @@ export function getCategoryBillableHours(
       };
     })
     .filter((item) => item.billable_hours > 0);
+}
+
+// --- Historical Project Comparison ---
+
+export interface HistoricalProject {
+  asunto_id: number;
+  title: string;
+  client_name: string;
+  practice_area: string;
+  project_type: string | null;
+  charge_type: string | null;
+  amount: number;
+  total_hours: number;
+  billable_hours: number;
+  total_cost: number;
+  total_billed: number;
+  avg_rate: number;
+  profit_margin: number;
+  start_date: string | null;
+  end_date: string | null;
+  duration_days: number;
+  team: Array<{
+    user_name: string;
+    user_code: string;
+    category: string;
+    hours: number;
+  }>;
+  team_size: number;
+}
+
+export function getHistoricalProjectsByArea(
+  area: string,
+): HistoricalProject[] {
+  const areaAsuntos = asuntos.filter(
+    (a) => a.practice_area === area && a.billable === "SI",
+  );
+
+  const result: HistoricalProject[] = [];
+
+  for (const asunto of areaAsuntos) {
+    const entries = timeEntries.filter(
+      (e) => parseInt(String(e.asunto_id), 10) === asunto.id,
+    );
+
+    if (entries.length === 0) continue;
+
+    let totalHours = 0;
+    let billableHours = 0;
+    let totalCost = 0;
+    const teamMap = new Map<
+      string,
+      { hours: number; code: string; category: string }
+    >();
+    let minDate: string | null = null;
+    let maxDate: string | null = null;
+
+    for (const entry of entries) {
+      const hours = typeof entry.hours === "number" ? entry.hours : 0;
+      const bh =
+        typeof entry.billable_hour === "number" ? entry.billable_hour : 0;
+      const cost = typeof entry.total_cost === "number" ? entry.total_cost : 0;
+      totalHours += hours;
+      billableHours += bh;
+      totalCost += cost;
+
+      const usuario = usuariosByCodeMap.get(entry.user_name);
+      const existing = teamMap.get(entry.user_name);
+      if (existing) {
+        existing.hours += hours;
+      } else {
+        teamMap.set(entry.user_name, {
+          hours,
+          code: entry.user_name,
+          category: usuario?.category || "Asociado",
+        });
+      }
+
+      const normalized = normalizeDate(entry.date);
+      if (normalized) {
+        if (!minDate || normalized < minDate) minDate = normalized;
+        if (!maxDate || normalized > maxDate) maxDate = normalized;
+      }
+    }
+
+    const totalBilled = facturacion
+      .filter((f) => f.asunto_id === asunto.id)
+      .reduce((sum, f) => sum + (f.amount_charged || 0), 0);
+
+    const avgRate = billableHours > 0 ? totalBilled / billableHours : 0;
+    const profitMargin =
+      totalBilled > 0 ? ((totalBilled - totalCost) / totalBilled) * 100 : 0;
+
+    const durationDays =
+      minDate && maxDate
+        ? Math.max(
+            1,
+            Math.ceil(
+              (new Date(maxDate).getTime() - new Date(minDate).getTime()) /
+                (1000 * 60 * 60 * 24),
+            ),
+          )
+        : 0;
+
+    const team = Array.from(teamMap.entries())
+      .map(([, data]) => ({
+        user_name: usuariosByCodeMap.get(data.code)?.name || data.code,
+        user_code: data.code,
+        category: data.category,
+        hours: Math.round(data.hours * 10) / 10,
+      }))
+      .sort((a, b) => b.hours - a.hours);
+
+    const cliente = clientesMap.get(asunto.cliente_id || 0);
+
+    result.push({
+      asunto_id: asunto.id,
+      title: asunto.title || `Asunto ${asunto.id}`,
+      client_name: cliente?.name || asunto.cliente_id?.toString() || "—",
+      practice_area: area,
+      project_type: asunto.project_type || null,
+      charge_type: asunto.charge_type || null,
+      amount: asunto.amount || 0,
+      total_hours: Math.round(totalHours * 10) / 10,
+      billable_hours: Math.round(billableHours * 10) / 10,
+      total_cost: Math.round(totalCost),
+      total_billed: Math.round(totalBilled),
+      avg_rate: Math.round(avgRate),
+      profit_margin: Math.round(profitMargin * 10) / 10,
+      start_date: minDate,
+      end_date: maxDate,
+      duration_days: durationDays,
+      team,
+      team_size: team.length,
+    });
+  }
+
+  return result.sort((a, b) => b.total_billed - a.total_billed);
+}
+
+// --- Budget / Strategic Planning utilities ---
+
+export interface AreaMonthActuals {
+  revenue: number;
+  cost: number;
+  total_hours: number;
+  billable_hours: number;
+}
+
+/**
+ * Get actual revenue, cost, and hours grouped by practice area and month for a given year.
+ */
+export function getActualsByAreaAndMonth(
+  year: number,
+): Map<string, Map<number, AreaMonthActuals>> {
+  const result = new Map<string, Map<number, AreaMonthActuals>>();
+
+  const ensureBucket = (area: string, month: number) => {
+    if (!result.has(area)) result.set(area, new Map());
+    const areaMap = result.get(area)!;
+    if (!areaMap.has(month))
+      areaMap.set(month, { revenue: 0, cost: 0, total_hours: 0, billable_hours: 0 });
+    return areaMap.get(month)!;
+  };
+
+  // Revenue from facturacion
+  facturacion.forEach((f) => {
+    if (!f.month || !f.asunto_id) return;
+    const dateStr = normalizeDate(f.month);
+    if (!dateStr) return;
+    const date = new Date(dateStr + "T00:00:00");
+    if (date.getFullYear() !== year) return;
+
+    const asunto = asuntosMap.get(f.asunto_id);
+    if (!asunto?.practice_area) return;
+
+    const bucket = ensureBucket(asunto.practice_area, date.getMonth() + 1);
+    bucket.revenue += f.amount_charged || 0;
+  });
+
+  // Cost + hours from time entries
+  timeEntries.forEach((entry) => {
+    const dateStr = normalizeDate(entry.date);
+    if (!dateStr) return;
+    const date = new Date(dateStr + "T00:00:00");
+    if (date.getFullYear() !== year) return;
+
+    const asuntoId = parseInt(String(entry.asunto_id), 10);
+    const asunto = asuntosMap.get(asuntoId);
+    if (!asunto?.practice_area) return;
+
+    const hours = typeof entry.hours === "number" ? entry.hours : 0;
+    const bh = typeof entry.billable_hour === "number" ? entry.billable_hour : 0;
+    const cost = typeof entry.total_cost === "number" ? entry.total_cost : 0;
+
+    const bucket = ensureBucket(asunto.practice_area, date.getMonth() + 1);
+    bucket.cost += cost;
+    bucket.total_hours += hours;
+    bucket.billable_hours += bh;
+  });
+
+  return result;
+}
+
+/**
+ * Count professionals per practice area from usuarios.
+ */
+export function getProfessionalCountByArea(): Map<string, number> {
+  const counts = new Map<string, number>();
+  usuarios.forEach((u) => {
+    if (u.practice_area) {
+      counts.set(u.practice_area, (counts.get(u.practice_area) || 0) + 1);
+    }
+  });
+  return counts;
+}
+
+/**
+ * Get all unique practice areas present in the mock data.
+ */
+export function getAllPracticeAreas(): string[] {
+  const areas = new Set<string>();
+  asuntos.forEach((a) => {
+    if (a.practice_area) areas.add(a.practice_area);
+  });
+  return Array.from(areas).sort();
 }

@@ -16,7 +16,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { getClientCosts, getTransformedTimeEntries } from "@/lib/mockDataUtils";
 import { formatDateLocal } from "@/lib/utils";
-import Top20Clientes from "@/components/Top20Clientes";
+import Top20Clientes, { type TopNOption } from "@/components/Top20Clientes";
 import facturacionData from "@/lib/mock/facturacion.json";
 import clientesData from "@/lib/mock/clientes.json";
 import usuariosData from "@/lib/mock/usuarios.json";
@@ -333,10 +333,19 @@ const transformMockData = (
     });
   }
 
-  // Calculate hours by category level (always use all unfiltered entries for display)
+  // Calculate hours by category level
+  // Cross-filtering: filter by clientName + feeType, but NOT by category (own dimension)
   const hoursByLevelMap = new Map<string, number>();
 
   allTimeEntries.forEach((entry) => {
+    // Apply clientName filter
+    if (filters?.clientName && entry.client_name !== filters.clientName) return;
+    // Apply feeType filter
+    if (filters?.feeType) {
+      const clientFeeType = clientNameToFeeTypeMap.get(entry.client_name);
+      if (clientFeeType !== filters.feeType) return;
+    }
+
     const usuario = usuarioMap.get(entry.user_id);
     const level = getCategoryLevel(usuario);
 
@@ -479,6 +488,7 @@ const Top20ClientesPageContent = () => {
   >([]);
   const [totalUnfilteredRevenue, setTotalUnfilteredRevenue] =
     useState<number>(0);
+  const [topN, setTopN] = useState<TopNOption>(20);
   const [dataLoading, setDataLoading] = useState(true);
   const [isFiltering, setIsFiltering] = useState(false);
   const [startDate, setStartDate] = useState<Date | undefined>(
@@ -749,6 +759,8 @@ const Top20ClientesPageContent = () => {
             formatDate={formatDate}
             hoursByLevel={hoursByLevel}
             facturacionByFeeType={facturacionByFeeType}
+            topN={topN}
+            onTopNChange={setTopN}
             onClientClick={(client) => {
               // Toggle filter: if already selected, deselect it
               if (filters.clientName === client.nombre) {
