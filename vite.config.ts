@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      "/sunafil-api": {
+        target: "https://aplicativosweb7.sunafil.gob.pe",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/sunafil-api/, ""),
+        secure: true,
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

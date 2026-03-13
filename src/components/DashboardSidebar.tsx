@@ -35,6 +35,7 @@ import {
   ChevronRight,
   BarChart3,
   Target,
+  Globe,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -48,6 +49,7 @@ const getDashboardSubItems = (userEmail: string) => [
 
 const menuItems = [
   { title: "Planificación", url: "/dashboard/planificacion", icon: Target },
+  { title: "Información Externa", url: "/dashboard/informacion-externa", icon: Globe },
   { title: "Alertas", url: "/dashboard/alertas", icon: Bell },
   { title: "Pricing", url: "/dashboard/pricing", icon: Calculator },
   { title: "Reportes", url: "/dashboard/reportes", icon: FileText },

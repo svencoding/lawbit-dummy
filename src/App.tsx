@@ -21,6 +21,7 @@ import ReportesPDF from "./pages/ReportesPDF";
 import Profesionales from "./pages/Profesionales";
 import Hernandez from "./pages/Hernandez";
 import Planificacion from "./pages/Planificacion";
+import InformacionExterna from "./pages/InformacionExterna";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -53,6 +54,7 @@ const App = () => (
             <Route path="/dashboard/profesionales" element={<Profesionales />} />
             <Route path="/dashboard/hernandez" element={<Hernandez />} />
             <Route path="/dashboard/planificacion" element={<Planificacion />} />
+            <Route path="/dashboard/informacion-externa" element={<InformacionExterna />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
