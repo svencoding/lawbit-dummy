@@ -36,6 +36,9 @@ import {
   PenLine,
   MessageSquare,
   X,
+  AlertTriangle,
+  Fuel,
+  Crosshair,
 } from "lucide-react";
 import {
   ComposedChart,
@@ -197,45 +200,154 @@ export default function Planificacion() {
     });
   }, [chartArea, timelineData, budgetEntries, actuals, year, chartNotes]);
 
-  // Area comparison view data: one bar per area per month
+  // Area comparison view data: one entry per area with planned vs actual
   const areaChartData = useMemo(() => {
-    return Array.from({ length: 12 }, (_, i) => {
-      const m = i + 1;
-      const date = new Date(year, i, 1);
-      const point: Record<string, any> = {
-        monthLabel: format(date, "MMM", { locale: es }),
+    return allAreas.map((area) => {
+      const areaEntries = budgetEntries.filter((e) => e.practice_area === area);
+      const areaActualsMap = actuals.get(area);
+      let totalPlanned = 0;
+      let totalActual = 0;
+      areaEntries.forEach((e) => (totalPlanned += e.planned_revenue || 0));
+      if (areaActualsMap) areaActualsMap.forEach((v) => (totalActual += v.revenue));
+      return {
+        area,
+        planned_revenue: Math.round(totalPlanned),
+        actual_revenue: Math.round(totalActual),
       };
-      allAreas.forEach((area) => {
-        const areaActualsMap = actuals.get(area);
-        const monthActuals = areaActualsMap?.get(m);
-        point[area] = Math.round(monthActuals?.revenue || 0);
-      });
-      // Add notes
-      const notes = chartNotes.get(m);
-      const maxVal = Math.max(...allAreas.map((a) => point[a] || 0));
-      point.noteY = notes ? maxVal : null;
-      point.noteText = notes ? notes.join("\n") : null;
-      return point;
     });
-  }, [actuals, allAreas, year, chartNotes]);
+  }, [actuals, allAreas, budgetEntries]);
 
   // Accumulated totals for right-side chart
   const accumulatedData = useMemo(() => {
     if (chartView === "areas") {
-      const point: Record<string, any> = { label: "Total" };
-      allAreas.forEach((area) => {
-        const areaActualsMap = actuals.get(area);
-        let total = 0;
-        if (areaActualsMap) areaActualsMap.forEach((v) => (total += v.revenue));
-        point[area] = Math.round(total);
-      });
-      return [point];
+      const totalPlanned = areaChartData.reduce((s, p) => s + p.planned_revenue, 0);
+      const totalActual = areaChartData.reduce((s, p) => s + p.actual_revenue, 0);
+      return [{ label: "Total", planned_revenue: totalPlanned, actual_revenue: totalActual }];
     }
     // General view
     const totalPlanned = chartData.reduce((s, p) => s + p.planned_revenue, 0);
     const totalActual = chartData.reduce((s, p) => s + p.actual_revenue, 0);
     return [{ label: "Total", planned_revenue: totalPlanned, actual_revenue: totalActual }];
-  }, [chartView, chartData, allAreas, actuals]);
+  }, [chartView, chartData, areaChartData]);
+
+  // --- Forecast: year-end projection based on YTD run rate ---
+  const forecastData = useMemo(() => {
+    // Find the last month with actual data
+    const monthsWithData = timelineData.filter((p) => p.actual_revenue > 0).length;
+    if (monthsWithData === 0) return [];
+
+    return breakdownData.map((row) => {
+      const areaActuals = actuals.get(row.practice_area);
+      let monthsActive = 0;
+      let ytdRevenue = 0;
+      let ytdCost = 0;
+      if (areaActuals) {
+        areaActuals.forEach((v) => {
+          if (v.revenue > 0 || v.cost > 0) {
+            monthsActive++;
+            ytdRevenue += v.revenue;
+            ytdCost += v.cost;
+          }
+        });
+      }
+      if (monthsActive === 0) monthsActive = 1;
+
+      const monthlyRunRate = ytdRevenue / monthsActive;
+      const projectedRevenue = Math.round(monthlyRunRate * 12);
+      const gap = projectedRevenue - row.planned_revenue;
+      const gapPct = row.planned_revenue > 0
+        ? Math.round((gap / row.planned_revenue) * 1000) / 10
+        : 0;
+
+      const costRunRate = ytdCost / monthsActive;
+      const projectedCost = Math.round(costRunRate * 12);
+
+      return {
+        area: row.practice_area,
+        planned: row.planned_revenue,
+        projected: projectedRevenue,
+        gap,
+        gapPct,
+        monthlyRunRate: Math.round(monthlyRunRate),
+        projectedCost,
+        plannedCost: row.planned_cost,
+      };
+    }).sort((a, b) => a.gapPct - b.gapPct); // worst gaps first
+  }, [breakdownData, actuals, timelineData]);
+
+  // --- Budget Burn Rate per area ---
+  const burnRateData = useMemo(() => {
+    const monthsWithData = timelineData.filter((p) => p.actual_cost > 0).length;
+    const monthsPassed = Math.max(monthsWithData, 1);
+    const expectedPct = Math.round((monthsPassed / 12) * 100);
+
+    return breakdownData.map((row) => {
+      const consumedPct = row.planned_cost > 0
+        ? Math.round((row.actual_cost / row.planned_cost) * 1000) / 10
+        : 0;
+      // Pace: >110% of expected = overspending, <90% = underspending
+      const pace = consumedPct / expectedPct;
+      const status: "ok" | "warning" | "danger" =
+        pace > 1.15 ? "danger" : pace > 1.0 ? "warning" : "ok";
+
+      return {
+        area: row.practice_area,
+        consumed: row.actual_cost,
+        budget: row.planned_cost,
+        consumedPct,
+        expectedPct,
+        status,
+      };
+    }).sort((a, b) => b.consumedPct - a.consumedPct);
+  }, [breakdownData, timelineData]);
+
+  // --- Alertas de Desviación ---
+  const alerts = useMemo(() => {
+    const items: Array<{
+      area: string;
+      type: "revenue_low" | "revenue_high" | "cost_over" | "util_low";
+      message: string;
+      severity: "warning" | "danger";
+      value: string;
+    }> = [];
+
+    breakdownData.forEach((row) => {
+      // Revenue significantly under budget
+      if (row.revenue_pct > 0 && row.revenue_pct < 85) {
+        items.push({
+          area: row.practice_area,
+          type: "revenue_low",
+          message: `Ingresos ${Math.round(100 - row.revenue_pct)}% bajo presupuesto`,
+          severity: row.revenue_pct < 70 ? "danger" : "warning",
+          value: `${row.revenue_pct}% del plan`,
+        });
+      }
+      // Cost significantly over budget
+      if (row.planned_cost > 0 && row.actual_cost > row.planned_cost * 1.15) {
+        const overPct = Math.round(((row.actual_cost - row.planned_cost) / row.planned_cost) * 100);
+        items.push({
+          area: row.practice_area,
+          type: "cost_over",
+          message: `Costos ${overPct}% sobre presupuesto`,
+          severity: overPct > 30 ? "danger" : "warning",
+          value: formatCurrency(row.actual_cost - row.planned_cost) + " excedente",
+        });
+      }
+      // Utilization significantly below target
+      if (row.actual_utilization > 0 && row.actual_utilization < row.target_utilization * 0.8) {
+        items.push({
+          area: row.practice_area,
+          type: "util_low",
+          message: `Utilización ${Math.round(row.target_utilization - row.actual_utilization)}pp bajo meta`,
+          severity: row.actual_utilization < row.target_utilization * 0.65 ? "danger" : "warning",
+          value: `${row.actual_utilization}% vs ${row.target_utilization}% meta`,
+        });
+      }
+    });
+
+    // Sort: danger first, then warning
+    return items.sort((a, b) => (a.severity === "danger" ? 0 : 1) - (b.severity === "danger" ? 0 : 1));
+  }, [breakdownData]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -389,6 +501,151 @@ export default function Planificacion() {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* Forecast + Burn Rate + Alerts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Forecast / Proyección */}
+          <Card className="border-border/50">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="bg-blue-50 dark:bg-blue-950/30 p-1.5 rounded-md">
+                  <Crosshair className="h-3.5 w-3.5 text-blue-600" />
+                </div>
+                <CardTitle className="text-sm font-medium">Proyección a Fin de Año</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2 max-h-[280px] overflow-y-auto">
+              {forecastData.map((row) => {
+                const isOver = row.gapPct >= 0;
+                return (
+                  <div key={row.area} className="flex items-center gap-2 py-1 border-b border-border/30 last:border-0">
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: getAreaColor(row.area) }}
+                    />
+                    <span className="text-xs flex-1 truncate">{row.area}</span>
+                    <div className="text-right">
+                      <span className={`text-xs font-semibold tabular-nums ${isOver ? "text-green-600" : "text-red-600"}`}>
+                        {isOver ? "+" : ""}{row.gapPct}%
+                      </span>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {formatCurrency(row.projected)} proy.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              {forecastData.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">Sin datos suficientes</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Budget Burn Rate */}
+          <Card className="border-border/50">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="bg-amber-50 dark:bg-amber-950/30 p-1.5 rounded-md">
+                  <Fuel className="h-3.5 w-3.5 text-amber-600" />
+                </div>
+                <CardTitle className="text-sm font-medium">Consumo de Presupuesto (Costos)</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2.5 max-h-[280px] overflow-y-auto">
+              {burnRateData.map((row) => (
+                <div key={row.area}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: getAreaColor(row.area) }}
+                      />
+                      <span className="text-xs truncate">{row.area}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-xs font-semibold tabular-nums ${
+                        row.status === "danger" ? "text-red-600" : row.status === "warning" ? "text-amber-600" : "text-green-600"
+                      }`}>
+                        {row.consumedPct}%
+                      </span>
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        / {row.expectedPct}% esperado
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden relative">
+                    {/* Expected marker */}
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-foreground/30 z-10"
+                      style={{ left: `${Math.min(row.expectedPct, 100)}%` }}
+                    />
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        row.status === "danger" ? "bg-red-500" : row.status === "warning" ? "bg-amber-500" : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${Math.min(row.consumedPct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Alertas de Desviación */}
+          <Card className="border-border/50">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="bg-red-50 dark:bg-red-950/30 p-1.5 rounded-md">
+                  <AlertTriangle className="h-3.5 w-3.5 text-red-600" />
+                </div>
+                <CardTitle className="text-sm font-medium">Alertas de Desviación</CardTitle>
+                {alerts.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                    {alerts.length}
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 max-h-[280px] overflow-y-auto">
+              {alerts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <div className="bg-green-50 dark:bg-green-950/30 p-2 rounded-full mb-2">
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Todo dentro de rangos normales</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {alerts.map((alert, i) => (
+                    <div
+                      key={`${alert.area}-${alert.type}-${i}`}
+                      className={`rounded-lg p-2.5 border ${
+                        alert.severity === "danger"
+                          ? "bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30"
+                          : "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/30"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className={`h-3.5 w-3.5 mt-0.5 flex-shrink-0 ${
+                          alert.severity === "danger" ? "text-red-500" : "text-amber-500"
+                        }`} />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium">{alert.area}</p>
+                          <p className="text-[11px] text-muted-foreground">{alert.message}</p>
+                          <p className={`text-[10px] font-medium mt-0.5 ${
+                            alert.severity === "danger" ? "text-red-600" : "text-amber-600"
+                          }`}>
+                            {alert.value}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Monthly Timeline Chart */}
@@ -560,9 +817,9 @@ export default function Planificacion() {
                       />
                     </ComposedChart>
                   ) : (
-                    <ComposedChart data={areaChartData} barCategoryGap="15%">
+                    <BarChart data={areaChartData} barCategoryGap="20%">
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
+                      <XAxis dataKey="area" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={60} />
                       <YAxis
                         tick={{ fontSize: 11 }}
                         tickFormatter={(v) =>
@@ -576,13 +833,11 @@ export default function Planificacion() {
                       <Tooltip
                         content={({ active, payload, label }) => {
                           if (!active || !payload?.length) return null;
-                          const noteEntry = payload.find((p: any) => p.dataKey === "noteY" && p.value != null);
                           return (
                             <div className="bg-popover border border-border rounded-lg shadow-lg p-3 text-sm max-w-xs">
-                              <p className="font-medium mb-1">Mes: {label}</p>
+                              <p className="font-medium mb-1">{label}</p>
                               {payload
-                                .filter((p: any) => p.dataKey !== "noteY" && p.value != null && (p.value as number) > 0)
-                                .sort((a: any, b: any) => (b.value as number) - (a.value as number))
+                                .filter((p: any) => p.value != null)
                                 .map((p: any, i: number) => (
                                   <p key={i} className="flex items-center gap-2">
                                     <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: p.color }} />
@@ -590,53 +845,35 @@ export default function Planificacion() {
                                     <span className="font-medium">{formatCurrencyFull(p.value)}</span>
                                   </p>
                                 ))}
-                              {noteEntry && (
-                                <div className="mt-2 pt-2 border-t border-border">
-                                  <div className="flex items-center gap-1 text-xs font-medium text-amber-600 mb-1">
-                                    <MessageSquare className="h-3 w-3" />
-                                    Notas
-                                  </div>
-                                  {(noteEntry.payload?.noteText as string)?.split("\n").map((line: string, i: number) => (
-                                    <p key={i} className="text-xs text-muted-foreground">{line}</p>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           );
                         }}
                       />
                       <Legend />
-                      {allAreas.map((area) => (
-                        <Bar
-                          key={area}
-                          dataKey={area}
-                          name={area}
-                          fill={getAreaColor(area)}
-                          radius={[2, 2, 0, 0]}
-                          stackId="areas"
-                        />
-                      ))}
-                      <Scatter
-                        dataKey="noteY"
-                        name="noteY"
-                        fill="#f59e0b"
-                        legendType="none"
-                        shape={(props: any) => {
-                          if (props.noteY == null) return null;
-                          return (
-                            <circle
-                              cx={props.cx}
-                              cy={props.cy}
-                              r={6}
-                              fill="#f59e0b"
-                              stroke="#fff"
-                              strokeWidth={2}
-                              style={{ cursor: "pointer" }}
-                            />
-                          );
-                        }}
+                      <Bar
+                        dataKey="planned_revenue"
+                        name="Planificado"
+                        fill={getChartColor(4)}
+                        opacity={0.4}
+                        radius={[2, 2, 0, 0]}
                       />
-                    </ComposedChart>
+                      <Bar
+                        dataKey="actual_revenue"
+                        name="Real"
+                        radius={[2, 2, 0, 0]}
+                      >
+                        {areaChartData.map((entry, i) => (
+                          <Cell
+                            key={i}
+                            fill={
+                              entry.actual_revenue >= entry.planned_revenue
+                                ? getChartColor(0)
+                                : "#f87171"
+                            }
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   )}
                 </ResponsiveContainer>
               </div>
@@ -710,8 +947,7 @@ export default function Planificacion() {
                             <div className="bg-popover border border-border rounded-lg shadow-lg p-2 text-xs max-w-[200px]">
                               <p className="font-medium mb-1">Acumulado Anual</p>
                               {payload
-                                .filter((p: any) => p.value != null && (p.value as number) > 0)
-                                .sort((a: any, b: any) => (b.value as number) - (a.value as number))
+                                .filter((p: any) => p.value != null)
                                 .map((p: any, i: number) => (
                                   <p key={i} className="flex items-center gap-1">
                                     <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
@@ -723,16 +959,19 @@ export default function Planificacion() {
                           );
                         }}
                       />
-                      {allAreas.map((area) => (
-                        <Bar
-                          key={area}
-                          dataKey={area}
-                          name={area}
-                          fill={getAreaColor(area)}
-                          radius={[2, 2, 0, 0]}
-                          stackId="areas"
-                        />
-                      ))}
+                      <Bar
+                        dataKey="planned_revenue"
+                        name="Planificado"
+                        fill={getChartColor(4)}
+                        opacity={0.4}
+                        radius={[2, 2, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="actual_revenue"
+                        name="Real"
+                        fill={getChartColor(0)}
+                        radius={[2, 2, 0, 0]}
+                      />
                     </BarChart>
                   )}
                 </ResponsiveContainer>

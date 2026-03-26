@@ -2,7 +2,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Globe, Search, Loader2, X, Newspaper, Shield, Clock, Building2, Scale, AlertTriangle, Gavel, FileWarning, Landmark, BookOpen } from "lucide-react";
+import { Globe, Search, Loader2, X, Newspaper, Shield, Clock, Building2, Scale, AlertTriangle, Gavel, FileWarning, Landmark, BookOpen, Mail, Send, Check, ChevronDown, Users, TrendingUp, BarChart3, Briefcase, MapPin, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -223,6 +223,159 @@ const MOCK_NEWS: NewsItem[] = [
   { id: 30, client: "DreamScape Productions", title: "Conflicto laboral por derechos de autor en producciones audiovisuales", summary: "Guionistas y directores demandan reconocimiento de derechos patrimoniales sobre contenido producido bajo relación de dependencia laboral.", category: "laboral", date: "2026-03-02", source: "La República" },
 ];
 
+// --- Newsletter Config Card ---
+
+interface NewsletterTopic {
+  id: string;
+  label: string;
+  description: string;
+  icon: typeof Scale;
+  enabled: boolean;
+}
+
+function NewsletterCard() {
+  const [frequency, setFrequency] = useState<"daily" | "weekly" | "monthly">("weekly");
+  const [topics, setTopics] = useState<NewsletterTopic[]>([
+    { id: "clients", label: "Noticias de mis clientes", description: "Menciones en prensa, resoluciones y procedimientos que involucren a tus clientes activos", icon: Users, enabled: true },
+    { id: "competition", label: "Competencia de mis clientes", description: "Movimientos corporativos, fusiones, sanciones y noticias de los competidores de tus clientes", icon: Briefcase, enabled: false },
+    { id: "macro", label: "Factores macroeconómicos", description: "Tipo de cambio, inflación, PBI, tasas de referencia del BCRP y proyecciones económicas", icon: TrendingUp, enabled: true },
+    { id: "normas", label: "Nuevas normas y regulaciones", description: "Publicaciones del Diario El Peruano: leyes, decretos supremos, resoluciones ministeriales", icon: FileText, enabled: true },
+    { id: "jurisprudencia", label: "Jurisprudencia relevante", description: "Casaciones, precedentes vinculantes del TC, y resoluciones del Tribunal Fiscal", icon: Gavel, enabled: false },
+    { id: "tributario", label: "Alertas tributarias", description: "Informes de SUNAT, cambios en tasas, vencimientos y fiscalizaciones relevantes", icon: Landmark, enabled: false },
+    { id: "laboral", label: "Actualidad laboral", description: "Inspecciones SUNAFIL, cambios normativos laborales y jurisprudencia de la Corte Suprema", icon: Shield, enabled: true },
+    { id: "sectorial", label: "Noticias sectoriales", description: "Alertas específicas por sector: minería, energía, tech, construcción, salud, etc.", icon: BarChart3, enabled: false },
+    { id: "indecopi", label: "INDECOPI y competencia", description: "Resoluciones de libre competencia, protección al consumidor y propiedad intelectual", icon: Scale, enabled: false },
+    { id: "regional", label: "Información regional", description: "Noticias legales y regulatorias relevantes por región geográfica de operación", icon: MapPin, enabled: false },
+  ]);
+  const [saved, setSaved] = useState(false);
+
+  const toggleTopic = (id: string) => {
+    setTopics((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, enabled: !t.enabled } : t))
+    );
+    setSaved(false);
+  };
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const enabledCount = topics.filter((t) => t.enabled).length;
+
+  return (
+    <Card className="border-2 border-dashed border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Mail className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Newsletter Personalizado</CardTitle>
+              <CardDescription className="text-xs">
+                Recibe un resumen curado de información externa relevante para tu práctica
+              </CardDescription>
+            </div>
+          </div>
+          <Badge variant="secondary" className="text-xs">
+            Beta
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Frequency selector */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Frecuencia de envío</label>
+          <div className="flex gap-2">
+            {([
+              { value: "daily" as const, label: "Diario", desc: "Lun-Vie, 7:00 AM" },
+              { value: "weekly" as const, label: "Semanal", desc: "Lunes, 7:00 AM" },
+              { value: "monthly" as const, label: "Mensual", desc: "1er día del mes" },
+            ]).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => { setFrequency(opt.value); setSaved(false); }}
+                className={`flex-1 rounded-lg border-2 p-3 text-left transition-all ${
+                  frequency === opt.value
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border hover:border-primary/40"
+                }`}
+              >
+                <div className="text-sm font-medium">{opt.label}</div>
+                <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Topics */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">Temas a incluir</label>
+            <span className="text-xs text-muted-foreground">{enabledCount} seleccionados</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-1">
+            {topics.map((topic) => {
+              const TopicIcon = topic.icon;
+              return (
+                <button
+                  key={topic.id}
+                  onClick={() => toggleTopic(topic.id)}
+                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
+                    topic.enabled
+                      ? "border-primary/50 bg-primary/5"
+                      : "border-border hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <div className={`mt-0.5 h-7 w-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                    topic.enabled ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                  }`}>
+                    <TopicIcon className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium leading-tight">{topic.label}</div>
+                    <div className="text-[10px] text-muted-foreground leading-snug mt-0.5 line-clamp-2">
+                      {topic.description}
+                    </div>
+                  </div>
+                  <div className={`mt-1 h-4 w-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                    topic.enabled ? "border-primary bg-primary" : "border-muted-foreground/30"
+                  }`}>
+                    {topic.enabled && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Save button */}
+        <div className="flex items-center gap-3 pt-1">
+          <Button onClick={handleSave} className="gap-2">
+            {saved ? (
+              <>
+                <Check className="h-4 w-4" />
+                Guardado
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Guardar preferencias
+              </>
+            )}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Se enviará a tu correo registrado
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// --- Noticias Relevantes ---
+
 function NoticiasRelevantes() {
   const [selectedCategory, setSelectedCategory] = useState<NewsCategory | "all">("all");
 
@@ -232,6 +385,9 @@ function NoticiasRelevantes() {
 
   return (
     <div className="space-y-5">
+      {/* Newsletter card */}
+      <NewsletterCard />
+
       {/* Category filters */}
       <div className="flex flex-wrap gap-2">
         <Button

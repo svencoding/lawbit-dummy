@@ -261,10 +261,12 @@ export function getClientCosts(
   transformedEntries.forEach((entry) => {
     const key = entry.client_code;
     if (!clientMap.has(key)) {
+      const cliente = clientesMap.get(parseInt(entry.client_code, 10));
       clientMap.set(key, {
         client_name: entry.client_name,
         client_code: entry.client_code,
         client_group_name: entry.client_group_name,
+        industry: cliente?.industry ?? null,
         total_cost: 0,
         total_hours: 0,
         billable_hours: 0,

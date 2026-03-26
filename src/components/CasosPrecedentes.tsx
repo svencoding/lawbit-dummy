@@ -31,6 +31,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Tooltip,
   TooltipContent,
@@ -49,6 +50,8 @@ import {
   ArrowUp,
   ArrowDown,
   Scale,
+  Layers,
+  Pencil,
 } from "lucide-react";
 import {
   getHistoricalProjectsByArea,
@@ -65,6 +68,7 @@ interface CasosPrecedentesProps {
     complexityFactor: number;
   };
   onApplyProject: (project: HistoricalProject) => void;
+  onCombineAndApply?: (combined: { totalHours: number; totalPrice: number; avgRate: number }) => void;
 }
 
 type SortField =
@@ -93,6 +97,7 @@ export default function CasosPrecedentes({
   selectedArea,
   currentEstimate,
   onApplyProject,
+  onCombineAndApply,
 }: CasosPrecedentesProps) {
   const [projectTypeFilter, setProjectTypeFilter] = useState<string>("all");
   const [chargeTypeFilter, setChargeTypeFilter] = useState<string>("all");
@@ -100,6 +105,9 @@ export default function CasosPrecedentes({
   const [showComparison, setShowComparison] = useState(false);
   const [sortField, setSortField] = useState<SortField>("total_billed");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [editingEstimate, setEditingEstimate] = useState(false);
+  const [editedHours, setEditedHours] = useState<number>(currentEstimate.totalHours);
+  const [editedPrice, setEditedPrice] = useState<number>(currentEstimate.totalPrice);
 
   const allProjects = useMemo(
     () => getHistoricalProjectsByArea(selectedArea),
@@ -162,6 +170,15 @@ export default function CasosPrecedentes({
     () => filteredProjects.filter((p) => selectedIds.has(p.asunto_id)),
     [filteredProjects, selectedIds],
   );
+
+  const combinedStats = useMemo(() => {
+    if (selectedProjects.length === 0) return null;
+    const count = selectedProjects.length;
+    const totalHours = Math.round(selectedProjects.reduce((s, p) => s + p.total_hours, 0) / count);
+    const totalPrice = Math.round(selectedProjects.reduce((s, p) => s + p.total_billed, 0) / count);
+    const avgRate = totalHours > 0 ? Math.round(totalPrice / totalHours) : 0;
+    return { totalHours, totalPrice, avgRate };
+  }, [selectedProjects]);
 
   const toggleSelection = (id: number) => {
     setSelectedIds((prev) => {
@@ -519,12 +536,40 @@ export default function CasosPrecedentes({
             >
               <div />
               <div className="p-3 bg-primary/10 rounded-lg border-2 border-primary/30 text-center">
-                <p className="text-xs text-muted-foreground mb-1">
-                  Estimación Actual
-                </p>
-                <p className="font-bold text-primary">
-                  ${currentEstimate.totalPrice.toLocaleString()}
-                </p>
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <p className="text-xs text-muted-foreground">
+                    Estimación Actual
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (!editingEstimate) {
+                        setEditedHours(currentEstimate.totalHours);
+                        setEditedPrice(currentEstimate.totalPrice);
+                      }
+                      setEditingEstimate(!editingEstimate);
+                    }}
+                    className="text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </div>
+                {editingEstimate ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 justify-center">
+                      <span className="text-xs text-muted-foreground">$</span>
+                      <Input
+                        type="number"
+                        value={editedPrice}
+                        onChange={(e) => setEditedPrice(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                        className="w-24 h-6 text-xs font-bold text-center"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="font-bold text-primary">
+                    ${(editingEstimate ? editedPrice : currentEstimate.totalPrice).toLocaleString()}
+                  </p>
+                )}
               </div>
               {selectedProjects.map((p) => (
                 <div
@@ -551,32 +596,40 @@ export default function CasosPrecedentes({
               <ComparisonRow
                 label="Horas Totales"
                 icon={<Clock className="h-4 w-4" />}
-                currentValue={`${currentEstimate.totalHours}h`}
-                currentNumeric={currentEstimate.totalHours}
+                currentValue={editingEstimate ? undefined : `${currentEstimate.totalHours}h`}
+                currentNumeric={editingEstimate ? editedHours : currentEstimate.totalHours}
                 projects={selectedProjects}
                 getValue={(p) => `${p.total_hours}h`}
                 getNumeric={(p) => p.total_hours}
+                editMode={editingEstimate}
+                editValue={editedHours}
+                onEditChange={(v) => setEditedHours(v)}
+                editSuffix="h"
               />
               <ComparisonRow
                 label="Facturación"
                 icon={<DollarSign className="h-4 w-4" />}
-                currentValue={`$${currentEstimate.totalPrice.toLocaleString()}`}
-                currentNumeric={currentEstimate.totalPrice}
+                currentValue={editingEstimate ? undefined : `$${currentEstimate.totalPrice.toLocaleString()}`}
+                currentNumeric={editingEstimate ? editedPrice : currentEstimate.totalPrice}
                 projects={selectedProjects}
                 getValue={(p) => `$${p.total_billed.toLocaleString()}`}
                 getNumeric={(p) => p.total_billed}
+                editMode={editingEstimate}
+                editValue={editedPrice}
+                onEditChange={(v) => setEditedPrice(v)}
+                editPrefix="$"
               />
               <ComparisonRow
                 label="Tarifa Promedio"
                 icon={<TrendingUp className="h-4 w-4" />}
                 currentValue={
-                  currentEstimate.totalHours > 0
-                    ? `$${Math.round(currentEstimate.totalPrice / currentEstimate.totalHours).toLocaleString()}/h`
+                  (editingEstimate ? editedHours : currentEstimate.totalHours) > 0
+                    ? `$${Math.round((editingEstimate ? editedPrice : currentEstimate.totalPrice) / (editingEstimate ? editedHours : currentEstimate.totalHours)).toLocaleString()}/h`
                     : "—"
                 }
                 currentNumeric={
-                  currentEstimate.totalHours > 0
-                    ? currentEstimate.totalPrice / currentEstimate.totalHours
+                  (editingEstimate ? editedHours : currentEstimate.totalHours) > 0
+                    ? (editingEstimate ? editedPrice : currentEstimate.totalPrice) / (editingEstimate ? editedHours : currentEstimate.totalHours)
                     : 0
                 }
                 projects={selectedProjects}
@@ -663,7 +716,28 @@ export default function CasosPrecedentes({
               }}
             >
               <div />
-              <div />
+              {editingEstimate ? (
+                <Button
+                  size="sm"
+                  className="w-full gap-1"
+                  onClick={() => {
+                    if (onCombineAndApply) {
+                      onCombineAndApply({
+                        totalHours: editedHours,
+                        totalPrice: editedPrice,
+                        avgRate: editedHours > 0 ? Math.round(editedPrice / editedHours) : 0,
+                      });
+                    }
+                    setEditingEstimate(false);
+                    setShowComparison(false);
+                  }}
+                >
+                  <Zap className="h-3 w-3" />
+                  Aplicar Editado
+                </Button>
+              ) : (
+                <div />
+              )}
               {selectedProjects.map((p) => (
                 <Button
                   key={p.asunto_id}
@@ -680,6 +754,43 @@ export default function CasosPrecedentes({
                 </Button>
               ))}
             </div>
+
+            {/* Combine and Apply */}
+            {selectedProjects.length >= 2 && combinedStats && onCombineAndApply && (
+              <>
+                <Separator className="my-4" />
+                <div className="p-4 bg-muted/30 rounded-lg border space-y-3">
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <Layers className="h-4 w-4" />
+                    Combinar Seleccionados (Promedio de {selectedProjects.length} casos)
+                  </p>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-lg font-bold">{combinedStats.totalHours}h</p>
+                      <p className="text-xs text-muted-foreground">Horas</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold">${combinedStats.totalPrice.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Facturación</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold">${combinedStats.avgRate.toLocaleString()}/h</p>
+                      <p className="text-xs text-muted-foreground">Tarifa Promedio</p>
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full gap-2"
+                    onClick={() => {
+                      onCombineAndApply(combinedStats);
+                      setShowComparison(false);
+                    }}
+                  >
+                    <Layers className="h-4 w-4" />
+                    Combinar y Aplicar
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -697,15 +808,25 @@ function ComparisonRow({
   getValue,
   getNumeric,
   colorByValue,
+  editMode,
+  editValue,
+  onEditChange,
+  editPrefix,
+  editSuffix,
 }: {
   label: string;
   icon: React.ReactNode;
-  currentValue: string;
+  currentValue?: string;
   currentNumeric: number;
   projects: HistoricalProject[];
   getValue: (p: HistoricalProject) => string;
   getNumeric: (p: HistoricalProject) => number;
   colorByValue?: boolean;
+  editMode?: boolean;
+  editValue?: number;
+  onEditChange?: (value: number) => void;
+  editPrefix?: string;
+  editSuffix?: string;
 }) {
   const allValues = [
     currentNumeric,
@@ -732,7 +853,20 @@ function ComparisonRow({
         {label}
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium text-center">{currentValue}</p>
+        {editMode && onEditChange ? (
+          <div className="flex items-center gap-1 justify-center">
+            {editPrefix && <span className="text-xs text-muted-foreground">{editPrefix}</span>}
+            <Input
+              type="number"
+              value={editValue ?? currentNumeric}
+              onChange={(e) => onEditChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              className="w-20 h-6 text-xs font-medium text-center"
+            />
+            {editSuffix && <span className="text-xs text-muted-foreground">{editSuffix}</span>}
+          </div>
+        ) : (
+          <p className="text-sm font-medium text-center">{currentValue}</p>
+        )}
         {currentNumeric > 0 && (
           <div className="w-full bg-muted rounded-full h-1.5">
             <div

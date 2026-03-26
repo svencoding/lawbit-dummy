@@ -15,7 +15,6 @@ import {
   TrendingUp,
   DollarSign,
   Briefcase,
-  CalendarIcon,
   X,
   RefreshCw,
   Loader2,
@@ -26,22 +25,7 @@ import { getChartColor } from "@/lib/chartColors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { dashboardCache } from "@/lib/dashboardCache";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import {
   ChartContainer,
   ChartTooltip,
@@ -59,7 +43,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 import {
@@ -80,6 +63,8 @@ import {
   FacturacionFiltersProvider,
   useFacturacionFilters,
 } from "@/hooks/useFacturacionFilters";
+import { useDateFilter, DateFilterProvider } from "@/hooks/useDateFilter";
+import ChartInfoModal from "@/components/ChartInfoModal";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
@@ -93,6 +78,7 @@ const FacturacionContent = () => {
     setClientFilter,
     setFormaCobroFilter,
     setEncargadoFilter,
+    setIndustryFilter,
     clearFilters,
     hasActiveFilters,
   } = useFacturacionFilters();
@@ -105,17 +91,16 @@ const FacturacionContent = () => {
   const [allClients, setAllClients] = useState<
     Array<{ nombre: string; totalFacturado: number }>
   >([]);
+  const [industryChartData, setIndustryChartData] = useState<
+    Array<{ name: string; value: number }>
+  >([]);
+  const [industryClients, setIndustryClients] = useState<Record<string, string[]>>({});
   const [allRevenueByUsers, setAllRevenueByUsers] = useState<
     Array<{ user_name: string; user_code: string; revenue: number }>
   >([]);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const isInitialTableLoadRef = useRef(true);
-  const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2025, 0, 1)
-  ); // 1/1/2025
-  const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2025, 11, 31)
-  ); // 31/12/2025
+  const { startDate, endDate } = useDateFilter();
 
   // Determine selectedArea from filters (for backward compatibility with getDashboardData)
   const selectedArea = filters.area || "all";
@@ -431,13 +416,40 @@ const FacturacionContent = () => {
         filters.formaCobro || undefined, // Filter by formaCobro if active
         filters.encargado?.code || undefined // Filter by encargado if active
       );
-      const clientsData = clientCosts
+      const filteredByIndustry = filters.industry
+        ? clientCosts.filter((c) => (c.industry || "Otros") === filters.industry)
+        : clientCosts;
+      const clientsData = filteredByIndustry
         .map((client) => ({
           nombre: client.client_name,
           totalFacturado: client.total_cost,
         }))
         .sort((a, b) => b.totalFacturado - a.totalFacturado);
       setAllClients(clientsData);
+
+      // Aggregate revenue by industry and collect client names per industry
+      const industryMap = new Map<string, number>();
+      const industryClientMap = new Map<string, string[]>();
+      clientCosts.forEach((client) => {
+        const industry = client.industry || "Otros";
+        industryMap.set(industry, (industryMap.get(industry) || 0) + client.total_cost);
+        const existing = industryClientMap.get(industry) || [];
+        existing.push(client.client_name);
+        industryClientMap.set(industry, existing);
+      });
+      const industryData = Array.from(industryMap.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+      // Keep top 8 and group the rest as "Otros"
+      const topIndustries = industryData.slice(0, 8);
+      const othersValue = industryData.slice(8).reduce((sum, item) => sum + item.value, 0);
+      if (othersValue > 0) {
+        const othersClients = industryData.slice(8).flatMap((d) => industryClientMap.get(d.name) || []);
+        industryClientMap.set("Otros", othersClients);
+        topIndustries.push({ name: "Otros", value: othersValue });
+      }
+      setIndustryChartData(topIndustries);
+      setIndustryClients(Object.fromEntries(industryClientMap));
 
       // Reset table scroll to top when filters change (not on initial load)
       if (!isInitialTableLoadRef.current && tableScrollRef.current) {
@@ -462,6 +474,7 @@ const FacturacionContent = () => {
     filters.area,
     filters.formaCobro,
     filters.encargado?.code,
+    filters.industry,
   ]);
 
   // Mark initial load as complete once data is ready and table is visible
@@ -686,117 +699,6 @@ const FacturacionContent = () => {
             </div>
           </div>
 
-          {/* Filters Row */}
-          <div className="flex flex-col lg:flex-row gap-2 items-start lg:items-center justify-between">
-            {/* Date Filters */}
-            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center flex-1">
-              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                Fecha:
-              </span>
-              <div className="flex flex-wrap gap-2 items-center">
-                {/* Start Date */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`justify-start text-left font-normal ${
-                        !startDate && "text-muted-foreground"
-                      }`}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                      {startDate ? (
-                        <span className="truncate">
-                          {format(startDate, "dd/MM/yyyy")}
-                        </span>
-                      ) : (
-                        <span>Fecha inicio</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      initialFocus
-                      locale={es}
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                {/* End Date */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`justify-start text-left font-normal ${
-                        !endDate && "text-muted-foreground"
-                      }`}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                      {endDate ? (
-                        <span className="truncate">
-                          {format(endDate, "dd/MM/yyyy")}
-                        </span>
-                      ) : (
-                        <span>Fecha fin</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      initialFocus
-                      locale={es}
-                      disabled={(date) =>
-                        startDate ? date < startDate : false
-                      }
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                {/* Clear Dates Button */}
-                {(startDate || endDate) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setStartDate(undefined);
-                      setEndDate(undefined);
-                    }}
-                    className="h-9 px-2"
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Limpiar fechas
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Area Filter */}
-            <div className="w-full lg:w-64">
-              <Select
-                value={filters.area || "all"}
-                onValueChange={(value) =>
-                  setAreaFilter(value === "all" ? null : value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por área" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las áreas</SelectItem>
-                  {availableAreas.map((area) => (
-                    <SelectItem key={area} value={area}>
-                      {area}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
         </div>
 
         {/* Active Filters */}
@@ -843,6 +745,17 @@ const FacturacionContent = () => {
                 <span>Encargado: {filters.encargado.name}</span>
                 <button
                   onClick={() => setEncargadoFilter(null)}
+                  className="ml-1 hover:bg-primary/20 rounded p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {filters.industry && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm">
+                <span>Industria: {filters.industry}</span>
+                <button
+                  onClick={() => setIndustryFilter(null)}
                   className="ml-1 hover:bg-primary/20 rounded p-0.5"
                 >
                   <X className="h-3 w-3" />
@@ -982,9 +895,13 @@ const FacturacionContent = () => {
             {/* Facturación por Área Pie Chart */}
             <div className="w-full lg:w-[450px] lg:flex-shrink-0">
               <div className="bg-muted/30 rounded-lg p-3 border transition-all duration-300 h-full flex flex-col">
-                <h3 className="text-sm font-semibold mb-1 text-foreground">
-                  Facturación por Área
-                </h3>
+                <ChartInfoModal
+                  title="Facturación por Área"
+                  info="Distribución de la facturación total según el área profesional. Haz clic en una sección para filtrar."
+                  data={(transformedFacturacionData || []).map((d: { area: string; facturacion: number }) => ({ name: d.area, value: d.facturacion }))}
+                  unit="$"
+                  className="mb-1"
+                />
                 {transformedFacturacionData &&
                 transformedFacturacionData.length > 0 ? (
                   <ChartContainer
@@ -1000,22 +917,36 @@ const FacturacionContent = () => {
                           data={transformedFacturacionData}
                           cx="50%"
                           cy="50%"
-                          labelLine={false}
-                          label={({ name, percent, payload }) => {
-                            // Only show labels for slices >= 2% to prevent overlap
-                            const slicePercent = (percent * 100);
-                            if (slicePercent >= 2) {
-                              return `${name}: ${slicePercent.toFixed(0)}%`;
-                            }
-                            return ""; // Hide labels for very small slices
-                          }}
                           outerRadius={70}
                           fill="hsl(var(--chart-5))"
                           dataKey="facturacion"
                           nameKey="area"
+                          label={({ cx, cy, midAngle, outerRadius, index }) => {
+                            const RADIAN = Math.PI / 180;
+                            const radius = outerRadius + 20;
+                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                            const entry = transformedFacturacionData[index];
+                            const total = transformedFacturacionData.reduce(
+                              (s: number, d: { facturacion: number }) => s + d.facturacion, 0
+                            );
+                            const pct = total > 0 ? ((entry.facturacion / total) * 100).toFixed(0) : "0";
+                            return (
+                              <text
+                                x={x}
+                                y={y}
+                                textAnchor={x > cx ? "start" : "end"}
+                                dominantBaseline="central"
+                                className="fill-foreground"
+                                fontSize={10}
+                              >
+                                {entry.area}: {pct}%
+                              </text>
+                            );
+                          }}
+                          labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }}
                           onClick={(data) => {
                             if (data?.area && !data.area.startsWith("Otros")) {
-                              // Don't allow filtering by "Other" category
                               if (filters.area === data.area) {
                                 setAreaFilter(null);
                               } else {
@@ -1026,7 +957,7 @@ const FacturacionContent = () => {
                           style={{ cursor: "pointer" }}
                         >
                           {transformedFacturacionData.map(
-                            (entry: any, index: number) => {
+                            (entry: { area: string }, index: number) => {
                               const isActive = filters.area === entry.area;
                               const isOtherCategory = entry.area?.startsWith("Otros");
                               return (
@@ -1108,6 +1039,7 @@ const FacturacionContent = () => {
                 )}
               </div>
             </div>
+
           </div>
 
           {/* Row 2: Facturación por Encargado Comercial and Facturación según Forma de Cobro */}
@@ -1242,9 +1174,13 @@ const FacturacionContent = () => {
               transformedFormaCobroChart.length > 0 && (
                 <div className="w-full lg:w-[450px] lg:flex-shrink-0">
                   <div className="bg-muted/30 rounded-lg p-3 border transition-all duration-300 h-full flex flex-col">
-                    <h3 className="text-sm font-semibold mb-1 text-foreground">
-                      Facturación según Forma de Cobro
-                    </h3>
+                    <ChartInfoModal
+                      title="Facturación según Forma de Cobro"
+                      info="Distribución de la facturación según la forma de cobro del cliente. Haz clic en una sección para filtrar."
+                      data={transformedFormaCobroChart || []}
+                      unit="$"
+                      className="mb-1"
+                    />
                     <ChartContainer
                       config={{
                         facturacionByFeeType: {
@@ -1258,22 +1194,36 @@ const FacturacionContent = () => {
                           data={transformedFormaCobroChart}
                           cx="50%"
                           cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => {
-                            // Only show labels for slices >= 2% to prevent overlap
-                            const slicePercent = (percent * 100);
-                            if (slicePercent >= 2) {
-                              return `${name}: ${slicePercent.toFixed(0)}%`;
-                            }
-                            return ""; // Hide labels for very small slices
-                          }}
-                          outerRadius={70}
+                          outerRadius={55}
                           fill="hsl(var(--chart-5))"
                           dataKey="value"
                           nameKey="name"
+                          label={({ cx, cy, midAngle, outerRadius, index }) => {
+                            const RADIAN = Math.PI / 180;
+                            const radius = outerRadius + 18;
+                            const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                            const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                            const entry = transformedFormaCobroChart[index];
+                            const total = transformedFormaCobroChart.reduce(
+                              (s: number, d: { value: number }) => s + d.value, 0
+                            );
+                            const pct = total > 0 ? ((entry.value / total) * 100).toFixed(0) : "0";
+                            return (
+                              <text
+                                x={x}
+                                y={y}
+                                textAnchor={x > cx ? "start" : "end"}
+                                dominantBaseline="central"
+                                className="fill-foreground"
+                                fontSize={10}
+                              >
+                                {entry.name}: {pct}%
+                              </text>
+                            );
+                          }}
+                          labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }}
                           onClick={(data) => {
                             if (data?.name && !data.name.startsWith("Otros")) {
-                              // Don't allow filtering by "Other" category
                               if (filters.formaCobro === data.name) {
                                 setFormaCobroFilter(null);
                               } else {
@@ -1284,9 +1234,8 @@ const FacturacionContent = () => {
                           style={{ cursor: "pointer" }}
                         >
                           {transformedFormaCobroChart.map(
-                            (entry: any, index: number) => {
-                              const isActive =
-                                filters.formaCobro === entry.name;
+                            (entry: { name: string }, index: number) => {
+                              const isActive = filters.formaCobro === entry.name;
                               const isOtherCategory = entry.name?.startsWith("Otros");
                               return (
                                 <Cell
@@ -1317,8 +1266,6 @@ const FacturacionContent = () => {
                                 100
                               ).toFixed(1);
                               const entry = payload[0].payload;
-                              
-                              // If it's the "Other" category, show breakdown
                               if (entry.originalNames && entry.originalNames.length > 0) {
                                 return (
                                   <div className="rounded-lg border bg-background p-2 shadow-sm">
@@ -1339,7 +1286,6 @@ const FacturacionContent = () => {
                                   </div>
                                 );
                               }
-                              
                               return (
                                 <div className="rounded-lg border bg-background p-2 shadow-sm">
                                   <div className="flex flex-col gap-1">
@@ -1364,6 +1310,128 @@ const FacturacionContent = () => {
                 </div>
               )}
           </div>
+
+          {/* Row 3: Facturación por Industria */}
+          <div className="flex flex-col lg:flex-row gap-3">
+          {industryChartData && industryChartData.length > 0 && (
+            <div className="w-full lg:w-[450px] lg:flex-shrink-0">
+              <div className="bg-muted/30 rounded-lg p-3 border transition-all duration-300 h-full flex flex-col">
+                <ChartInfoModal
+                  title="Facturación por Industria"
+                  info="Distribución de la facturación según la industria de los clientes. Haz clic en una industria para ver los clientes que la componen."
+                  data={industryChartData || []}
+                  unit="$"
+                  className="mb-1"
+                  details={industryClients}
+                  detailLabel="Clientes"
+                />
+                <ChartContainer
+                  config={{
+                    facturacionByIndustry: {
+                      label: "Facturación por Industria",
+                    },
+                  }}
+                >
+                  <ResponsiveContainer width="100%" height={190}>
+                    <PieChart>
+                      <Pie
+                        data={industryChartData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={55}
+                        fill="hsl(var(--chart-3))"
+                        dataKey="value"
+                        nameKey="name"
+                        label={({ cx, cy, midAngle, outerRadius, index }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius = outerRadius + 18;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          const entry = industryChartData[index];
+                          const total = industryChartData.reduce(
+                            (s, d) => s + d.value, 0
+                          );
+                          const pct = total > 0 ? ((entry.value / total) * 100).toFixed(0) : "0";
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              textAnchor={x > cx ? "start" : "end"}
+                              dominantBaseline="central"
+                              className="fill-foreground"
+                              fontSize={10}
+                            >
+                              {entry.name}: {pct}%
+                            </text>
+                          );
+                        }}
+                        labelLine={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 }}
+                        onClick={(data: { name: string }) => {
+                          if (data?.name && !data.name.startsWith("Otros")) {
+                            if (filters.industry === data.name) {
+                              setIndustryFilter(null);
+                            } else {
+                              setIndustryFilter(data.name);
+                            }
+                          }
+                        }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {industryChartData.map(
+                          (entry, index: number) => {
+                            const isActive = filters.industry === entry.name;
+                            const isOtherCategory = entry.name?.startsWith("Otros");
+                            return (
+                              <Cell
+                                key={`cell-industry-${index}`}
+                                fill={getChartColor(index)}
+                                fillOpacity={isActive ? 1 : 0.85}
+                                stroke={isActive ? "#000" : "none"}
+                                strokeWidth={isActive ? 3 : 0}
+                                style={{
+                                  cursor: isOtherCategory ? "default" : "pointer",
+                                  filter: isActive ? "drop-shadow(0 0 4px rgba(0,0,0,0.3))" : "none"
+                                }}
+                              />
+                            );
+                          }
+                        )}
+                      </Pie>
+                      <ChartTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const total = industryChartData.reduce(
+                              (sum, item) => sum + item.value,
+                              0
+                            );
+                            const percent = (
+                              (Number(payload[0].value) / total) *
+                              100
+                            ).toFixed(1);
+                            return (
+                              <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-sm font-medium">
+                                    {payload[0].payload.name}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    ${Number(payload[0].value).toLocaleString()}{" "}
+                                    ({percent}%)
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </div>
+            </div>
+          )}
+          </div>
         </div>
       </div>
     </DashboardLayout>
@@ -1372,9 +1440,11 @@ const FacturacionContent = () => {
 
 const Facturacion = () => {
   return (
-    <FacturacionFiltersProvider>
-      <FacturacionContent />
-    </FacturacionFiltersProvider>
+    <DateFilterProvider>
+      <FacturacionFiltersProvider>
+        <FacturacionContent />
+      </FacturacionFiltersProvider>
+    </DateFilterProvider>
   );
 };
 

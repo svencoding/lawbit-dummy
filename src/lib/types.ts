@@ -57,6 +57,7 @@ export interface ClientCost {
   total_hours: number;
   billable_hours: number;
   project_count: number;
+  industry: string | null;
   projects: Array<{
     project_id: number;
     project_name: string;

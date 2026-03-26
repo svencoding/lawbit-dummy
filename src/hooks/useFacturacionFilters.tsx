@@ -11,6 +11,7 @@ export interface FacturacionFilters {
   clientName: string | null; // Client name filter
   formaCobro: string | null; // Forma de cobro filter (e.g., "Honorarios Fijos", "Por Hora")
   encargado: { code: string; name: string } | null; // Encargado comercial filter
+  industry: string | null; // Industry filter
 }
 
 interface FacturacionFiltersContextType {
@@ -19,6 +20,7 @@ interface FacturacionFiltersContextType {
   setClientFilter: (clientName: string | null) => void;
   setFormaCobroFilter: (formaCobro: string | null) => void;
   setEncargadoFilter: (encargado: { code: string; name: string } | null) => void;
+  setIndustryFilter: (industry: string | null) => void;
   clearFilters: () => void;
   hasActiveFilters: boolean;
 }
@@ -37,6 +39,7 @@ export function FacturacionFiltersProvider({
     clientName: null,
     formaCobro: null,
     encargado: null,
+    industry: null,
   });
 
   const setAreaFilter = useCallback((area: string | null) => {
@@ -71,12 +74,20 @@ export function FacturacionFiltersProvider({
     []
   );
 
+  const setIndustryFilter = useCallback((industry: string | null) => {
+    setFilters((prev) => ({
+      ...prev,
+      industry: prev.industry === industry ? null : industry,
+    }));
+  }, []);
+
   const clearFilters = useCallback(() => {
     setFilters({
       area: null,
       clientName: null,
       formaCobro: null,
       encargado: null,
+      industry: null,
     });
   }, []);
 
@@ -84,7 +95,8 @@ export function FacturacionFiltersProvider({
     filters.area !== null ||
     filters.clientName !== null ||
     filters.formaCobro !== null ||
-    filters.encargado !== null;
+    filters.encargado !== null ||
+    filters.industry !== null;
 
   return (
     <FacturacionFiltersContext.Provider
@@ -94,6 +106,7 @@ export function FacturacionFiltersProvider({
         setClientFilter,
         setFormaCobroFilter,
         setEncargadoFilter,
+        setIndustryFilter,
         clearFilters,
         hasActiveFilters,
       }}

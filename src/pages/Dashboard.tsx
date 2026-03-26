@@ -17,7 +17,6 @@ import {
   DollarSign,
   Briefcase,
   CalendarIcon,
-  X,
   RefreshCw,
   Loader2,
 } from "lucide-react";
@@ -34,14 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import {
   ChartContainer,
   ChartTooltip,
@@ -65,6 +56,7 @@ import {
 import { getDashboardData } from "@/lib/mockDataUtils";
 import { getChartColor } from "@/lib/chartColors";
 import { formatDateLocal } from "@/lib/utils";
+import { useDateFilter } from "@/hooks/useDateFilter";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
@@ -78,12 +70,7 @@ const Facturacion = () => {
   const [isRefreshing, setIsRefreshing] = useState(false); // For incremental loading
   const [selectedArea, setSelectedArea] = useState<string>("all");
   const [availableAreas, setAvailableAreas] = useState<string[]>([]);
-  const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2025, 0, 1)
-  ); // 1/1/2025
-  const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2025, 11, 31)
-  ); // 31/12/2025
+  const { startDate, endDate } = useDateFilter();
 
   const transformFinalNumber = (value: number | string | null | undefined) => {
     if (value === null || value === undefined) {
@@ -1179,22 +1166,6 @@ const Facturacion = () => {
       color: "text-green-600",
       bgColor: "bg-green-100",
     },
-    // {
-    //   title: "Total Casos",
-    //   value: dashboardData?.totalCases || "0",
-    //   description: "Total de casos en el sistema",
-    //   icon: Briefcase,
-    //   color: "text-purple-600",
-    //   bgColor: "bg-purple-100",
-    // },
-    // {
-    //   title: "Horas Trabajadas",
-    //   value: Math.round(dashboardData?.horasTrabajadas || 0).toLocaleString(),
-    //   description: "Total de horas registradas",
-    //   icon: Clock,
-    //   color: "text-amber-600",
-    //   bgColor: "bg-amber-100",
-    // },
     {
       title: "Total Facturado",
       value: `$${transformFinalNumber(
@@ -1205,22 +1176,6 @@ const Facturacion = () => {
       color: "text-emerald-600",
       bgColor: "bg-emerald-100",
     },
-    // {
-    //   title: "Meta de Facturación",
-    //   value: `$${(dashboardData?.metaFacturacion || 0).toLocaleString()}`,
-    //   description: "Meta de facturación para el período",
-    //   icon: TrendingUp,
-    //   color: "text-purple-600",
-    //   bgColor: "bg-purple-100",
-    // },
-    // {
-    //   title: "Casos Cerrados",
-    //   value: dashboardData?.casosInactivos || "0",
-    //   description: "Casos finalizados",
-    //   icon: TrendingUp,
-    //   color: "text-indigo-600",
-    //   bgColor: "bg-indigo-100",
-    // },
   ];
 
   // Chart colors derived from primary color via CSS variables
@@ -1267,93 +1222,6 @@ const Facturacion = () => {
 
           {/* Filters Row */}
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            {/* Date Filters */}
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-1">
-              <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-                Filtrar por fecha:
-              </span>
-              <div className="flex flex-wrap gap-3 items-center">
-                {/* Start Date */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`justify-start text-left font-normal ${
-                        !startDate && "text-muted-foreground"
-                      }`}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                      {startDate ? (
-                        <span className="truncate">
-                          {format(startDate, "dd/MM/yyyy")}
-                        </span>
-                      ) : (
-                        <span>Fecha inicio</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      initialFocus
-                      locale={es}
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                {/* End Date */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`justify-start text-left font-normal ${
-                        !endDate && "text-muted-foreground"
-                      }`}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                      {endDate ? (
-                        <span className="truncate">
-                          {format(endDate, "dd/MM/yyyy")}
-                        </span>
-                      ) : (
-                        <span>Fecha fin</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      initialFocus
-                      locale={es}
-                      disabled={(date) =>
-                        startDate ? date < startDate : false
-                      }
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                {/* Clear Dates Button */}
-                {(startDate || endDate) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setStartDate(undefined);
-                      setEndDate(undefined);
-                    }}
-                    className="h-9 px-2"
-                  >
-                    <X className="h-4 w-4 mr-1" />
-                    Limpiar fechas
-                  </Button>
-                )}
-              </div>
-            </div>
-
             {/* Area Filter */}
             <div className="w-full lg:w-64">
               <Select value={selectedArea} onValueChange={setSelectedArea}>

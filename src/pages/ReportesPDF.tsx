@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -19,8 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -42,6 +39,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   Download,
   Clock,
@@ -51,9 +49,6 @@ import {
   Activity,
   CalendarIcon,
   Loader2,
-  Mail,
-  Send,
-  X,
   Building2,
   User,
   BarChart3,
@@ -63,6 +58,9 @@ import {
   Percent,
   Scale,
   FileText,
+  CalendarClock,
+  MessageSquare,
+  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -409,160 +407,7 @@ function computeGerencialData(
 
 // ===================== SUB-COMPONENTS =====================
 
-/** Scheduling + Recipients panel (always visible) */
-function SchedulePanel({
-  emails,
-  setEmails,
-  emailInput,
-  setEmailInput,
-}: {
-  emails: string[];
-  setEmails: (e: string[]) => void;
-  emailInput: string;
-  setEmailInput: (v: string) => void;
-}) {
-  const [frequency, setFrequency] = useState("");
-  const [day, setDay] = useState("");
-  const [hour, setHour] = useState("");
-
-  const addEmail = () => {
-    const trimmed = emailInput.trim();
-    if (trimmed && trimmed.includes("@") && !emails.includes(trimmed)) {
-      setEmails([...emails, trimmed]);
-      setEmailInput("");
-    }
-  };
-
-  return (
-    <Card className="border-border/50">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Send className="h-4 w-4" />
-          Programar Envio Automatico
-        </CardTitle>
-        <CardDescription>
-          Configura el envio recurrente de este reporte por email
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        {/* Frequency / Day / Hour */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">
-              Frecuencia
-            </label>
-            <Select value={frequency} onValueChange={setFrequency}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="weekly">Semanal</SelectItem>
-                <SelectItem value="biweekly">Quincenal</SelectItem>
-                <SelectItem value="monthly">Mensual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">
-              Dia de envio
-            </label>
-            <Select value={day} onValueChange={setDay}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monday">Lunes</SelectItem>
-                <SelectItem value="tuesday">Martes</SelectItem>
-                <SelectItem value="wednesday">Miercoles</SelectItem>
-                <SelectItem value="thursday">Jueves</SelectItem>
-                <SelectItem value="friday">Viernes</SelectItem>
-                <SelectItem value="1">Dia 1 del mes</SelectItem>
-                <SelectItem value="15">Dia 15 del mes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">
-              Hora de envio
-            </label>
-            <Select value={hour} onValueChange={setHour}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar..." />
-              </SelectTrigger>
-              <SelectContent>
-                {[
-                  "06:00", "07:00", "08:00", "09:00", "10:00", "11:00",
-                  "12:00", "13:00", "14:00", "15:00", "16:00", "17:00",
-                  "18:00",
-                ].map((h) => (
-                  <SelectItem key={h} value={h}>
-                    {h}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Email recipients */}
-        <div>
-          <label className="text-sm font-medium text-muted-foreground mb-2 block">
-            <Mail className="h-3.5 w-3.5 inline mr-1" />
-            Destinatarios
-          </label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="correo@ejemplo.com"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addEmail();
-                }
-              }}
-              className="flex-1"
-            />
-            <Button variant="outline" size="sm" onClick={addEmail}>
-              Agregar
-            </Button>
-          </div>
-          {emails.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {emails.map((email) => (
-                <Badge
-                  key={email}
-                  variant="secondary"
-                  className="gap-1 pr-1"
-                >
-                  {email}
-                  <button
-                    onClick={() =>
-                      setEmails(emails.filter((e) => e !== email))
-                    }
-                    className="ml-1 hover:bg-muted rounded-full p-0.5"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          )}
-          {emails.length === 0 && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Agrega los correos de los destinatarios que recibiran el reporte
-            </p>
-          )}
-        </div>
-
-        <Button disabled className="w-full sm:w-auto">
-          <Send className="mr-2 h-4 w-4" />
-          Programar Envio
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
+/* SchedulePanel removed — feature not yet implemented */
 
 /** Delta badge for KPI cards */
 function DeltaBadge({
@@ -1647,7 +1492,7 @@ const ReportesPDF = () => {
   );
   const usuarios = useMemo(() => getUsuarios(), []);
 
-  // Individual tab
+  // Individual
   const [selectedProfessional, setSelectedProfessional] = useState("");
   const [indPeriod, setIndPeriod] = useState("");
   const [indStart, setIndStart] = useState<Date | undefined>();
@@ -1655,20 +1500,24 @@ const ReportesPDF = () => {
   const [indData, setIndData] = useState<IndividualReportData | null>(null);
   const [indLoading, setIndLoading] = useState(false);
   const [indExporting, setIndExporting] = useState(false);
-  const [indEmails, setIndEmails] = useState<string[]>([]);
-  const [indEmailInput, setIndEmailInput] = useState("");
   const [indPreviewOpen, setIndPreviewOpen] = useState(false);
+  const [indScheduleEnabled, setIndScheduleEnabled] = useState(false);
+  const [indScheduleFreq, setIndScheduleFreq] = useState("weekly");
+  const [indScheduleDay, setIndScheduleDay] = useState("monday");
+  const [indScheduleHour, setIndScheduleHour] = useState("09:00");
 
-  // Gerencial tab
+  // Gerencial
   const [gerPeriod, setGerPeriod] = useState("");
   const [gerStart, setGerStart] = useState<Date | undefined>();
   const [gerEnd, setGerEnd] = useState<Date | undefined>();
   const [gerData, setGerData] = useState<GerencialReportData | null>(null);
   const [gerLoading, setGerLoading] = useState(false);
   const [gerExporting, setGerExporting] = useState(false);
-  const [gerEmails, setGerEmails] = useState<string[]>([]);
-  const [gerEmailInput, setGerEmailInput] = useState("");
   const [gerPreviewOpen, setGerPreviewOpen] = useState(false);
+  const [gerScheduleEnabled, setGerScheduleEnabled] = useState(false);
+  const [gerScheduleFreq, setGerScheduleFreq] = useState("weekly");
+  const [gerScheduleDay, setGerScheduleDay] = useState("monday");
+  const [gerScheduleHour, setGerScheduleHour] = useState("09:00");
 
   useEffect(() => {
     if (!loading && !user) navigate("/auth");
@@ -1796,8 +1645,8 @@ const ReportesPDF = () => {
       <DashboardLayout>
         <div className="space-y-6">
           <Skeleton className="h-12 w-64" />
-          <Skeleton className="h-10 w-96" />
-          <Skeleton className="h-40" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
         </div>
       </DashboardLayout>
     );
@@ -1911,224 +1760,384 @@ const ReportesPDF = () => {
   const hasPeriodInd = !!(indStart && indEnd);
   const hasPeriodGer = !!(gerStart && gerEnd);
 
+  const gerPeriodLabel = hasPeriodGer && gerStart && gerEnd
+    ? `${format(gerStart, "dd MMM", { locale: es })} — ${format(gerEnd, "dd MMM yyyy", { locale: es })}`
+    : "Todo el periodo";
+  const indPeriodLabel = hasPeriodInd && indStart && indEnd
+    ? `${format(indStart, "dd MMM", { locale: es })} — ${format(indEnd, "dd MMM yyyy", { locale: es })}`
+    : "Todo el periodo";
+
   return (
     <DashboardLayout>
       <div className="space-y-6 w-full min-w-0 max-w-full">
+        {/* Page header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Reportes PDF</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Genera, descarga y programa reportes de la firma
+            Genera y descarga reportes de la firma
           </p>
         </div>
 
-        <Tabs defaultValue="gerencial" className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="gerencial" className="gap-2">
-              <Building2 className="h-4 w-4" />
-              Reporte Gerencial
-            </TabsTrigger>
-            <TabsTrigger value="individual" className="gap-2">
-              <User className="h-4 w-4" />
-              Reporte Individual
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ================== GERENCIAL TAB ================== */}
-          <TabsContent value="gerencial" className="space-y-6 mt-6">
-            {/* Controls */}
-            <Card className="border-border/50">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Reporte Gerencial
-                </CardTitle>
-                <CardDescription>
-                  Resumen ejecutivo de facturacion, clientes y desempeno de la
-                  firma
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <PeriodSelector
-                  periodPreset={gerPeriod}
-                  setPeriodPreset={setGerPeriod}
-                  startDate={gerStart}
-                  setStartDate={setGerStart}
-                  endDate={gerEnd}
-                  setEndDate={setGerEnd}
-                />
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setGerPreviewOpen(true)}
-                    disabled={!gerData || gerLoading}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Vista Previa
-                  </Button>
-                  <Button
-                    onClick={handleGerPDF}
-                    disabled={!gerData || gerExporting}
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    {gerExporting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Generando...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="mr-2 h-4 w-4" />
-                        Descargar PDF
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Schedule + Recipients */}
-            <SchedulePanel
-              emails={gerEmails}
-              setEmails={setGerEmails}
-              emailInput={gerEmailInput}
-              setEmailInput={setGerEmailInput}
-            />
-
-            {/* Gerencial Preview Dialog */}
-            <Dialog open={gerPreviewOpen} onOpenChange={setGerPreviewOpen}>
-              <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
-                    Vista Previa — Reporte Gerencial
-                  </DialogTitle>
-                  <DialogDescription>
-                    Asi se vera el contenido del reporte PDF
-                  </DialogDescription>
-                </DialogHeader>
-                {gerData && (
-                  <GerencialPreviewContent
-                    gerData={gerData}
-                    gerStats={gerStats}
-                    hasPeriodGer={hasPeriodGer}
+        {/* ================== GERENCIAL CARD ================== */}
+        <Card className="border-border/50 overflow-hidden">
+          <CardContent className="p-0">
+            {/* Main row */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 p-5">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-md">
+                <Building2 className="h-7 w-7 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-foreground">Reporte Gerencial</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Resumen ejecutivo de facturacion, clientes y desempeno de la firma
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                      <CalendarIcon className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{gerPeriodLabel}</span>
+                      <span className="sm:hidden">Periodo</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-4" align="end">
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Seleccionar periodo</p>
+                      <PeriodSelector
+                        periodPreset={gerPeriod}
+                        setPeriodPreset={setGerPeriod}
+                        startDate={gerStart}
+                        setStartDate={setGerStart}
+                        endDate={gerEnd}
+                        setEndDate={setGerEnd}
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => setGerPreviewOpen(true)}
+                  disabled={!gerData || gerLoading}
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Vista Previa</span>
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 text-xs bg-primary hover:bg-primary/90"
+                  onClick={handleGerPDF}
+                  disabled={!gerData || gerExporting}
+                >
+                  {gerExporting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  <span>{gerExporting ? "Generando..." : "Descargar PDF"}</span>
+                </Button>
+              </div>
+            </div>
+            {/* Schedule strip */}
+            <div className="border-t border-border/50 bg-muted/30 px-5 py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Switch
+                    checked={gerScheduleEnabled}
+                    onCheckedChange={setGerScheduleEnabled}
+                    className="scale-90"
                   />
-                )}
-              </DialogContent>
-            </Dialog>
-          </TabsContent>
-
-          {/* ================== INDIVIDUAL TAB ================== */}
-          <TabsContent value="individual" className="space-y-6 mt-6">
-            {/* Controls */}
-            <Card className="border-border/50">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Reporte Individual
-                </CardTitle>
-                <CardDescription>
-                  Reporte detallado de productividad por profesional
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
-                  <div className="min-w-[220px]">
-                    <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                      Profesional
-                    </label>
-                    <Select
-                      value={selectedProfessional}
-                      onValueChange={setSelectedProfessional}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar profesional..." />
+                  <div className="flex items-center gap-1.5">
+                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Programacion {gerScheduleEnabled ? "activada" : "desactivada"}
+                    </span>
+                  </div>
+                </div>
+                {gerScheduleEnabled && (
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="text-muted-foreground">Enviar cada</span>
+                    <Select value={gerScheduleFreq} onValueChange={setGerScheduleFreq}>
+                      <SelectTrigger className="h-7 w-[110px] text-xs">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {usuarios.map((u) => (
-                          <SelectItem key={u.code} value={u.code}>
-                            {u.name} ({u.category})
-                          </SelectItem>
+                        <SelectItem value="weekly">Semana</SelectItem>
+                        <SelectItem value="biweekly">Quincena</SelectItem>
+                        <SelectItem value="monthly">Mes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-muted-foreground">el</span>
+                    <Select value={gerScheduleDay} onValueChange={setGerScheduleDay}>
+                      <SelectTrigger className="h-7 w-[110px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monday">Lunes</SelectItem>
+                        <SelectItem value="tuesday">Martes</SelectItem>
+                        <SelectItem value="wednesday">Miercoles</SelectItem>
+                        <SelectItem value="thursday">Jueves</SelectItem>
+                        <SelectItem value="friday">Viernes</SelectItem>
+                        <SelectItem value="1">Dia 1</SelectItem>
+                        <SelectItem value="15">Dia 15</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-muted-foreground">a las</span>
+                    <Select value={gerScheduleHour} onValueChange={setGerScheduleHour}>
+                      <SelectTrigger className="h-7 w-[80px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["07:00","08:00","09:00","10:00","11:00","12:00","14:00","16:00","18:00"].map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <PeriodSelector
-                    periodPreset={indPeriod}
-                    setPeriodPreset={setIndPeriod}
-                    startDate={indStart}
-                    setStartDate={setIndStart}
-                    endDate={indEnd}
-                    setEndDate={setIndEnd}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIndPreviewOpen(true)}
-                    disabled={!indData || indLoading}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Vista Previa
-                  </Button>
-                  <Button
-                    onClick={handleIndPDF}
-                    disabled={!indData || indExporting}
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    {indExporting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Generando...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="mr-2 h-4 w-4" />
-                        Descargar PDF
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-            {/* Schedule + Recipients */}
-            <SchedulePanel
-              emails={indEmails}
-              setEmails={setIndEmails}
-              emailInput={indEmailInput}
-              setEmailInput={setIndEmailInput}
-            />
-
-            {/* Individual Preview Dialog */}
-            <Dialog open={indPreviewOpen} onOpenChange={setIndPreviewOpen}>
-              <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    Vista Previa — Reporte Individual
-                  </DialogTitle>
-                  <DialogDescription>
-                    Asi se vera el contenido del reporte PDF
-                  </DialogDescription>
-                </DialogHeader>
-                {indData ? (
-                  <IndividualPreviewContent
-                    indData={indData}
-                    indStats={indStats}
-                    hasPeriodInd={hasPeriodInd}
+        {/* ================== INDIVIDUAL CARD ================== */}
+        <Card className="border-border/50 overflow-hidden">
+          <CardContent className="p-0">
+            {/* Main row */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 p-5">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-md">
+                <User className="h-7 w-7 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-foreground">Reporte Individual</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Reporte detallado de productividad por profesional
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                <Select
+                  value={selectedProfessional}
+                  onValueChange={setSelectedProfessional}
+                >
+                  <SelectTrigger className="h-8 text-xs w-[180px]">
+                    <SelectValue placeholder="Profesional..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {usuarios.map((u) => (
+                      <SelectItem key={u.code} value={u.code}>
+                        {u.name} ({u.category})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                      <CalendarIcon className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{indPeriodLabel}</span>
+                      <span className="sm:hidden">Periodo</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-4" align="end">
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Seleccionar periodo</p>
+                      <PeriodSelector
+                        periodPreset={indPeriod}
+                        setPeriodPreset={setIndPeriod}
+                        startDate={indStart}
+                        setStartDate={setIndStart}
+                        endDate={indEnd}
+                        setEndDate={setIndEnd}
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={() => setIndPreviewOpen(true)}
+                  disabled={!indData || indLoading}
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Vista Previa</span>
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 text-xs bg-primary hover:bg-primary/90"
+                  onClick={handleIndPDF}
+                  disabled={!indData || indExporting}
+                >
+                  {indExporting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  <span>{indExporting ? "Generando..." : "Descargar PDF"}</span>
+                </Button>
+              </div>
+            </div>
+            {/* Schedule strip */}
+            <div className="border-t border-border/50 bg-muted/30 px-5 py-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Switch
+                    checked={indScheduleEnabled}
+                    onCheckedChange={setIndScheduleEnabled}
+                    className="scale-90"
                   />
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                    <p className="text-muted-foreground">
-                      Selecciona un profesional para ver la vista previa
-                    </p>
+                  <div className="flex items-center gap-1.5">
+                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Programacion {indScheduleEnabled ? "activada" : "desactivada"}
+                    </span>
+                  </div>
+                </div>
+                {indScheduleEnabled && (
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    <span className="text-muted-foreground">Enviar cada</span>
+                    <Select value={indScheduleFreq} onValueChange={setIndScheduleFreq}>
+                      <SelectTrigger className="h-7 w-[110px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly">Semana</SelectItem>
+                        <SelectItem value="biweekly">Quincena</SelectItem>
+                        <SelectItem value="monthly">Mes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-muted-foreground">el</span>
+                    <Select value={indScheduleDay} onValueChange={setIndScheduleDay}>
+                      <SelectTrigger className="h-7 w-[110px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monday">Lunes</SelectItem>
+                        <SelectItem value="tuesday">Martes</SelectItem>
+                        <SelectItem value="wednesday">Miercoles</SelectItem>
+                        <SelectItem value="thursday">Jueves</SelectItem>
+                        <SelectItem value="friday">Viernes</SelectItem>
+                        <SelectItem value="1">Dia 1</SelectItem>
+                        <SelectItem value="15">Dia 15</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-muted-foreground">a las</span>
+                    <Select value={indScheduleHour} onValueChange={setIndScheduleHour}>
+                      <SelectTrigger className="h-7 w-[80px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["07:00","08:00","09:00","10:00","11:00","12:00","14:00","16:00","18:00"].map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
-              </DialogContent>
-            </Dialog>
-          </TabsContent>
-        </Tabs>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ================== REPORTES PERSONALIZADOS CARD ================== */}
+        <Card className="border-border/50 overflow-hidden">
+          <CardContent className="p-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 p-5">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0 shadow-md">
+                <Sparkles className="h-7 w-7 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-foreground">Reportes Personalizados</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Reportes a medida con metricas, diseno y formato adaptados a tu firma
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs shrink-0"
+                onClick={() => window.open("mailto:contacto@lawbit.io?subject=Reportes%20Personalizados&body=Hola%2C%20me%20interesa%20conocer%20m%C3%A1s%20sobre%20los%20reportes%20personalizados.", "_blank")}
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                Contactar a Lawbit
+              </Button>
+            </div>
+            {/* Feature preview strip */}
+            <div className="border-t border-border/50 bg-muted/30 px-5 py-3">
+              <div className="flex items-center gap-6 text-xs text-muted-foreground overflow-x-auto">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  Branding de tu firma
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  KPIs personalizados
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  Formato y diseno a medida
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  Integracion con tus sistemas
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ================== GERENCIAL PREVIEW DIALOG ================== */}
+        <Dialog open={gerPreviewOpen} onOpenChange={setGerPreviewOpen}>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Vista Previa — Reporte Gerencial
+              </DialogTitle>
+              <DialogDescription>
+                Asi se vera el contenido del reporte PDF
+              </DialogDescription>
+            </DialogHeader>
+            {gerData && (
+              <GerencialPreviewContent
+                gerData={gerData}
+                gerStats={gerStats}
+                hasPeriodGer={hasPeriodGer}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ================== INDIVIDUAL PREVIEW DIALOG ================== */}
+        <Dialog open={indPreviewOpen} onOpenChange={setIndPreviewOpen}>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Vista Previa — Reporte Individual
+              </DialogTitle>
+              <DialogDescription>
+                Asi se vera el contenido del reporte PDF
+              </DialogDescription>
+            </DialogHeader>
+            {indData ? (
+              <IndividualPreviewContent
+                indData={indData}
+                indStats={indStats}
+                hasPeriodInd={hasPeriodInd}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <User className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-muted-foreground">
+                  Selecciona un profesional para ver la vista previa
+                </p>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

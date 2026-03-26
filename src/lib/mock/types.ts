@@ -23,6 +23,7 @@ export interface Cliente {
   name: string | null; // text (nullable)
   client_manager: string | null; // text (nullable)
   fee_type: "FLAT FEE" | "RETAINER" | "HITOS" | "TASA" | null; // text (nullable)
+  industry: string | null; // text (nullable)
 }
 
 export interface Asunto {

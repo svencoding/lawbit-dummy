@@ -9,26 +9,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Bell,
   DollarSign,
-  Calendar as CalendarIcon,
   AlertTriangle,
   CheckCircle2,
   Clock,
   Users,
   TrendingUp,
   Mail,
+  ShieldAlert,
+  CalendarClock,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -72,8 +64,6 @@ const Alertas = () => {
 
   useEffect(() => {
     if (user) {
-      // TODO: Fetch actual retainer data from database
-      // For now, using mock data for presentation purposes
       fetchRetainers();
       fetchRetainerHours();
     }
@@ -83,7 +73,6 @@ const Alertas = () => {
     try {
       setDataLoading(true);
 
-      // Mock data for presentation - replace with actual API call
       const mockRetainers: MonthlyRetainer[] = [
         {
           id: "1",
@@ -142,7 +131,6 @@ const Alertas = () => {
         },
       ];
 
-      // Simulate API delay
       await new Promise((resolve) => setTimeout(resolve, 500));
       setRetainers(mockRetainers);
     } catch (error) {
@@ -154,7 +142,6 @@ const Alertas = () => {
 
   const fetchRetainerHours = async () => {
     try {
-      // Mock data for retainer hours alerts
       const mockRetainerHours: RetainerHoursAlert[] = [
         {
           id: "rh1",
@@ -224,7 +211,6 @@ const Alertas = () => {
         },
       ];
 
-      // Simulate API delay
       await new Promise((resolve) => setTimeout(resolve, 500));
       setRetainerHours(mockRetainerHours);
     } catch (error) {
@@ -232,80 +218,57 @@ const Alertas = () => {
     }
   };
 
-  const getStatusBadge = (retainer: MonthlyRetainer) => {
-    switch (retainer.alertaEstado) {
+  const getAlertColor = (alertaEstado: string) => {
+    switch (alertaEstado) {
       case "vencido":
-        return (
-          <Badge variant="destructive" className="gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            Vencido
-          </Badge>
-        );
+        return { bg: "bg-red-50 dark:bg-red-950/30", text: "text-red-600 dark:text-red-400", border: "border-l-red-500", bar: "bg-red-500" };
       case "por_vencer":
-        return (
-          <Badge variant="default" className="gap-1 bg-amber-500">
-            <Clock className="h-3 w-3" />
-            Por vencer
-          </Badge>
-        );
+        return { bg: "bg-amber-50 dark:bg-amber-950/30", text: "text-amber-600 dark:text-amber-400", border: "border-l-amber-500", bar: "bg-amber-500" };
       case "proximo":
-        return (
-          <Badge variant="default" className="gap-1 bg-blue-500">
-            <Bell className="h-3 w-3" />
-            Próximo
-          </Badge>
-        );
+        return { bg: "bg-blue-50 dark:bg-blue-950/30", text: "text-blue-600 dark:text-blue-400", border: "border-l-blue-500", bar: "bg-blue-500" };
       default:
-        return (
-          <Badge variant="secondary" className="gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            Al día
-          </Badge>
-        );
+        return { bg: "bg-green-50 dark:bg-green-950/30", text: "text-green-600 dark:text-green-400", border: "border-l-green-500", bar: "bg-green-500" };
     }
   };
 
-  const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case "activo":
-        return (
-          <Badge variant="outline" className="text-green-600 border-green-600">
-            Activo
-          </Badge>
-        );
-      case "pausado":
-        return (
-          <Badge variant="outline" className="text-amber-600 border-amber-600">
-            Pausado
-          </Badge>
-        );
-      case "cancelado":
-        return (
-          <Badge variant="outline" className="text-red-600 border-red-600">
-            Cancelado
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{estado}</Badge>;
+  const getAlertLabel = (alertaEstado: string) => {
+    switch (alertaEstado) {
+      case "vencido": return "Vencido";
+      case "por_vencer": return "Por vencer";
+      case "proximo": return "Próximo";
+      default: return "Al día";
     }
+  };
+
+  const getAlertIcon = (alertaEstado: string) => {
+    switch (alertaEstado) {
+      case "vencido": return AlertTriangle;
+      case "por_vencer": return Clock;
+      case "proximo": return CalendarClock;
+      default: return CheckCircle2;
+    }
+  };
+
+  const getProgressColor = (pct: number) => {
+    if (pct >= 90) return "bg-red-500";
+    if (pct >= 80) return "bg-amber-500";
+    return "bg-blue-500";
+  };
+
+  const getProgressBg = (pct: number) => {
+    if (pct >= 90) return "bg-red-100 dark:bg-red-950/40";
+    if (pct >= 80) return "bg-amber-100 dark:bg-amber-950/40";
+    return "bg-blue-100 dark:bg-blue-950/40";
   };
 
   const getStats = () => {
     const total = retainers.length;
-    const vencidos = retainers.filter(
-      (r) => r.alertaEstado === "vencido"
-    ).length;
-    const porVencer = retainers.filter(
-      (r) => r.alertaEstado === "por_vencer"
-    ).length;
-    const proximos = retainers.filter(
-      (r) => r.alertaEstado === "proximo"
-    ).length;
+    const vencidos = retainers.filter((r) => r.alertaEstado === "vencido").length;
+    const porVencer = retainers.filter((r) => r.alertaEstado === "por_vencer").length;
     const totalMonto = retainers
       .filter((r) => r.estado === "activo")
       .reduce((sum, r) => sum + r.monto, 0);
-
-    return { total, vencidos, porVencer, proximos, totalMonto };
+    return { total, vencidos, porVencer, totalMonto };
   };
 
   const stats = getStats();
@@ -317,10 +280,7 @@ const Alertas = () => {
     const internalAlerts = retainerHours.filter(
       (rh) => rh.tipoAlerta === "interna" && rh.porcentajeUsado >= 70
     ).length;
-    const totalActive = retainerHours.filter(
-      (rh) => rh.estado === "activo"
-    ).length;
-
+    const totalActive = retainerHours.filter((rh) => rh.estado === "activo").length;
     return { clientAlerts, internalAlerts, totalActive };
   };
 
@@ -330,449 +290,325 @@ const Alertas = () => {
     return (
       <DashboardLayout>
         <div className="space-y-6">
-          <Skeleton className="h-12 w-64" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-32" />
+              <Skeleton key={i} className="h-24" />
             ))}
           </div>
-          <Skeleton className="h-96 w-full" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Skeleton className="h-80" />
+            <Skeleton className="h-80" />
+          </div>
         </div>
       </DashboardLayout>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
-  // Sort retainers: vencidos first, then por vencer, then proximos, then ok
   const sortedRetainers = [...retainers].sort((a, b) => {
     const order = { vencido: 0, por_vencer: 1, proximo: 2, ok: 3 };
     return order[a.alertaEstado] - order[b.alertaEstado];
   });
+
+  const clientAlerts = retainerHours
+    .filter((rh) => rh.tipoAlerta === "cliente" && rh.porcentajeUsado >= 80)
+    .sort((a, b) => b.porcentajeUsado - a.porcentajeUsado);
+
+  const internalAlerts = retainerHours
+    .filter((rh) => rh.tipoAlerta === "interna" && rh.porcentajeUsado >= 70)
+    .sort((a, b) => b.porcentajeUsado - a.porcentajeUsado);
+
+  const kpiCards = [
+    {
+      title: "Alertas Críticas",
+      value: stats.vencidos,
+      subtitle: "Retainers vencidos",
+      icon: ShieldAlert,
+      color: "text-red-600",
+      bgColor: "bg-red-50 dark:bg-red-950/30",
+    },
+    {
+      title: "Por Vencer",
+      value: stats.porVencer,
+      subtitle: "Próximos 7 días",
+      icon: Clock,
+      color: "text-amber-600",
+      bgColor: "bg-amber-50 dark:bg-amber-950/30",
+    },
+    {
+      title: "Alertas Clientes",
+      value: retainerHoursStats.clientAlerts,
+      subtitle: "Horas ≥80% usadas",
+      icon: Mail,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50 dark:bg-blue-950/30",
+    },
+    {
+      title: "Retainers Activos",
+      value: retainerHoursStats.totalActive,
+      subtitle: "Con seguimiento",
+      icon: Users,
+      color: "text-green-600",
+      bgColor: "bg-green-50 dark:bg-green-950/30",
+    },
+  ];
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Alertas por hitos
+          <h1 className="text-2xl font-bold text-foreground">
+            Alertas por Hitos
           </h1>
-          <p className="text-muted-foreground">
-            Gestiona y monitorea los retainers mensuales y alertas de horas de
-            tus clientes
+          <p className="text-sm text-muted-foreground mt-1">
+            Monitoreo de retainers y consumo de horas
           </p>
         </div>
 
-        {/* Retainer Hours Alerts Section */}
-        <div className="space-y-6">
-          {/* Retainer Hours Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-border/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Alertas para Clientes
-                </CardTitle>
-                <Mail className="h-4 w-4 text-blue-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
-                  {retainerHoursStats.clientAlerts}
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {kpiCards.map((kpi) => (
+            <Card
+              key={kpi.title}
+              className="border-border/50 hover:shadow-md transition-shadow"
+            >
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`${kpi.bgColor} p-2.5 rounded-lg flex-shrink-0`}>
+                  <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Clientes con ≥80% de horas usadas
-                </p>
+                <div className="min-w-0">
+                  <p className="text-2xl font-bold text-foreground leading-none">
+                    {kpi.value}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 truncate">
+                    {kpi.subtitle}
+                  </p>
+                </div>
               </CardContent>
             </Card>
+          ))}
+        </div>
 
-            <Card className="border-border/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Alertas Internas
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-purple-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-purple-600">
-                  {retainerHoursStats.internalAlerts}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Retainers con alto uso de horas
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Retainers Activos
-                </CardTitle>
-                <Users className="h-4 w-4 text-green-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {retainerHoursStats.totalActive}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Con seguimiento de horas
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Client Alerts Table */}
+        {/* Two-column layout: Hours alerts + Retainers */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Client Alerts - Visual cards with progress bars */}
           <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Mail className="h-5 w-5 text-blue-500" />
-                Alertas para Clientes (≥80% de horas usadas)
-              </CardTitle>
-              <CardDescription>
-                Clientes que deben ser notificados sobre el uso de sus horas de
-                retainer
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead className="text-right">Horas Usadas</TableHead>
-                      <TableHead className="text-right">
-                        Horas Totales
-                      </TableHead>
-                      <TableHead className="text-right">Porcentaje</TableHead>
-                      <TableHead>Período</TableHead>
-                      <TableHead>Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {retainerHours
-                      .filter(
-                        (rh) =>
-                          rh.tipoAlerta === "cliente" &&
-                          rh.porcentajeUsado >= 80
-                      )
-                      .sort((a, b) => b.porcentajeUsado - a.porcentajeUsado)
-                      .length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center text-muted-foreground py-8"
-                        >
-                          No hay alertas para clientes en este momento
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      retainerHours
-                        .filter(
-                          (rh) =>
-                            rh.tipoAlerta === "cliente" &&
-                            rh.porcentajeUsado >= 80
-                        )
-                        .sort((a, b) => b.porcentajeUsado - a.porcentajeUsado)
-                        .map((retainerHour) => (
-                          <TableRow key={retainerHour.id}>
-                            <TableCell className="font-medium">
-                              {retainerHour.cliente}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {retainerHour.horasUsadas}h
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                              {retainerHour.horasTotales}h
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Badge
-                                variant={
-                                  retainerHour.porcentajeUsado >= 90
-                                    ? "destructive"
-                                    : retainerHour.porcentajeUsado >= 80
-                                    ? "default"
-                                    : "secondary"
-                                }
-                                className={
-                                  retainerHour.porcentajeUsado >= 90
-                                    ? "bg-red-500"
-                                    : retainerHour.porcentajeUsado >= 80
-                                    ? "bg-amber-500"
-                                    : ""
-                                }
-                              >
-                                {retainerHour.porcentajeUsado}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {format(retainerHour.fechaInicio, "dd MMM", {
-                                locale: es,
-                              })}{" "}
-                              -{" "}
-                              {format(retainerHour.fechaFin, "dd MMM yyyy", {
-                                locale: es,
-                              })}
-                            </TableCell>
-                            <TableCell>
-                              {getEstadoBadge(retainerHour.estado)}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                    )}
-                  </TableBody>
-                </Table>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="bg-blue-50 dark:bg-blue-950/30 p-1.5 rounded-md">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm font-semibold text-foreground">
+                      Alertas para Clientes
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Clientes con alto consumo de horas
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="secondary" className="text-xs">
+                  {clientAlerts.length}
+                </Badge>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {clientAlerts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Sin alertas activas
+                </div>
+              ) : (
+                clientAlerts.map((rh) => (
+                  <div
+                    key={rh.id}
+                    className="p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-foreground truncate mr-2">
+                        {rh.cliente}
+                      </span>
+                      <span className={`text-sm font-bold ${rh.porcentajeUsado >= 90 ? "text-red-600" : "text-amber-600"}`}>
+                        {rh.porcentajeUsado}%
+                      </span>
+                    </div>
+                    <div className={`w-full h-2 rounded-full ${getProgressBg(rh.porcentajeUsado)}`}>
+                      <div
+                        className={`h-2 rounded-full transition-all ${getProgressColor(rh.porcentajeUsado)}`}
+                        style={{ width: `${Math.min(rh.porcentajeUsado, 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-xs text-muted-foreground">
+                        {rh.horasUsadas}h / {rh.horasTotales}h
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {format(rh.fechaInicio, "dd MMM", { locale: es })} - {format(rh.fechaFin, "dd MMM", { locale: es })}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
 
-          {/* Internal Alerts Table */}
+          {/* Internal Alerts */}
           <Card className="border-border/50">
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-purple-500" />
-                Alertas Internas (Alto uso de horas)
-              </CardTitle>
-              <CardDescription>
-                Retainers con alto consumo de horas que requieren atención
-                interna
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead className="text-right">Horas Usadas</TableHead>
-                      <TableHead className="text-right">
-                        Horas Totales
-                      </TableHead>
-                      <TableHead className="text-right">Porcentaje</TableHead>
-                      <TableHead>Período</TableHead>
-                      <TableHead>Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {retainerHours
-                      .filter(
-                        (rh) =>
-                          rh.tipoAlerta === "interna" &&
-                          rh.porcentajeUsado >= 70
-                      )
-                      .sort((a, b) => b.porcentajeUsado - a.porcentajeUsado)
-                      .length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center text-muted-foreground py-8"
-                        >
-                          No hay alertas internas en este momento
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      retainerHours
-                        .filter(
-                          (rh) =>
-                            rh.tipoAlerta === "interna" &&
-                            rh.porcentajeUsado >= 70
-                        )
-                        .sort((a, b) => b.porcentajeUsado - a.porcentajeUsado)
-                        .map((retainerHour) => (
-                          <TableRow key={retainerHour.id}>
-                            <TableCell className="font-medium">
-                              {retainerHour.cliente}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {retainerHour.horasUsadas}h
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                              {retainerHour.horasTotales}h
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Badge
-                                variant={
-                                  retainerHour.porcentajeUsado >= 90
-                                    ? "destructive"
-                                    : retainerHour.porcentajeUsado >= 80
-                                    ? "default"
-                                    : "secondary"
-                                }
-                                className={
-                                  retainerHour.porcentajeUsado >= 90
-                                    ? "bg-red-500"
-                                    : retainerHour.porcentajeUsado >= 80
-                                    ? "bg-amber-500"
-                                    : "bg-purple-500"
-                                }
-                              >
-                                {retainerHour.porcentajeUsado}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {format(retainerHour.fechaInicio, "dd MMM", {
-                                locale: es,
-                              })}{" "}
-                              -{" "}
-                              {format(retainerHour.fechaFin, "dd MMM yyyy", {
-                                locale: es,
-                              })}
-                            </TableCell>
-                            <TableCell>
-                              {getEstadoBadge(retainerHour.estado)}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                    )}
-                  </TableBody>
-                </Table>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="bg-purple-50 dark:bg-purple-950/30 p-1.5 rounded-md">
+                    <TrendingUp className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm font-semibold text-foreground">
+                      Alertas Internas
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Retainers con alto consumo interno
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="secondary" className="text-xs">
+                  {internalAlerts.length}
+                </Badge>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {internalAlerts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Sin alertas internas
+                </div>
+              ) : (
+                internalAlerts.map((rh) => (
+                  <div
+                    key={rh.id}
+                    className="p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-foreground truncate mr-2">
+                        {rh.cliente}
+                      </span>
+                      <span className={`text-sm font-bold ${rh.porcentajeUsado >= 90 ? "text-red-600" : rh.porcentajeUsado >= 80 ? "text-amber-600" : "text-purple-600"}`}>
+                        {rh.porcentajeUsado}%
+                      </span>
+                    </div>
+                    <div className={`w-full h-2 rounded-full ${rh.porcentajeUsado >= 90 ? "bg-red-100 dark:bg-red-950/40" : rh.porcentajeUsado >= 80 ? "bg-amber-100 dark:bg-amber-950/40" : "bg-purple-100 dark:bg-purple-950/40"}`}>
+                      <div
+                        className={`h-2 rounded-full transition-all ${rh.porcentajeUsado >= 90 ? "bg-red-500" : rh.porcentajeUsado >= 80 ? "bg-amber-500" : "bg-purple-500"}`}
+                        style={{ width: `${Math.min(rh.porcentajeUsado, 100)}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className="text-xs text-muted-foreground">
+                        {rh.horasUsadas}h / {rh.horasTotales}h
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {format(rh.fechaInicio, "dd MMM", { locale: es })} - {format(rh.fechaFin, "dd MMM", { locale: es })}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Retainers Table */}
+        {/* Retainers List - Stacked cards instead of table */}
         <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle className="text-foreground">
-              Lista de Retainers
-            </CardTitle>
-            <CardDescription>
-              Monitorea el estado de todos los retainers mensuales
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead className="text-right">Monto Mensual</TableHead>
-                    <TableHead>Frecuencia</TableHead>
-                    <TableHead>Próximo Pago</TableHead>
-                    <TableHead className="text-right">Días Restantes</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Alerta</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedRetainers.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-center text-muted-foreground py-8"
-                      >
-                        No hay retainers registrados
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    sortedRetainers.map((retainer) => (
-                      <TableRow key={retainer.id}>
-                        <TableCell className="font-medium">
-                          {retainer.cliente}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-emerald-600">
-                          ${retainer.monto.toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="capitalize">
-                            {retainer.frecuencia}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {format(retainer.fechaProximoPago, "dd MMM yyyy", {
-                            locale: es,
-                          })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span
-                            className={
-                              retainer.diasRestantes < 0
-                                ? "text-red-600 font-semibold"
-                                : retainer.diasRestantes <= 7
-                                ? "text-amber-600 font-semibold"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            {retainer.diasRestantes < 0
-                              ? `${Math.abs(
-                                  retainer.diasRestantes
-                                )} días vencido`
-                              : `${retainer.diasRestantes} días`}
-                          </span>
-                        </TableCell>
-                        <TableCell>{getEstadoBadge(retainer.estado)}</TableCell>
-                        <TableCell>{getStatusBadge(retainer)}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 p-1.5 rounded-md">
+                <DollarSign className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-semibold text-foreground">
+                  Lista de Retainers
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Estado de pagos y vencimientos
+                </CardDescription>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Info Card */}
-        <Card className="border-border/50 bg-muted/50">
-          <CardHeader>
-            <CardTitle className="text-foreground flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              Sobre las Alertas
-            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <div>
-                <p className="font-semibold text-foreground mb-1">
-                  Alertas de Retainers Mensuales:
-                </p>
-                <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li>
-                    <strong className="text-foreground">Vencido:</strong> El
-                    retainer ya pasó su fecha de pago y requiere atención
-                    inmediata.
-                  </li>
-                  <li>
-                    <strong className="text-foreground">Por vencer:</strong> El
-                    retainer vence en los próximos 7 días.
-                  </li>
-                  <li>
-                    <strong className="text-foreground">Próximo:</strong> El
-                    retainer vence en los próximos 30 días.
-                  </li>
-                  <li>
-                    <strong className="text-foreground">Al día:</strong> El
-                    retainer está al día y no requiere acción inmediata.
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <p className="font-semibold text-foreground mb-1">
-                  Alertas de Horas de Retainer:
-                </p>
-                <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li>
-                    <strong className="text-foreground">
-                      Alertas para Clientes:
-                    </strong>{" "}
-                    Se notifica automáticamente a los clientes cuando alcanzan
-                    el 80% de sus horas de retainer para evitar quejas
-                    posteriores.
-                  </li>
-                  <li>
-                    <strong className="text-foreground">
-                      Alertas Internas:
-                    </strong>{" "}
-                    Se generan alertas internas cuando se observa un alto
-                    consumo de horas en un retainer, permitiendo a la firma
-                    anticiparse y comunicarse con el cliente.
-                  </li>
-                </ul>
-              </div>
-              <p className="pt-2 text-xs italic">
-                Nota: Los métodos de alerta (SMS, email) se configurarán en una
-                futura actualización.
-              </p>
+            <div className="space-y-2">
+              {sortedRetainers.map((retainer) => {
+                const colors = getAlertColor(retainer.alertaEstado);
+                const AlertIcon = getAlertIcon(retainer.alertaEstado);
+                return (
+                  <div
+                    key={retainer.id}
+                    className={`flex items-center gap-4 p-3 rounded-lg border border-border/50 border-l-[3px] ${colors.border} hover:bg-muted/30 transition-colors`}
+                  >
+                    {/* Alert icon */}
+                    <div className={`${colors.bg} p-2 rounded-lg flex-shrink-0`}>
+                      <AlertIcon className={`h-4 w-4 ${colors.text}`} />
+                    </div>
+
+                    {/* Client info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground truncate">
+                          {retainer.cliente}
+                        </span>
+                        {retainer.estado !== "activo" && (
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] px-1.5 py-0 ${
+                              retainer.estado === "pausado"
+                                ? "text-amber-600 border-amber-300"
+                                : "text-red-600 border-red-300"
+                            }`}
+                          >
+                            {retainer.estado === "pausado" ? "Pausado" : "Cancelado"}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-muted-foreground">
+                          {format(retainer.fechaProximoPago, "dd MMM yyyy", { locale: es })}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
+                          {retainer.frecuencia}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Amount */}
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-emerald-600">
+                        ${retainer.monto.toLocaleString()}
+                      </p>
+                      <p className={`text-xs font-medium ${colors.text}`}>
+                        {retainer.diasRestantes < 0
+                          ? `${Math.abs(retainer.diasRestantes)}d vencido`
+                          : `${retainer.diasRestantes}d restantes`}
+                      </p>
+                    </div>
+
+                    {/* Status badge */}
+                    <div className="flex-shrink-0">
+                      <Badge
+                        className={`text-[10px] px-2 py-0.5 ${
+                          retainer.alertaEstado === "vencido"
+                            ? "bg-red-500 hover:bg-red-600"
+                            : retainer.alertaEstado === "por_vencer"
+                            ? "bg-amber-500 hover:bg-amber-600"
+                            : retainer.alertaEstado === "proximo"
+                            ? "bg-blue-500 hover:bg-blue-600"
+                            : "bg-green-500 hover:bg-green-600"
+                        } text-white border-0`}
+                      >
+                        {getAlertLabel(retainer.alertaEstado)}
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

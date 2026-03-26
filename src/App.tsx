@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { PrimaryColorProvider } from "@/hooks/usePrimaryColor";
+import { DateFilterProvider } from "@/hooks/useDateFilter";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Facturacion from "./pages/Facturacion";
@@ -22,6 +23,8 @@ import Profesionales from "./pages/Profesionales";
 import Hernandez from "./pages/Hernandez";
 import Planificacion from "./pages/Planificacion";
 import InformacionExterna from "./pages/InformacionExterna";
+import ClientProfile from "./pages/ClientProfile";
+import ProjectProfile from "./pages/ProjectProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +33,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="light" storageKey="lawbit-theme">
       <PrimaryColorProvider>
+      <DateFilterProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -55,11 +59,14 @@ const App = () => (
             <Route path="/dashboard/hernandez" element={<Hernandez />} />
             <Route path="/dashboard/planificacion" element={<Planificacion />} />
             <Route path="/dashboard/informacion-externa" element={<InformacionExterna />} />
+            <Route path="/dashboard/clientes/:clientId" element={<ClientProfile />} />
+            <Route path="/dashboard/asuntos/:asuntoId" element={<ProjectProfile />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
+      </DateFilterProvider>
       </PrimaryColorProvider>
     </ThemeProvider>
   </QueryClientProvider>

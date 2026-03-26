@@ -2,13 +2,9 @@ import { useState, useMemo } from "react";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -24,45 +20,50 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Users,
-  UserCircle,
-  TrendingUp,
-  TrendingDown,
+  Scale,
+  FolderKanban,
   DollarSign,
   Clock,
-  Briefcase,
-  Activity,
-  ArrowRight,
-  Minus,
+  BarChart3,
+  TrendingUp,
+  Target,
+  Percent,
+  Plus,
+  X,
   Check,
   ChevronsUpDown,
-  ExternalLink,
-  Percent,
+  Zap,
 } from "lucide-react";
+import {
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import {
   getClientCosts,
   getProjectCosts,
   getUsuarios,
   getUserProfileData,
+  getTransformedTimeEntries,
 } from "@/lib/mockDataUtils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import fotoSven from "@/assets/foto-sven.png";
 import facturacionData from "@/lib/mock/facturacion.json";
 import clientesData from "@/lib/mock/clientes.json";
 import asuntosData from "@/lib/mock/asuntos.json";
@@ -70,895 +71,765 @@ import type { Payment, Cliente, Asunto } from "@/lib/mock/types";
 
 type ComparisonMode = "clients" | "lawyers" | "projects";
 
-type DetailView = "projects" | "clients" | null;
+const ENTITY_COLORS = [
+  "hsl(210, 55%, 45%)",
+  "hsl(340, 55%, 50%)",
+  "hsl(160, 55%, 40%)",
+  "hsl(25, 70%, 50%)",
+];
+
+const ENTITY_BG_COLORS = [
+  "bg-blue-500/10 border-blue-500/30",
+  "bg-pink-500/10 border-pink-500/30",
+  "bg-emerald-500/10 border-emerald-500/30",
+  "bg-amber-500/10 border-amber-500/30",
+];
+
+const ENTITY_TEXT_COLORS = [
+  "text-blue-600 dark:text-blue-400",
+  "text-pink-600 dark:text-pink-400",
+  "text-emerald-600 dark:text-emerald-400",
+  "text-amber-600 dark:text-amber-400",
+];
+
+const ENTITY_DOT_COLORS = [
+  "bg-blue-500",
+  "bg-pink-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+];
+
+const MAX_ENTITIES = 4;
+const MIN_ENTITIES = 2;
 
 const ComparisonTool = () => {
   const [mode, setMode] = useState<ComparisonMode>("clients");
-  const [entity1, setEntity1] = useState<string>("");
-  const [entity2, setEntity2] = useState<string>("");
-  const [open1, setOpen1] = useState(false);
-  const [open2, setOpen2] = useState(false);
-  const [detailView, setDetailView] = useState<DetailView>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>(["", ""]);
+  const [openPopovers, setOpenPopovers] = useState<boolean[]>([false, false]);
 
   // Get data based on mode
-  const clientsData = useMemo(() => {
-    const clients = getClientCosts(
-      new Date(2025, 0, 1),
-      new Date(2025, 11, 31)
-    );
+  const clientsCompData = useMemo(() => {
+    const clients = getClientCosts(new Date(2025, 0, 1), new Date(2025, 11, 31));
     const facturacion = facturacionData as Payment[];
     const clientes = clientesData as Cliente[];
-    
-    // Create a map of cliente_id to client name
+
     const clienteIdToNameMap = new Map<number, string>();
-    clientes.forEach((cliente) => {
-      if (cliente.name) {
-        clienteIdToNameMap.set(cliente.id, cliente.name);
-      }
+    clientes.forEach((c) => {
+      if (c.name) clienteIdToNameMap.set(c.id, c.name);
     });
-    
-    // Calculate revenue from facturacion for each client
+
     const clientRevenueMap = new Map<string, number>();
     facturacion.forEach((payment) => {
       if (!payment.month || !payment.cliente_id) return;
-      
-      const paymentDate = payment.month;
-      const date = new Date(paymentDate + "T00:00:00");
-      
-      // Filter by date range
-      const startDate = new Date(2025, 0, 1);
-      const endDate = new Date(2025, 11, 31);
-      
-      if (date < startDate || date > endDate) return;
-      
+      const date = new Date(payment.month + "T00:00:00");
+      if (date < new Date(2025, 0, 1) || date > new Date(2025, 11, 31)) return;
       const clientName = clienteIdToNameMap.get(payment.cliente_id);
       if (!clientName) return;
-      
-      const revenue = payment.amount_charged || 0;
-      clientRevenueMap.set(
-        clientName,
-        (clientRevenueMap.get(clientName) || 0) + revenue
-      );
+      clientRevenueMap.set(clientName, (clientRevenueMap.get(clientName) || 0) + (payment.amount_charged || 0));
     });
-    
+
     return clients
       .map((client) => {
         const revenue = clientRevenueMap.get(client.client_name) || client.total_cost;
-        const billableHours = client.billable_hours || client.total_hours;
+        const billableHours = client.billable_hours ?? 0;
+        const nonBillableHours = client.total_hours - billableHours;
         const margin = revenue > 0 ? ((revenue - client.total_cost) / revenue) * 100 : 0;
         const rate = billableHours > 0 ? revenue / billableHours : 0;
-        
         return {
           id: client.client_name,
           name: client.client_name,
           hours: client.total_hours,
-          billableHours: billableHours,
+          billableHours,
+          nonBillableHours,
           cost: client.total_cost,
-          revenue: revenue,
-          margin: margin,
-          rate: rate,
+          revenue,
+          margin,
+          rate,
           projects: client.project_count,
         };
       })
       .sort((a, b) => b.revenue - a.revenue);
   }, []);
 
-  const lawyersData = useMemo(() => {
+  const lawyersCompData = useMemo(() => {
     const usuarios = getUsuarios();
+    const allEntries = getTransformedTimeEntries(new Date(2025, 0, 1), new Date(2025, 11, 31));
     return usuarios
       .map((usuario) => {
-        const profileData = getUserProfileData(
-          usuario.code,
-          new Date(2025, 0, 1),
-          new Date(2025, 11, 31)
-        );
+        const profileData = getUserProfileData(usuario.code, new Date(2025, 0, 1), new Date(2025, 11, 31));
+        // Compute billable/non-billable from raw entries
+        const userEntries = allEntries.filter((e) => e.user_id === usuario.id);
+        const billableHours = userEntries.reduce((sum, e) => sum + (e.billable_duration || 0), 0);
+        const totalHours = profileData?.total_hours || 0;
+        const nonBillableHours = totalHours - billableHours;
         return {
           id: usuario.code,
           name: usuario.name,
           code: usuario.code,
           category: usuario.category,
           practiceArea: usuario.practice_area,
-          hours: profileData?.total_hours || 0,
+          hours: totalHours,
+          billableHours,
+          nonBillableHours,
           revenue: profileData?.total_revenue || 0,
           cost: profileData?.total_cost || 0,
           projects: profileData?.projects.length || 0,
           clients: profileData?.clients.length || 0,
-          // Calculate utilization (simplified)
-          utilization: 85 + Math.random() * 30, // Mock utilization
+          utilization: totalHours > 0 ? (billableHours / totalHours) * 100 : 0,
         };
       })
       .sort((a, b) => b.revenue - a.revenue);
   }, []);
 
-  const projectsComparisonData = useMemo(() => {
-    const projects = getProjectCosts(
-      new Date(2025, 0, 1),
-      new Date(2025, 11, 31)
-    );
+  const projectsCompData = useMemo(() => {
+    const projects = getProjectCosts(new Date(2025, 0, 1), new Date(2025, 11, 31));
     const facturacion = facturacionData as Payment[];
     const asuntos = asuntosData as Asunto[];
 
-    // Create a map of asunto_id to asunto metadata
     const asuntoMap = new Map<number, Asunto>();
     asuntos.forEach((a) => asuntoMap.set(a.id, a));
 
-    // Calculate revenue from facturacion for each project
     const projectRevenueMap = new Map<number, number>();
     facturacion.forEach((payment) => {
       if (!payment.month || !payment.asunto_id) return;
-
       const date = new Date(payment.month + "T00:00:00");
-      const startDate = new Date(2025, 0, 1);
-      const endDate = new Date(2025, 11, 31);
-
-      if (date < startDate || date > endDate) return;
-
-      const revenue = payment.amount_charged || 0;
-      projectRevenueMap.set(
-        payment.asunto_id,
-        (projectRevenueMap.get(payment.asunto_id) || 0) + revenue
-      );
+      if (date < new Date(2025, 0, 1) || date > new Date(2025, 11, 31)) return;
+      projectRevenueMap.set(payment.asunto_id, (projectRevenueMap.get(payment.asunto_id) || 0) + (payment.amount_charged || 0));
     });
 
     return projects
       .map((project) => {
         const revenue = projectRevenueMap.get(project.project_id) || project.total_cost;
-        const billableHours = project.billable_hours || project.total_hours;
+        const billableHours = project.billable_hours ?? 0;
+        const nonBillableHours = project.total_hours - billableHours;
         const margin = revenue > 0 ? ((revenue - project.total_cost) / revenue) * 100 : 0;
         const rate = billableHours > 0 ? revenue / billableHours : 0;
         const asunto = asuntoMap.get(project.project_id);
-
         return {
           id: project.project_id.toString(),
           name: project.project_name,
           clientName: project.client_name,
           practiceArea: asunto?.practice_area || null,
           projectType: asunto?.project_type || null,
-          chargeType: asunto?.charge_type || null,
           hours: project.total_hours,
-          billableHours: billableHours,
+          billableHours,
+          nonBillableHours,
           cost: project.total_cost,
-          revenue: revenue,
-          margin: margin,
-          rate: rate,
-          projects: 0, // Not applicable for projects
+          revenue,
+          margin,
+          rate,
+          projects: 0,
         };
       })
       .sort((a, b) => b.revenue - a.revenue);
   }, []);
 
-  const entities = mode === "clients" ? clientsData : mode === "lawyers" ? lawyersData : projectsComparisonData;
+  const entities = mode === "clients" ? clientsCompData : mode === "lawyers" ? lawyersCompData : projectsCompData;
 
-  // Get selected entities data
-  const selectedEntity1 =
-    mode === "clients"
-      ? clientsData.find((c) => c.id === entity1)
-      : mode === "lawyers"
-      ? lawyersData.find((l) => l.id === entity1)
-      : projectsComparisonData.find((p) => p.id === entity1);
+  // Pre-select top 2 entities when mode changes or on first load
+  const effectiveIds = useMemo(() => {
+    const ids = [...selectedIds];
+    let changed = false;
+    for (let i = 0; i < ids.length; i++) {
+      if (!ids[i] && entities.length > i) {
+        ids[i] = entities[i].id;
+        changed = true;
+      }
+    }
+    if (changed) return ids;
+    return selectedIds;
+  }, [selectedIds, entities]);
 
-  const selectedEntity2 =
-    mode === "clients"
-      ? clientsData.find((c) => c.id === entity2)
-      : mode === "lawyers"
-      ? lawyersData.find((l) => l.id === entity2)
-      : projectsComparisonData.find((p) => p.id === entity2);
+  // Sync effective IDs back
+  if (effectiveIds !== selectedIds && effectiveIds.some((id, i) => id !== selectedIds[i])) {
+    setSelectedIds(effectiveIds);
+  }
 
-  // Get detailed profile data for lawyers
-  const entity1Details =
-    mode === "lawyers" && entity1
-      ? getUserProfileData(entity1, new Date(2025, 0, 1), new Date(2025, 11, 31))
-      : null;
+  const selectedEntities = effectiveIds.map((id) => entities.find((e) => e.id === id) || null);
 
-  const entity2Details =
-    mode === "lawyers" && entity2
-      ? getUserProfileData(entity2, new Date(2025, 0, 1), new Date(2025, 11, 31))
-      : null;
-
-  // Calculate comparison metrics
-  const getPercentageDiff = (val1: number, val2: number) => {
-    if (val2 === 0) return val1 > 0 ? 100 : 0;
-    return ((val1 - val2) / val2) * 100;
+  const addEntity = () => {
+    if (selectedIds.length < MAX_ENTITIES) {
+      // Find next unused entity
+      const usedIds = new Set(selectedIds);
+      const nextEntity = entities.find((e) => !usedIds.has(e.id));
+      setSelectedIds([...selectedIds, nextEntity?.id || ""]);
+      setOpenPopovers([...openPopovers, false]);
+    }
   };
 
+  const removeEntity = (index: number) => {
+    if (selectedIds.length > MIN_ENTITIES) {
+      setSelectedIds(selectedIds.filter((_, i) => i !== index));
+      setOpenPopovers(openPopovers.filter((_, i) => i !== index));
+    }
+  };
+
+  const setEntityId = (index: number, id: string) => {
+    const next = [...selectedIds];
+    next[index] = id;
+    setSelectedIds(next);
+  };
+
+  const setPopoverOpen = (index: number, open: boolean) => {
+    const next = [...openPopovers];
+    next[index] = open;
+    setOpenPopovers(next);
+  };
+
+  // Format helpers
   const formatCurrency = (value: number) => {
-    const millions = value / 1000000;
-    return millions % 1 === 0 ? `$${millions}M` : `$${millions.toFixed(1)}M`;
-  };
-
-  const formatRate = (value: number) => {
-    // Format as hourly rate: $X/h or $X.XX/h
+    if (value >= 1000000) {
+      const millions = value / 1000000;
+      return `$${millions % 1 === 0 ? millions : millions.toFixed(1)}M`;
+    }
     if (value >= 1000) {
       const thousands = value / 1000;
-      return thousands % 1 === 0 ? `$${thousands}k/h` : `$${thousands.toFixed(1)}k/h`;
+      return `$${thousands % 1 === 0 ? thousands : thousands.toFixed(0)}k`;
     }
-    return `$${Math.round(value)}/h`;
+    return `$${Math.round(value)}`;
   };
 
-  const MetricCard = ({
-    label,
-    value1,
-    value2,
-    format = "number",
-    icon: Icon,
-    onClick,
-    clickable = false,
-    entity1Name,
-    entity2Name,
-  }: {
-    label: string;
-    value1: number;
-    value2: number;
-    format?: "number" | "currency" | "percentage" | "rate";
-    icon: React.ComponentType<{ className?: string }>;
-    onClick?: () => void;
-    clickable?: boolean;
-    entity1Name?: string;
-    entity2Name?: string;
-  }) => {
-    // For percentage format, calculate difference as percentage points, not percentage of percentage
-    const diff = format === "percentage" 
-      ? value1 - value2  // Direct difference in percentage points
-      : getPercentageDiff(value1, value2);
-    const isPositive = diff > 0;
-    const isEqual = Math.abs(diff) < 0.1;
+  const formatNumber = (value: number) => Math.round(value).toLocaleString();
 
-    const formatValue = (val: number) => {
-      if (format === "currency") return formatCurrency(val);
-      if (format === "percentage") return `${val.toFixed(1)}%`;
-      if (format === "rate") return formatRate(val);
-      return Math.round(val).toLocaleString();
-    };
-
-    const getDiffLabel = () => {
-      if (isEqual) return "Igual";
-      
-      if (format === "percentage") {
-        // For percentages, show difference in percentage points
-        const absDiff = Math.abs(diff);
-        if (isPositive) {
-          return `${absDiff.toFixed(1)} puntos porcentuales más que ${entity2Name || "el otro"}`;
-        } else {
-          return `${absDiff.toFixed(1)} puntos porcentuales menos que ${entity2Name || "el otro"}`;
-        }
-      }
-      
-      // For other formats, use percentage difference
-      if (isPositive) {
-        return `${Math.abs(diff).toFixed(0)}% más que ${entity2Name || "el otro"}`;
-      } else {
-        return `${Math.abs(diff).toFixed(0)}% menos que ${entity2Name || "el otro"}`;
-      }
-    };
-
-    return (
-      <div
-        className={`relative bg-muted/30 rounded-lg p-4 border border-border/50 ${
-          clickable ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""
-        }`}
-        onClick={clickable ? onClick : undefined}
-        onDoubleClick={clickable ? onClick : undefined}
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">
-            {label}
-          </span>
-          {clickable && (
-            <ExternalLink className="h-3 w-3 text-muted-foreground ml-auto" />
-          )}
-        </div>
-        <div className="grid grid-cols-3 gap-3 items-center mb-3">
-          <div className="text-right">
-            <div className="text-xl font-bold text-primary">
-              {formatValue(value1)}
-            </div>
-            {entity1Name && (
-              <div className="text-xs text-muted-foreground mt-1">
-                {entity1Name}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col items-center justify-center">
-            <div className="flex items-center gap-1 mb-1">
-              {isEqual ? (
-                <Minus className="h-4 w-4 text-muted-foreground" />
-              ) : isPositive ? (
-                <TrendingUp className="h-4 w-4 text-emerald-600" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-red-600" />
-              )}
-              <span
-                className={`text-sm font-semibold ${
-                  isEqual
-                    ? "text-muted-foreground"
-                    : isPositive
-                    ? "text-emerald-600"
-                    : "text-red-600"
-                }`}
-              >
-                {isEqual 
-                  ? (format === "percentage" ? "0 pp" : "0%")
-                  : format === "percentage"
-                  ? `${Math.abs(diff).toFixed(1)} pp`
-                  : `${Math.abs(diff).toFixed(0)}%`}
-              </span>
-            </div>
-            <div className="text-xs text-muted-foreground text-center px-2">
-              {getDiffLabel()}
-            </div>
-          </div>
-          <div className="text-left">
-            <div className="text-xl font-bold text-primary">
-              {formatValue(value2)}
-            </div>
-            {entity2Name && (
-              <div className="text-xs text-muted-foreground mt-1">
-                {entity2Name}
-              </div>
-            )}
-          </div>
-        </div>
-        {/* Visual comparison bar */}
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <div>
-            <div className="text-xs text-muted-foreground mb-1 text-right">
-              {entity1Name || "Cliente 1"}
-            </div>
-            <Progress
-              value={(value1 / Math.max(value1, value2, 1)) * 100}
-              className="h-2"
-            />
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground mb-1 text-left">
-              {entity2Name || "Cliente 2"}
-            </div>
-            <Progress
-              value={(value2 / Math.max(value1, value2, 1)) * 100}
-              className="h-2"
-            />
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const ComparisonView = () => {
-    if (!selectedEntity1 || !selectedEntity2) {
-      return (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="bg-muted/30 rounded-full p-6 mb-4">
-            {mode === "clients" ? (
-              <Users className="h-12 w-12 text-muted-foreground" />
-            ) : mode === "lawyers" ? (
-              <UserCircle className="h-12 w-12 text-muted-foreground" />
-            ) : (
-              <Briefcase className="h-12 w-12 text-muted-foreground" />
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            Selecciona dos {mode === "clients" ? "clientes" : mode === "lawyers" ? "abogados" : "asuntos"} para
-            comparar sus métricas
-          </p>
-        </div>
+  // Metrics definition per mode
+  const getMetrics = () => {
+    const base = [
+      { key: "hours", label: "Horas Totales", format: "number" as const, icon: Clock },
+      { key: "revenue", label: "Facturación", format: "currency" as const, icon: DollarSign },
+      { key: "cost", label: "Costo Total", format: "currency" as const, icon: BarChart3 },
+    ];
+    if (mode === "clients" || mode === "projects") {
+      base.push(
+        { key: "margin", label: "Margen", format: "percentage" as const, icon: Percent },
+        { key: "rate", label: "Tarifa Prom.", format: "rate" as const, icon: Target },
       );
     }
-
-    return (
-      <div className="space-y-4">
-        {/* Headers */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="flex flex-col items-end">
-            {mode === "lawyers" && (
-              <Avatar className="h-12 w-12 mb-2">
-                <AvatarImage src={fotoSven} alt={selectedEntity1.name} />
-                <AvatarFallback>{selectedEntity1.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-            )}
-            <h3 className="font-bold text-lg text-right">
-              {selectedEntity1.name}
-            </h3>
-            {mode === "lawyers" && "category" in selectedEntity1 && selectedEntity1.category && (
-              <Badge variant="outline" className="mt-1">
-                {String(selectedEntity1.category)}
-              </Badge>
-            )}
-            {mode === "projects" && "clientName" in selectedEntity1 && (
-              <span className="text-sm text-muted-foreground mt-1">
-                {String(selectedEntity1.clientName)}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center justify-center">
-            <div className="bg-primary/10 rounded-full p-2">
-              <ArrowRight className="h-5 w-5 text-primary" />
-            </div>
-          </div>
-          <div className="flex flex-col items-start">
-            {mode === "lawyers" && (
-              <Avatar className="h-12 w-12 mb-2">
-                <AvatarImage src={fotoSven} alt={selectedEntity2.name} />
-                <AvatarFallback>{selectedEntity2.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-            )}
-            <h3 className="font-bold text-lg text-left">
-              {selectedEntity2.name}
-            </h3>
-            {mode === "lawyers" && "category" in selectedEntity2 && selectedEntity2.category && (
-              <Badge variant="outline" className="mt-1">
-                {String(selectedEntity2.category)}
-              </Badge>
-            )}
-            {mode === "projects" && "clientName" in selectedEntity2 && (
-              <span className="text-sm text-muted-foreground mt-1">
-                {String(selectedEntity2.clientName)}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Metrics */}
-        <div className="space-y-3">
-          <MetricCard
-            label="Total de Horas"
-            value1={selectedEntity1.hours}
-            value2={selectedEntity2.hours}
-            format="number"
-            icon={Clock}
-            entity1Name={selectedEntity1.name}
-            entity2Name={selectedEntity2.name}
-          />
-          <MetricCard
-            label={mode === "lawyers" ? "Ingresos" : "Facturación"}
-            value1={
-              "revenue" in selectedEntity1
-                ? Number(selectedEntity1.revenue)
-                : 0
-            }
-            value2={
-              "revenue" in selectedEntity2
-                ? Number(selectedEntity2.revenue)
-                : 0
-            }
-            format="currency"
-            icon={DollarSign}
-            entity1Name={selectedEntity1.name}
-            entity2Name={selectedEntity2.name}
-          />
-          <MetricCard
-            label="Costo Total"
-            value1={selectedEntity1.cost}
-            value2={selectedEntity2.cost}
-            format="currency"
-            icon={DollarSign}
-            entity1Name={selectedEntity1.name}
-            entity2Name={selectedEntity2.name}
-          />
-          {(mode === "clients" || mode === "projects") &&
-            "margin" in selectedEntity1 &&
-            "margin" in selectedEntity2 && (
-              <MetricCard
-                label="Margen"
-                value1={Number(selectedEntity1.margin)}
-                value2={Number(selectedEntity2.margin)}
-                format="percentage"
-                icon={Percent}
-                entity1Name={selectedEntity1.name}
-                entity2Name={selectedEntity2.name}
-              />
-            )}
-          {(mode === "clients" || mode === "projects") &&
-            "rate" in selectedEntity1 &&
-            "rate" in selectedEntity2 && (
-              <MetricCard
-                label="Tarifa Promedio"
-                value1={Number(selectedEntity1.rate)}
-                value2={Number(selectedEntity2.rate)}
-                format="rate"
-                icon={Clock}
-                entity1Name={selectedEntity1.name}
-                entity2Name={selectedEntity2.name}
-              />
-            )}
-          {mode !== "projects" && (
-            <MetricCard
-              label="Proyectos"
-              value1={selectedEntity1.projects}
-              value2={selectedEntity2.projects}
-              format="number"
-              icon={Briefcase}
-              clickable
-              onClick={() => setDetailView("projects")}
-              entity1Name={selectedEntity1.name}
-              entity2Name={selectedEntity2.name}
-            />
-          )}
-          {mode === "lawyers" &&
-            "utilization" in selectedEntity1 &&
-            "utilization" in selectedEntity2 && (
-              <MetricCard
-                label="% Utilización"
-                value1={Number(selectedEntity1.utilization)}
-                value2={Number(selectedEntity2.utilization)}
-                format="percentage"
-                icon={Activity}
-                entity1Name={selectedEntity1.name}
-                entity2Name={selectedEntity2.name}
-              />
-            )}
-          {mode === "lawyers" &&
-            "clients" in selectedEntity1 &&
-            "clients" in selectedEntity2 && (
-              <MetricCard
-                label="Clientes Atendidos"
-                value1={Number(selectedEntity1.clients)}
-                value2={Number(selectedEntity2.clients)}
-                format="number"
-                icon={Users}
-                clickable
-                onClick={() => setDetailView("clients")}
-                entity1Name={selectedEntity1.name}
-                entity2Name={selectedEntity2.name}
-              />
-            )}
-        </div>
-      </div>
-    );
+    if (mode !== "projects") {
+      base.push({ key: "projects", label: "Proyectos", format: "number" as const, icon: FolderKanban });
+    }
+    if (mode === "lawyers") {
+      base.push(
+        { key: "utilization", label: "Utilización", format: "percentage" as const, icon: Zap },
+        { key: "clients", label: "Clientes", format: "number" as const, icon: Users },
+      );
+    }
+    return base;
   };
+
+  const metrics = getMetrics();
+
+  const formatMetricValue = (value: number, format: string) => {
+    if (format === "currency") return formatCurrency(value);
+    if (format === "percentage") return `${value.toFixed(1)}%`;
+    if (format === "rate") return value >= 1000 ? `$${(value / 1000).toFixed(1)}k/h` : `$${Math.round(value)}/h`;
+    return formatNumber(value);
+  };
+
+  // Radar chart data
+  const radarData = useMemo(() => {
+    const validEntities = selectedEntities.filter(Boolean);
+    if (validEntities.length < 2) return [];
+
+    const radarMetrics = metrics.filter((m) => ["hours", "revenue", "cost", "margin", "projects", "utilization", "clients"].includes(m.key));
+
+    return radarMetrics.map((metric) => {
+      const values = validEntities.map((e) => (e as any)?.[metric.key] || 0);
+      const maxVal = Math.max(...values, 1);
+      const entry: any = { metric: metric.label };
+      validEntities.forEach((e, i) => {
+        entry[`entity${i}`] = ((values[i] / maxVal) * 100);
+      });
+      return entry;
+    });
+  }, [selectedEntities, metrics]);
+
+  // Revenue vs Cost chart data — one row per metric, each entity as its own key
+  const revCostData = useMemo(() => {
+    const validEntities = selectedEntities.filter(Boolean);
+    if (validEntities.length < 2) return [];
+
+    const revenue: any = { metric: "Facturación" };
+    const cost: any = { metric: "Costo" };
+    const margin: any = { metric: "Margen %" };
+    validEntities.forEach((e, i) => {
+      revenue[`e${i}`] = (e as any)?.revenue || 0;
+      cost[`e${i}`] = e!.cost;
+      margin[`e${i}`] = (e as any)?.margin || 0;
+    });
+    return [revenue, cost];
+  }, [selectedEntities]);
+
+  // Hours chart data — one row per entity with billable / non-billable
+  const hoursData = useMemo(() => {
+    const validEntities = selectedEntities.filter(Boolean);
+    if (validEntities.length < 2) return [];
+
+    return validEntities.map((e, i) => {
+      const billable = (e as any).billableHours ?? 0;
+      const nonBillable = (e as any).nonBillableHours ?? Math.max(0, e!.hours - billable);
+      const pctBillable = e!.hours > 0 ? (billable / e!.hours) * 100 : 0;
+      return {
+        name: e!.name.length > 18 ? e!.name.substring(0, 18) + "…" : e!.name,
+        fullName: e!.name,
+        billable,
+        nonBillable,
+        total: e!.hours,
+        pctBillable,
+        color: ENTITY_COLORS[i],
+        dotColor: ENTITY_DOT_COLORS[i],
+        idx: i,
+      };
+    });
+  }, [selectedEntities]);
+
+  const validCount = selectedEntities.filter(Boolean).length;
+
+  // Chart configs
+  const radarChartConfig: ChartConfig = {};
+  selectedEntities.forEach((e, i) => {
+    if (e) {
+      radarChartConfig[`entity${i}`] = {
+        label: e.name,
+        color: ENTITY_COLORS[i],
+      };
+    }
+  });
+
+  const revCostChartConfig: ChartConfig = {};
+  selectedEntities.forEach((e, i) => {
+    if (e) {
+      revCostChartConfig[`e${i}`] = { label: e.name, color: ENTITY_COLORS[i] };
+    }
+  });
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">
-          Comparación
-        </h1>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Comparación</h1>
         <p className="text-muted-foreground">
           Compara métricas de rendimiento entre clientes, abogados o asuntos
         </p>
       </div>
 
-      <Card className="border-border/50">
-        <CardContent className="pt-6 space-y-6">
-        {/* Mode Selector */}
-        <Tabs
-          value={mode}
-          onValueChange={(v) => {
-            setMode(v as ComparisonMode);
-            setEntity1("");
-            setEntity2("");
-            setOpen1(false);
-            setOpen2(false);
-          }}
-        >
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="clients">
-              <Users className="h-4 w-4 mr-2" />
-              Clientes
-            </TabsTrigger>
-            <TabsTrigger value="lawyers">
-              <UserCircle className="h-4 w-4 mr-2" />
-              Abogados
-            </TabsTrigger>
-            <TabsTrigger value="projects">
-              <Briefcase className="h-4 w-4 mr-2" />
-              Asuntos
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+      {/* Mode Selector */}
+      <Tabs
+        value={mode}
+        onValueChange={(v) => {
+          setMode(v as ComparisonMode);
+          setSelectedIds(["", ""]);
+          setOpenPopovers([false, false]);
+        }}
+      >
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="clients">
+            <Users className="h-4 w-4 mr-2" />
+            Clientes
+          </TabsTrigger>
+          <TabsTrigger value="lawyers">
+            <Scale className="h-4 w-4 mr-2" />
+            Abogados
+          </TabsTrigger>
+          <TabsTrigger value="projects">
+            <FolderKanban className="h-4 w-4 mr-2" />
+            Asuntos
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-        {/* Entity Selectors */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium mb-2 block">
-              {mode === "clients" ? "Cliente" : mode === "lawyers" ? "Abogado" : "Asunto"} #1
-            </label>
-            <Popover open={open1} onOpenChange={setOpen1}>
+      {/* Entity Selectors */}
+      <div className="flex flex-wrap gap-3 items-end">
+        {selectedIds.map((entityId, index) => (
+          <div key={index} className={`flex-1 min-w-[200px] max-w-[300px]`}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className={`h-2.5 w-2.5 rounded-full ${ENTITY_DOT_COLORS[index]}`} />
+              <label className="text-xs font-medium text-muted-foreground">
+                {mode === "clients" ? "Cliente" : mode === "lawyers" ? "Abogado" : "Asunto"} {index + 1}
+              </label>
+              {selectedIds.length > MIN_ENTITIES && (
+                <button
+                  onClick={() => removeEntity(index)}
+                  className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <Popover open={openPopovers[index]} onOpenChange={(o) => setPopoverOpen(index, o)}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   role="combobox"
-                  aria-expanded={open1}
-                  className="w-full justify-between"
+                  className={cn(
+                    "w-full justify-between h-9 text-sm",
+                    entityId && `border-l-2`,
+                  )}
+                  style={entityId ? { borderLeftColor: ENTITY_COLORS[index] } : undefined}
                 >
-                  {entity1
-                    ? entities.find((entity) => entity.id === entity1)?.name
-                    : `Seleccionar ${mode === "clients" ? "cliente" : mode === "lawyers" ? "abogado" : "asunto"}...`}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  <span className="truncate">
+                    {entityId
+                      ? entities.find((e) => e.id === entityId)?.name
+                      : "Seleccionar..."}
+                  </span>
+                  <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[400px] p-0">
+              <PopoverContent className="w-[300px] p-0">
                 <Command>
                   <CommandInput placeholder="Buscar..." />
-                  <CommandList className="max-h-[300px]">
-                    <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+                  <CommandList className="max-h-[250px]">
+                    <CommandEmpty>Sin resultados.</CommandEmpty>
                     <CommandGroup>
-                      {entities.map((entity) => (
-                        <CommandItem
-                          key={entity.id}
-                          value={entity.name}
-                          onSelect={() => {
-                            setEntity1(entity.id);
-                            setOpen1(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              entity1 === entity.id ? "opacity-100" : "opacity-0"
+                      {entities.map((entity) => {
+                        const usedByOther = selectedIds.some((id, i) => i !== index && id === entity.id);
+                        return (
+                          <CommandItem
+                            key={entity.id}
+                            value={entity.name}
+                            disabled={usedByOther}
+                            onSelect={() => {
+                              setEntityId(index, entity.id);
+                              setPopoverOpen(index, false);
+                            }}
+                            className={usedByOther ? "opacity-40" : ""}
+                          >
+                            <Check
+                              className={cn("mr-2 h-3.5 w-3.5", entityId === entity.id ? "opacity-100" : "opacity-0")}
+                            />
+                            <span className="truncate">{entity.name}</span>
+                            {mode === "lawyers" && "category" in entity && entity.category && (
+                              <span className="text-muted-foreground ml-2 text-xs">
+                                {String(entity.category)}
+                              </span>
                             )}
-                          />
-                          {entity.name}
-                          {mode === "lawyers" && "category" in entity && entity.category && (
-                            <span className="text-muted-foreground ml-2 text-xs">
-                              • {String(entity.category)}
-                            </span>
-                          )}
-                          {mode === "projects" && "clientName" in entity && entity.clientName && (
-                            <span className="text-muted-foreground ml-2 text-xs">
-                              • {String(entity.clientName)}
-                            </span>
-                          )}
-                        </CommandItem>
-                      ))}
+                            {mode === "projects" && "clientName" in entity && (
+                              <span className="text-muted-foreground ml-2 text-xs truncate">
+                                {String((entity as any).clientName)}
+                              </span>
+                            )}
+                          </CommandItem>
+                        );
+                      })}
                     </CommandGroup>
                   </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>
           </div>
-
-          <div>
-            <label className="text-sm font-medium mb-2 block">
-              {mode === "clients" ? "Cliente" : mode === "lawyers" ? "Abogado" : "Asunto"} #2
-            </label>
-            <Popover open={open2} onOpenChange={setOpen2}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={open2}
-                  className="w-full justify-between"
-                >
-                  {entity2
-                    ? entities.find((entity) => entity.id === entity2)?.name
-                    : `Seleccionar ${mode === "clients" ? "cliente" : mode === "lawyers" ? "abogado" : "asunto"}...`}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[400px] p-0">
-                <Command>
-                  <CommandInput placeholder="Buscar..." />
-                  <CommandList className="max-h-[300px]">
-                    <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-                    <CommandGroup>
-                      {entities.map((entity) => (
-                        <CommandItem
-                          key={entity.id}
-                          value={entity.name}
-                          onSelect={() => {
-                            setEntity2(entity.id);
-                            setOpen2(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              entity2 === entity.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {entity.name}
-                          {mode === "lawyers" && "category" in entity && entity.category && (
-                            <span className="text-muted-foreground ml-2 text-xs">
-                              • {String(entity.category)}
-                            </span>
-                          )}
-                          {mode === "projects" && "clientName" in entity && entity.clientName && (
-                            <span className="text-muted-foreground ml-2 text-xs">
-                              • {String(entity.clientName)}
-                            </span>
-                          )}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
-        {/* Comparison View */}
-        <ComparisonView />
-
-        {/* Detail Dialogs */}
-        {mode === "lawyers" && selectedEntity1 && selectedEntity2 && (
-          <>
-            {/* Projects Detail Dialog */}
-            <Dialog open={detailView === "projects"} onOpenChange={(open) => !open && setDetailView(null)}>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Comparación de Proyectos</DialogTitle>
-                  <DialogDescription>
-                    Desglose detallado de proyectos para {selectedEntity1.name} y {selectedEntity2.name}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Entity 1 Projects */}
-                  <div>
-                    <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      {selectedEntity1.name}
-                      <Badge variant="outline">{entity1Details?.projects.length || 0} proyectos</Badge>
-                    </h3>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Proyecto</TableHead>
-                            <TableHead className="text-xs text-right">Horas</TableHead>
-                            <TableHead className="text-xs text-right">Ingresos</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {entity1Details?.projects.slice(0, 10).map((project) => (
-                            <TableRow key={project.project_id}>
-                              <TableCell className="text-xs font-medium">
-                                {project.project_name}
-                              </TableCell>
-                              <TableCell className="text-xs text-right">
-                                {Math.round(project.total_hours)}
-                              </TableCell>
-                              <TableCell className="text-xs text-right text-emerald-600">
-                                {formatCurrency(project.revenue)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    {(entity1Details?.projects.length || 0) > 10 && (
-                      <p className="text-xs text-muted-foreground mt-2 text-center">
-                        Mostrando 10 de {entity1Details?.projects.length} proyectos
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Entity 2 Projects */}
-                  <div>
-                    <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      {selectedEntity2.name}
-                      <Badge variant="outline">{entity2Details?.projects.length || 0} proyectos</Badge>
-                    </h3>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Proyecto</TableHead>
-                            <TableHead className="text-xs text-right">Horas</TableHead>
-                            <TableHead className="text-xs text-right">Ingresos</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {entity2Details?.projects.slice(0, 10).map((project) => (
-                            <TableRow key={project.project_id}>
-                              <TableCell className="text-xs font-medium">
-                                {project.project_name}
-                              </TableCell>
-                              <TableCell className="text-xs text-right">
-                                {Math.round(project.total_hours)}
-                              </TableCell>
-                              <TableCell className="text-xs text-right text-emerald-600">
-                                {formatCurrency(project.revenue)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    {(entity2Details?.projects.length || 0) > 10 && (
-                      <p className="text-xs text-muted-foreground mt-2 text-center">
-                        Mostrando 10 de {entity2Details?.projects.length} proyectos
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            {/* Clients Detail Dialog */}
-            <Dialog open={detailView === "clients"} onOpenChange={(open) => !open && setDetailView(null)}>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Comparación de Clientes</DialogTitle>
-                  <DialogDescription>
-                    Desglose detallado de clientes atendidos por {selectedEntity1.name} y {selectedEntity2.name}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Entity 1 Clients */}
-                  <div>
-                    <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      {selectedEntity1.name}
-                      <Badge variant="outline">{entity1Details?.clients.length || 0} clientes</Badge>
-                    </h3>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Cliente</TableHead>
-                            <TableHead className="text-xs text-right">Horas</TableHead>
-                            <TableHead className="text-xs text-right">Ingresos</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {entity1Details?.clients.slice(0, 10).map((client) => (
-                            <TableRow key={client.client_code}>
-                              <TableCell className="text-xs font-medium">
-                                {client.client_name}
-                              </TableCell>
-                              <TableCell className="text-xs text-right">
-                                {Math.round(client.total_hours)}
-                              </TableCell>
-                              <TableCell className="text-xs text-right text-emerald-600">
-                                {formatCurrency(client.revenue)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    {(entity1Details?.clients.length || 0) > 10 && (
-                      <p className="text-xs text-muted-foreground mt-2 text-center">
-                        Mostrando 10 de {entity1Details?.clients.length} clientes
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Entity 2 Clients */}
-                  <div>
-                    <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      {selectedEntity2.name}
-                      <Badge variant="outline">{entity2Details?.clients.length || 0} clientes</Badge>
-                    </h3>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Cliente</TableHead>
-                            <TableHead className="text-xs text-right">Horas</TableHead>
-                            <TableHead className="text-xs text-right">Ingresos</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {entity2Details?.clients.slice(0, 10).map((client) => (
-                            <TableRow key={client.client_code}>
-                              <TableCell className="text-xs font-medium">
-                                {client.client_name}
-                              </TableCell>
-                              <TableCell className="text-xs text-right">
-                                {Math.round(client.total_hours)}
-                              </TableCell>
-                              <TableCell className="text-xs text-right text-emerald-600">
-                                {formatCurrency(client.revenue)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    {(entity2Details?.clients.length || 0) > 10 && (
-                      <p className="text-xs text-muted-foreground mt-2 text-center">
-                        Mostrando 10 de {entity2Details?.clients.length} clientes
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </>
+        ))}
+        {selectedIds.length < MAX_ENTITIES && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addEntity}
+            className="h-9 gap-1.5 text-muted-foreground mb-0"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Agregar
+          </Button>
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Charts Section */}
+      {validCount >= 2 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Radar Chart */}
+          <Card className="border-border/50">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 rounded-md bg-primary/10">
+                  <Target className="h-4 w-4 text-primary" />
+                </div>
+                <h3 className="font-semibold text-sm">Perfil Comparativo</h3>
+              </div>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
+                    <PolarGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <PolarAngleAxis
+                      dataKey="metric"
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <PolarRadiusAxis
+                      angle={90}
+                      domain={[0, 100]}
+                      tick={false}
+                      axisLine={false}
+                    />
+                    {selectedEntities.map((e, i) =>
+                      e ? (
+                        <Radar
+                          key={i}
+                          name={e.name}
+                          dataKey={`entity${i}`}
+                          stroke={ENTITY_COLORS[i]}
+                          fill={ENTITY_COLORS[i]}
+                          fillOpacity={0.12}
+                          strokeWidth={2}
+                        />
+                      ) : null,
+                    )}
+                    <Legend
+                      wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                      formatter={(value: number) => `${value.toFixed(0)}%`}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bar Chart - Revenue & Cost grouped by metric */}
+          <Card className="border-border/50">
+            <CardContent className="pt-5 pb-4">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 rounded-md bg-primary/10">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                </div>
+                <h3 className="font-semibold text-sm">Facturación vs Costo</h3>
+              </div>
+              <ChartContainer config={revCostChartConfig} className="h-[300px] w-full">
+                <BarChart data={revCostData} margin={{ left: 10, right: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="metric" tick={{ fontSize: 12, fontWeight: 500 }} />
+                  <YAxis tickFormatter={(v) => formatCurrency(v)} tick={{ fontSize: 11 }} />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        formatter={(value) => formatCurrency(Number(value))}
+                      />
+                    }
+                  />
+                  {selectedEntities.map((e, i) =>
+                    e ? (
+                      <Bar
+                        key={i}
+                        dataKey={`e${i}`}
+                        name={e.name}
+                        fill={ENTITY_COLORS[i]}
+                        radius={[4, 4, 0, 0]}
+                        barSize={validCount <= 2 ? 40 : validCount === 3 ? 28 : 22}
+                      />
+                    ) : null,
+                  )}
+                  <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Metric Cards Grid */}
+      {validCount >= 2 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {metrics.map((metric) => {
+            const values = selectedEntities.map((e) => (e ? (e as any)[metric.key] || 0 : 0));
+            const maxVal = Math.max(...values, 1);
+
+            return (
+              <Card key={metric.key} className="border-border/50">
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 rounded-md bg-muted">
+                      <metric.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      {metric.label}
+                    </span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {selectedEntities.map((entity, i) => {
+                      if (!entity) return null;
+                      const value = (entity as any)[metric.key] || 0;
+                      const barWidth = (value / maxVal) * 100;
+                      const isMax = value === maxVal && values.filter((v) => v === maxVal).length === 1;
+                      return (
+                        <div key={i}>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5">
+                              <div className={`h-2 w-2 rounded-full ${ENTITY_DOT_COLORS[i]}`} />
+                              <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                                {entity.name}
+                              </span>
+                            </div>
+                            <span className={cn("text-sm font-semibold tabular-nums", isMax && ENTITY_TEXT_COLORS[i])}>
+                              {formatMetricValue(value, metric.format)}
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${barWidth}%`,
+                                backgroundColor: ENTITY_COLORS[i],
+                                opacity: isMax ? 1 : 0.5,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Hours Breakdown - visual bars per entity */}
+      {validCount >= 2 && (
+        <Card className="border-border/50">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="p-1.5 rounded-md bg-primary/10">
+                <Clock className="h-4 w-4 text-primary" />
+              </div>
+              <h3 className="font-semibold text-sm">Distribución de Horas</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4 ml-9">
+              Horas facturables vs no facturables por cada entidad
+            </p>
+            <div className="space-y-4">
+              {hoursData.map((row) => (
+                <div key={row.idx}>
+                  {/* Entity label row */}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2.5 w-2.5 rounded-full ${row.dotColor}`} />
+                      <span className="text-sm font-medium">{row.fullName}</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      {formatNumber(row.total)} hrs totales
+                    </span>
+                  </div>
+                  {/* Stacked bar */}
+                  <div className="flex h-7 rounded-md overflow-hidden bg-muted/40">
+                    {row.billable > 0 && (
+                      <div
+                        className="h-full flex items-center justify-center text-[11px] font-medium text-white transition-all duration-500"
+                        style={{
+                          width: `${row.pctBillable}%`,
+                          backgroundColor: row.color,
+                          minWidth: row.pctBillable > 5 ? undefined : "24px",
+                        }}
+                      >
+                        {row.pctBillable > 15 && `${formatNumber(row.billable)} hrs`}
+                      </div>
+                    )}
+                    {row.nonBillable > 0 && (
+                      <div
+                        className="h-full flex items-center justify-center text-[11px] font-medium text-muted-foreground transition-all duration-500"
+                        style={{
+                          width: `${100 - row.pctBillable}%`,
+                          backgroundColor: "hsl(var(--muted))",
+                          minWidth: (100 - row.pctBillable) > 5 ? undefined : "24px",
+                        }}
+                      >
+                        {(100 - row.pctBillable) > 15 && `${formatNumber(row.nonBillable)} hrs`}
+                      </div>
+                    )}
+                  </div>
+                  {/* Labels below */}
+                  <div className="flex items-center justify-between mt-1">
+                    <div className="flex items-center gap-1">
+                      <div className="h-2 w-2 rounded-sm" style={{ backgroundColor: row.color }} />
+                      <span className="text-[11px] text-muted-foreground">
+                        Facturable ({row.pctBillable.toFixed(0)}%)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="h-2 w-2 rounded-sm bg-muted" />
+                      <span className="text-[11px] text-muted-foreground">
+                        No facturable ({(100 - row.pctBillable).toFixed(0)}%)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Summary Table */}
+      {validCount >= 2 && (
+        <Card className="border-border/50">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-1.5 rounded-md bg-primary/10">
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </div>
+              <h3 className="font-semibold text-sm">Resumen Comparativo</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Métrica
+                    </th>
+                    {selectedEntities.map((e, i) =>
+                      e ? (
+                        <th key={i} className="text-right py-2 px-3">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <div className={`h-2 w-2 rounded-full ${ENTITY_DOT_COLORS[i]}`} />
+                            <span className="text-xs font-medium truncate max-w-[100px]">
+                              {e.name}
+                            </span>
+                          </div>
+                        </th>
+                      ) : null,
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.map((metric, mi) => {
+                    const values = selectedEntities.map((e) => (e ? (e as any)[metric.key] || 0 : 0));
+                    const maxIdx = values.indexOf(Math.max(...values));
+                    return (
+                      <tr key={metric.key} className={mi % 2 === 0 ? "bg-muted/20" : ""}>
+                        <td className="py-2.5 px-3 text-muted-foreground flex items-center gap-2">
+                          <metric.icon className="h-3.5 w-3.5" />
+                          {metric.label}
+                        </td>
+                        {selectedEntities.map((e, i) =>
+                          e ? (
+                            <td
+                              key={i}
+                              className={cn(
+                                "text-right py-2.5 px-3 tabular-nums font-medium",
+                                i === maxIdx && "font-bold",
+                              )}
+                            >
+                              <span className={i === maxIdx ? ENTITY_TEXT_COLORS[i] : ""}>
+                                {formatMetricValue((e as any)[metric.key] || 0, metric.format)}
+                              </span>
+                              {i === maxIdx && values.filter((v) => v === values[maxIdx]).length === 1 && (
+                                <Badge variant="outline" className="ml-2 text-[10px] py-0 px-1">
+                                  Mejor
+                                </Badge>
+                              )}
+                            </td>
+                          ) : null,
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

@@ -3,17 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarIcon, X, Plus, Minus, Info } from "lucide-react";
+import { X, Plus, Minus, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { useDateFilter } from "@/hooks/useDateFilter";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import {
   Bar,
@@ -263,12 +256,7 @@ const Hernandez = () => {
   >(null);
   const [selectedProject, setSelectedProject] = useState<number | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2025, 0, 1),
-  );
-  const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2025, 11, 31),
-  );
+  const { startDate, endDate } = useDateFilter();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -413,86 +401,6 @@ const Hernandez = () => {
             </div>
           </div>
 
-          {/* Date Filters - commented out for now
-          <div className="flex flex-wrap gap-3 items-center">
-            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-              Filtrar por fecha:
-            </span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={`justify-start text-left font-normal ${
-                    !startDate && "text-muted-foreground"
-                  }`}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                  {startDate ? (
-                    <span className="truncate">
-                      {format(startDate, "dd/MM/yyyy")}
-                    </span>
-                  ) : (
-                    <span>Fecha inicio</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={startDate}
-                  onSelect={setStartDate}
-                  initialFocus
-                  locale={es}
-                />
-              </PopoverContent>
-            </Popover>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={`justify-start text-left font-normal ${
-                    !endDate && "text-muted-foreground"
-                  }`}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                  {endDate ? (
-                    <span className="truncate">
-                      {format(endDate, "dd/MM/yyyy")}
-                    </span>
-                  ) : (
-                    <span>Fecha fin</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={endDate}
-                  onSelect={setEndDate}
-                  initialFocus
-                  locale={es}
-                  disabled={(date) =>
-                    startDate ? date < startDate : false
-                  }
-                />
-              </PopoverContent>
-            </Popover>
-            {(startDate || endDate) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setStartDate(undefined);
-                  setEndDate(undefined);
-                }}
-                className="h-9 px-2"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Limpiar fechas
-              </Button>
-            )}
-          </div>
-          */}
         </div>
 
         {/* Active Filters */}

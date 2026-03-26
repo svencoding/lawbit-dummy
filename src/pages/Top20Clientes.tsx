@@ -4,16 +4,8 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { Calendar as CalendarIcon, X, Loader2 } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { getClientCosts, getTransformedTimeEntries } from "@/lib/mockDataUtils";
 import { formatDateLocal } from "@/lib/utils";
 import Top20Clientes, { type TopNOption } from "@/components/Top20Clientes";
@@ -27,6 +19,7 @@ import {
   useChartFilters,
   ChartFilters,
 } from "@/hooks/useChartFilters";
+import { useDateFilter, DateFilterProvider } from "@/hooks/useDateFilter";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
@@ -422,11 +415,199 @@ const transformMockData = (
     .map(([name, value]) => ({ name, value }))
     .filter((item) => item.value > 0);
 
+  // --- Client Health Score ---
+  // Derive from: billing recency, billing frequency, number of active asuntos, hours trend
+  const now = endDate || new Date();
+  const healthScoreMap = new Map<string, string>();
+  const clientLastActivity = new Map<string, Date>();
+  const clientMonthCount = new Map<string, Set<string>>();
+  const clientAsuntoCount = new Map<string, Set<number>>();
+
+  allTimeEntries.forEach((entry) => {
+    const name = entry.client_name;
+    const entryDate = new Date(entry.date);
+
+    // Track last activity
+    const prev = clientLastActivity.get(name);
+    if (!prev || entryDate > prev) clientLastActivity.set(name, entryDate);
+
+    // Track unique months with activity
+    const monthKey = `${entryDate.getFullYear()}-${entryDate.getMonth()}`;
+    if (!clientMonthCount.has(name)) clientMonthCount.set(name, new Set());
+    clientMonthCount.get(name)!.add(monthKey);
+
+    // Track unique asuntos
+    if (!clientAsuntoCount.has(name)) clientAsuntoCount.set(name, new Set());
+    clientAsuntoCount.get(name)!.add(entry.project_id);
+  });
+
+  clients.forEach((client) => {
+    const lastActivity = clientLastActivity.get(client.nombre);
+    const months = clientMonthCount.get(client.nombre)?.size || 0;
+    const asuntos = clientAsuntoCount.get(client.nombre)?.size || 0;
+
+    if (!lastActivity) {
+      healthScoreMap.set(client.nombre, "Inactivo");
+      return;
+    }
+
+    const daysSinceActivity = Math.floor((now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Score: recency (0-40) + frequency (0-30) + diversity (0-30)
+    let score = 0;
+    if (daysSinceActivity <= 30) score += 40;
+    else if (daysSinceActivity <= 90) score += 25;
+    else if (daysSinceActivity <= 180) score += 10;
+
+    if (months >= 6) score += 30;
+    else if (months >= 3) score += 20;
+    else if (months >= 1) score += 10;
+
+    if (asuntos >= 3) score += 30;
+    else if (asuntos >= 2) score += 20;
+    else score += 10;
+
+    if (score >= 70) healthScoreMap.set(client.nombre, "Creciendo");
+    else if (score >= 45) healthScoreMap.set(client.nombre, "Estable");
+    else if (score >= 25) healthScoreMap.set(client.nombre, "En Riesgo");
+    else healthScoreMap.set(client.nombre, "Inactivo");
+  });
+
+  const healthCounts = new Map<string, number>();
+  healthScoreMap.forEach((score) => {
+    healthCounts.set(score, (healthCounts.get(score) || 0) + 1);
+  });
+  const clientHealthData = Array.from(healthCounts.entries())
+    .map(([name, value]) => ({ name, value }));
+
+  // Build per-category enriched client lists for health
+  const clientHealthDetails: Record<string, Array<{
+    name: string;
+    daysSinceActivity: number | null;
+    monthsActive: number;
+    asuntosCount: number;
+    score: number;
+  }>> = {};
+  healthScoreMap.forEach((status, clientName) => {
+    if (!clientHealthDetails[status]) clientHealthDetails[status] = [];
+    const lastActivity = clientLastActivity.get(clientName);
+    const daysSince = lastActivity
+      ? Math.floor((now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+    const months = clientMonthCount.get(clientName)?.size || 0;
+    const asuntos = clientAsuntoCount.get(clientName)?.size || 0;
+
+    let score = 0;
+    if (daysSince !== null) {
+      if (daysSince <= 30) score += 40;
+      else if (daysSince <= 90) score += 25;
+      else if (daysSince <= 180) score += 10;
+    }
+    if (months >= 6) score += 30;
+    else if (months >= 3) score += 20;
+    else if (months >= 1) score += 10;
+    if (asuntos >= 3) score += 30;
+    else if (asuntos >= 2) score += 20;
+    else score += 10;
+
+    clientHealthDetails[status].push({
+      name: clientName,
+      daysSinceActivity: daysSince,
+      monthsActive: months,
+      asuntosCount: asuntos,
+      score,
+    });
+  });
+
+  // Sort each category by the most relevant metric
+  Object.entries(clientHealthDetails).forEach(([status, list]) => {
+    if (status === "Creciendo") {
+      list.sort((a, b) => b.score - a.score); // highest score first
+    } else if (status === "Inactivo" || status === "En Riesgo") {
+      list.sort((a, b) => (b.daysSinceActivity ?? 9999) - (a.daysSinceActivity ?? 9999)); // longest inactive first
+    } else {
+      list.sort((a, b) => b.score - a.score);
+    }
+  });
+
+  // --- Client Tenure ---
+  const tenureBuckets = new Map<string, number>();
+  clients.forEach((client) => {
+    const firstDate = client.primeraFactura ? new Date(client.primeraFactura) : null;
+    if (!firstDate) {
+      tenureBuckets.set("Sin datos", (tenureBuckets.get("Sin datos") || 0) + 1);
+      return;
+    }
+    const monthsDiff = (now.getFullYear() - firstDate.getFullYear()) * 12 + (now.getMonth() - firstDate.getMonth());
+    let bucket: string;
+    if (monthsDiff < 6) bucket = "< 6 meses";
+    else if (monthsDiff < 12) bucket = "6-12 meses";
+    else if (monthsDiff < 24) bucket = "1-2 años";
+    else bucket = "2+ años";
+    tenureBuckets.set(bucket, (tenureBuckets.get(bucket) || 0) + 1);
+  });
+  const clientTenureData = Array.from(tenureBuckets.entries())
+    .map(([name, value]) => ({ name, value }));
+
+  // Build per-bucket client lists for tenure
+  const clientTenureDetails: Record<string, string[]> = {};
+  clients.forEach((client) => {
+    const firstDate = client.primeraFactura ? new Date(client.primeraFactura) : null;
+    let bucket: string;
+    if (!firstDate) {
+      bucket = "Sin datos";
+    } else {
+      const monthsDiff = (now.getFullYear() - firstDate.getFullYear()) * 12 + (now.getMonth() - firstDate.getMonth());
+      if (monthsDiff < 6) bucket = "< 6 meses";
+      else if (monthsDiff < 12) bucket = "6-12 meses";
+      else if (monthsDiff < 24) bucket = "1-2 años";
+      else bucket = "2+ años";
+    }
+    if (!clientTenureDetails[bucket]) clientTenureDetails[bucket] = [];
+    clientTenureDetails[bucket].push(client.nombre);
+  });
+
+  // --- Seasonality (monthly billing pattern) ---
+  const monthlyRevenue = new Map<number, number>();
+  facturacion.forEach((payment) => {
+    if (!payment.month || !payment.cliente_id) return;
+    const paymentDate = normalizeDate(payment.month);
+    if (!paymentDate) return;
+    const date = new Date(paymentDate + "T00:00:00");
+
+    if (startDate && compareDateOnly(date, startDate) < 0) return;
+    if (endDate && compareDateOnly(date, endDate) > 0) return;
+
+    // Apply filters
+    if (filters?.clientName) {
+      const clientName = clienteIdToNameMap.get(payment.cliente_id);
+      if (clientName !== filters.clientName) return;
+    }
+    if (filters?.feeType) {
+      const cliente = clientes.find((c) => c.id === payment.cliente_id);
+      if (!cliente || cliente.fee_type !== filters.feeType) return;
+    }
+
+    const month = date.getMonth(); // 0-11
+    monthlyRevenue.set(month, (monthlyRevenue.get(month) || 0) + (payment.amount_charged || 0));
+  });
+
+  const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const seasonalityData = monthNames.map((name, index) => ({
+    name,
+    value: monthlyRevenue.get(index) || 0,
+  }));
+
   return {
     clients,
     hoursByLevel,
     facturacionByFeeType,
     totalUnfilteredRevenue,
+    clientHealthData,
+    clientHealthDetails,
+    clientTenureData,
+    clientTenureDetails,
+    seasonalityData,
   };
 };
 
@@ -486,17 +667,27 @@ const Top20ClientesPageContent = () => {
   const [facturacionByFeeType, setFacturacionByFeeType] = useState<
     Array<{ name: string; value: number }>
   >([]);
+  const [clientHealthData, setClientHealthData] = useState<
+    Array<{ name: string; value: number }>
+  >([]);
+  const [clientHealthDetails, setClientHealthDetails] = useState<
+    Record<string, Array<{ name: string; daysSinceActivity: number | null; monthsActive: number; asuntosCount: number; score: number }>>
+  >({});
+  const [clientTenureData, setClientTenureData] = useState<
+    Array<{ name: string; value: number }>
+  >([]);
+  const [clientTenureDetails, setClientTenureDetails] = useState<
+    Record<string, string[]>
+  >({});
+  const [seasonalityData, setSeasonalityData] = useState<
+    Array<{ name: string; value: number }>
+  >([]);
   const [totalUnfilteredRevenue, setTotalUnfilteredRevenue] =
     useState<number>(0);
   const [topN, setTopN] = useState<TopNOption>(20);
   const [dataLoading, setDataLoading] = useState(true);
   const [isFiltering, setIsFiltering] = useState(false);
-  const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2025, 0, 1)
-  ); // 1/1/2025
-  const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2025, 11, 31)
-  ); // 31/12/2025
+  const { startDate, endDate } = useDateFilter();
 
   const fetchClientsData = useCallback(
     async (isFilterChange = false) => {
@@ -522,6 +713,11 @@ const Top20ClientesPageContent = () => {
           setClients(transformedData.clients);
           setHoursByLevel(transformedData.hoursByLevel || []);
           setFacturacionByFeeType(transformedData.facturacionByFeeType || []);
+          setClientHealthData(transformedData.clientHealthData || []);
+          setClientHealthDetails(transformedData.clientHealthDetails || {});
+          setClientTenureData(transformedData.clientTenureData || []);
+          setClientTenureDetails(transformedData.clientTenureDetails || {});
+          setSeasonalityData(transformedData.seasonalityData || []);
           setTotalUnfilteredRevenue(
             transformedData.totalUnfilteredRevenue || 0
           );
@@ -603,91 +799,6 @@ const Top20ClientesPageContent = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Date Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-            Filtrar por fecha:
-          </span>
-          <div className="flex flex-wrap gap-3 items-center">
-            {/* Start Date */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={`justify-start text-left font-normal ${
-                    !startDate && "text-muted-foreground"
-                  }`}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                  {startDate ? (
-                    <span className="truncate">
-                      {format(startDate, "dd/MM/yyyy")}
-                    </span>
-                  ) : (
-                    <span>Fecha inicio</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={startDate}
-                  onSelect={setStartDate}
-                  initialFocus
-                  locale={es}
-                />
-              </PopoverContent>
-            </Popover>
-
-            {/* End Date */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={`justify-start text-left font-normal ${
-                    !endDate && "text-muted-foreground"
-                  }`}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                  {endDate ? (
-                    <span className="truncate">
-                      {format(endDate, "dd/MM/yyyy")}
-                    </span>
-                  ) : (
-                    <span>Fecha fin</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={endDate}
-                  onSelect={setEndDate}
-                  initialFocus
-                  locale={es}
-                  disabled={(date) => (startDate ? date < startDate : false)}
-                />
-              </PopoverContent>
-            </Popover>
-
-            {/* Clear Dates Button */}
-            {(startDate || endDate) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setStartDate(undefined);
-                  setEndDate(undefined);
-                }}
-                className="h-9 px-2"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Limpiar fechas
-              </Button>
-            )}
-          </div>
-        </div>
-
         {/* Loading Overlay - Only show for non-mock data */}
         {isFiltering && !USE_MOCK_DATA && (
           <div className="relative">
@@ -780,6 +891,11 @@ const Top20ClientesPageContent = () => {
             }}
             activeFilters={filters}
             totalUnfilteredRevenue={totalUnfilteredRevenue}
+            clientHealthData={clientHealthData}
+            clientHealthDetails={clientHealthDetails}
+            clientTenureData={clientTenureData}
+            clientTenureDetails={clientTenureDetails}
+            seasonalityData={seasonalityData}
           />
         </div>
       </div>
@@ -789,9 +905,11 @@ const Top20ClientesPageContent = () => {
 
 const Top20ClientesPage = () => {
   return (
-    <ChartFiltersProvider>
-      <Top20ClientesPageContent />
-    </ChartFiltersProvider>
+    <DateFilterProvider>
+      <ChartFiltersProvider>
+        <Top20ClientesPageContent />
+      </ChartFiltersProvider>
+    </DateFilterProvider>
   );
 };
 

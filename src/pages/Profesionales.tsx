@@ -14,20 +14,10 @@ import {
   Clock,
   DollarSign,
   TrendingUp,
-  CalendarIcon,
-  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+import { useDateFilter } from "@/hooks/useDateFilter";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import {
   Bar,
@@ -154,12 +144,7 @@ const categoryColors: Record<string, string> = {
 const Profesionales = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const [startDate, setStartDate] = useState<Date | undefined>(
-    new Date(2025, 0, 1),
-  );
-  const [endDate, setEndDate] = useState<Date | undefined>(
-    new Date(2025, 11, 31),
-  );
+  const { startDate, endDate } = useDateFilter();
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
@@ -273,90 +258,6 @@ const Profesionales = () => {
               <p className="text-muted-foreground">
                 Resumen de rendimiento de los encargados comerciales de la firma
               </p>
-            </div>
-          </div>
-
-          {/* Date Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-              Filtrar por fecha:
-            </span>
-            <div className="flex flex-wrap gap-3 items-center">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={`justify-start text-left font-normal ${
-                      !startDate && "text-muted-foreground"
-                    }`}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                    {startDate ? (
-                      <span className="truncate">
-                        {format(startDate, "dd/MM/yyyy")}
-                      </span>
-                    ) : (
-                      <span>Fecha inicio</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={setStartDate}
-                    initialFocus
-                    locale={es}
-                  />
-                </PopoverContent>
-              </Popover>
-
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={`justify-start text-left font-normal ${
-                      !endDate && "text-muted-foreground"
-                    }`}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
-                    {endDate ? (
-                      <span className="truncate">
-                        {format(endDate, "dd/MM/yyyy")}
-                      </span>
-                    ) : (
-                      <span>Fecha fin</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={setEndDate}
-                    initialFocus
-                    locale={es}
-                    disabled={(date) =>
-                      startDate ? date < startDate : false
-                    }
-                  />
-                </PopoverContent>
-              </Popover>
-
-              {(startDate || endDate) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStartDate(undefined);
-                    setEndDate(undefined);
-                  }}
-                  className="h-9 px-2"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Limpiar fechas
-                </Button>
-              )}
             </div>
           </div>
         </div>

@@ -13,7 +13,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Info, TrendingUp, Clock, AlertTriangle, UserX } from "lucide-react";
+import ChartInfoModal from "@/components/ChartInfoModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useState } from "react";
 import { getChartColor } from "@/lib/chartColors";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import {
@@ -28,6 +36,7 @@ import {
   Pie,
   Cell,
   Legend,
+  Tooltip,
 } from "recharts";
 
 interface ClientSummary {
@@ -64,9 +73,181 @@ interface Top20ClientesProps {
   totalUnfilteredRevenue?: number;
   topN?: TopNOption;
   onTopNChange?: (value: TopNOption) => void;
+  clientHealthData?: Array<{ name: string; value: number }>;
+  clientHealthDetails?: Record<string, Array<{ name: string; daysSinceActivity: number | null; monthsActive: number; asuntosCount: number; score: number }>>;
+  clientTenureData?: Array<{ name: string; value: number }>;
+  clientTenureDetails?: Record<string, string[]>;
+  seasonalityData?: Array<{ name: string; value: number }>;
 }
 
 const TOP_N_PRESETS = [5, 10, 20, 30];
+
+type HealthClient = {
+  name: string;
+  daysSinceActivity: number | null;
+  monthsActive: number;
+  asuntosCount: number;
+  score: number;
+};
+
+const HEALTH_CONFIG: Record<string, { icon: typeof TrendingUp; color: string; bgColor: string; label: string; metric: (c: HealthClient) => string }> = {
+  Creciendo: {
+    icon: TrendingUp,
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-50 dark:bg-emerald-950/30",
+    label: "Top por actividad",
+    metric: (c) => `${c.asuntosCount} asuntos · ${c.monthsActive} meses activo`,
+  },
+  Estable: {
+    icon: Clock,
+    color: "text-blue-600",
+    bgColor: "bg-blue-50 dark:bg-blue-950/30",
+    label: "Actividad reciente",
+    metric: (c) => `${c.daysSinceActivity ?? "—"} días · ${c.asuntosCount} asuntos`,
+  },
+  "En Riesgo": {
+    icon: AlertTriangle,
+    color: "text-amber-600",
+    bgColor: "bg-amber-50 dark:bg-amber-950/30",
+    label: "Mayor inactividad",
+    metric: (c) => `${c.daysSinceActivity ?? "—"} días sin actividad`,
+  },
+  Inactivo: {
+    icon: UserX,
+    color: "text-red-600",
+    bgColor: "bg-red-50 dark:bg-red-950/30",
+    label: "Sin actividad reciente",
+    metric: (c) => c.daysSinceActivity != null ? `${c.daysSinceActivity} días sin actividad` : "Sin registro",
+  },
+};
+
+const ClientHealthSection = ({
+  healthData,
+  healthDetails,
+}: {
+  healthData: Array<{ name: string; value: number }>;
+  healthDetails?: Record<string, HealthClient[]>;
+}) => {
+  const [open, setOpen] = useState(false);
+  const total = healthData.reduce((s, d) => s + d.value, 0);
+  const sorted = [...healthData].sort((a, b) => b.value - a.value);
+
+  return (
+    <div className="bg-muted/30 rounded-lg p-4 border transition-all duration-300 flex flex-col">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-foreground">Estado de Clientes</h3>
+        <button
+          onClick={() => setOpen(true)}
+          className="h-5 w-5 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="flex-1 flex items-center justify-center min-h-[200px]">
+        <ChartContainer
+          config={{ clientHealth: { label: "Estado de Clientes" } }}
+          className="w-full h-full"
+          style={{ aspectRatio: "auto" }}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={healthData} cx="50%" cy="45%" outerRadius={65} dataKey="value">
+                {healthData.map((_, index) => (
+                  <Cell key={`health-${index}`} fill={getChartColor(index)} fillOpacity={0.85} />
+                ))}
+              </Pie>
+              <Legend
+                verticalAlign="bottom"
+                iconType="circle"
+                iconSize={8}
+                formatter={(value: string) => {
+                  const item = healthData.find((d) => d.name === value);
+                  const pct = item && total > 0 ? ((item.value / total) * 100).toFixed(0) : "0";
+                  return <span className="text-xs text-foreground">{value}: {pct}%</span>;
+                }}
+                wrapperStyle={{ fontSize: "11px" }}
+              />
+              <ChartTooltip
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="rounded-lg border bg-background p-2 shadow-sm">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-medium">{payload[0].name}</span>
+                          <span className="text-sm text-muted-foreground">{payload[0].value} clientes</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartContainer>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">Estado de Clientes</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-4">
+            Clasifica clientes según actividad reciente, frecuencia y diversidad de asuntos.
+          </p>
+
+          <div className="space-y-4">
+            {sorted.map((cat) => {
+              const config = HEALTH_CONFIG[cat.name];
+              const clients = healthDetails?.[cat.name] || [];
+              const top5 = clients.slice(0, 5);
+              const pct = total > 0 ? ((cat.value / total) * 100).toFixed(1) : "0";
+              if (!config) return null;
+              const IconComp = config.icon;
+
+              return (
+                <div key={cat.name} className="rounded-lg border p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`${config.bgColor} p-1.5 rounded-md`}>
+                      <IconComp className={`h-3.5 w-3.5 ${config.color}`} />
+                    </div>
+                    <span className="text-sm font-medium flex-1">{cat.name}</span>
+                    <span className="text-sm font-semibold tabular-nums">{cat.value}</span>
+                    <span className="text-xs text-muted-foreground w-12 text-right tabular-nums">{pct}%</span>
+                  </div>
+                  {top5.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {config.label}
+                      </p>
+                      {top5.map((client, i) => (
+                        <div key={client.name} className="flex items-center gap-2 py-0.5">
+                          <span className="text-[10px] text-muted-foreground w-4 text-right tabular-nums">{i + 1}.</span>
+                          <span className="text-xs flex-1 truncate">{client.name}</span>
+                          <span className="text-[11px] text-muted-foreground tabular-nums">{config.metric(client)}</span>
+                        </div>
+                      ))}
+                      {clients.length > 5 && (
+                        <p className="text-[10px] text-muted-foreground pl-6">
+                          +{clients.length - 5} más
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="border-t pt-3 mt-1 flex justify-between text-sm">
+            <span className="text-muted-foreground">Total</span>
+            <span className="font-semibold">{total} clientes</span>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
 
 const Top20Clientes = ({
   clients,
@@ -82,6 +263,11 @@ const Top20Clientes = ({
   totalUnfilteredRevenue = 0,
   topN = 20,
   onTopNChange,
+  clientHealthData = [],
+  clientHealthDetails,
+  clientTenureData = [],
+  clientTenureDetails,
+  seasonalityData = [],
 }: Top20ClientesProps) => {
   // Calculate total revenue from filtered clients
   const totalFilteredRevenue = clients.reduce(
@@ -435,9 +621,7 @@ const Top20Clientes = ({
           <div className="flex-1 min-w-0 flex flex-col gap-6 pl-4" style={{ maxHeight: "600px" }}>
             {/* Horas por Nivel Pie Chart */}
             <div className="flex-1 bg-muted/30 rounded-lg p-4 border transition-all duration-300 min-h-0 flex flex-col">
-              <h3 className="text-sm font-semibold mb-3 text-foreground">
-                Horas por Nivel
-              </h3>
+              <ChartInfoModal title="Horas por Nivel" info="Distribución de horas trabajadas según el nivel profesional (Socio, Asociado Sr, Asociado, Otro)." data={hoursByLevel} unit="horas" />
               {hoursByLevel.length > 0 ? (
                 <div className="flex-1 flex items-center justify-center min-h-[200px]">
                   <ChartContainer 
@@ -450,22 +634,30 @@ const Top20Clientes = ({
                         <Pie
                           data={hoursByLevel}
                           cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) =>
-                            `${name}: ${(percent * 100).toFixed(0)}%`
-                          }
-                          outerRadius={80}
+                          cy="45%"
+                          outerRadius={65}
                           fill="hsl(var(--chart-5))"
                           dataKey="value"
                         >
-                          {hoursByLevel.map((entry, index) => (
+                          {hoursByLevel.map((_, index) => (
                               <Cell
                                 key={`cell-${index}`}
                                 fill={getChartColor(index)}
                               />
                           ))}
                         </Pie>
+                        <Legend
+                          verticalAlign="bottom"
+                          iconType="circle"
+                          iconSize={8}
+                          formatter={(value: string, entry: any) => {
+                            const total = hoursByLevel.reduce((s, d) => s + d.value, 0);
+                            const item = hoursByLevel.find((d) => d.name === value);
+                            const pct = item && total > 0 ? ((item.value / total) * 100).toFixed(0) : "0";
+                            return <span className="text-xs text-foreground">{value}: {pct}%</span>;
+                          }}
+                          wrapperStyle={{ fontSize: "11px" }}
+                        />
                         <ChartTooltip
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
@@ -498,9 +690,7 @@ const Top20Clientes = ({
 
             {/* Facturación por Forma de Cobro Pie Chart */}
             <div className="flex-1 bg-muted/30 rounded-lg p-4 border transition-all duration-300 min-h-0 flex flex-col">
-              <h3 className="text-sm font-semibold mb-3 text-foreground">
-                Facturación por Forma de Cobro
-              </h3>
+              <ChartInfoModal title="Facturación por Forma de Cobro" info="Distribución de facturación según el tipo de cobro del cliente (por hora, tarifa fija, etc.). Haz clic en una sección para filtrar." data={facturacionByFeeType} unit="$" />
               {facturacionByFeeType.length > 0 ? (
                 <div className="flex-1 flex items-center justify-center min-h-[200px]">
                   <ChartContainer 
@@ -513,12 +703,8 @@ const Top20Clientes = ({
                         <Pie
                           data={facturacionByFeeType}
                           cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) =>
-                            `${name}: ${(percent * 100).toFixed(0)}%`
-                          }
-                          outerRadius={80}
+                          cy="45%"
+                          outerRadius={65}
                           fill="hsl(var(--chart-5))"
                           dataKey="value"
                           animationDuration={300}
@@ -547,6 +733,18 @@ const Top20Clientes = ({
                             );
                           })}
                         </Pie>
+                        <Legend
+                          verticalAlign="bottom"
+                          iconType="circle"
+                          iconSize={8}
+                          formatter={(value: string) => {
+                            const total = facturacionByFeeType.reduce((s, d) => s + d.value, 0);
+                            const item = facturacionByFeeType.find((d) => d.name === value);
+                            const pct = item && total > 0 ? ((item.value / total) * 100).toFixed(0) : "0";
+                            return <span className="text-xs text-foreground">{value}: {pct}%</span>;
+                          }}
+                          wrapperStyle={{ fontSize: "11px" }}
+                        />
                         <ChartTooltip
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
@@ -578,6 +776,155 @@ const Top20Clientes = ({
             </div>
           </div>
         </div>
+
+        {/* Row 2: Client Health + Tenure */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          {/* Client Health Score */}
+          {clientHealthData.length > 0 && (
+            <ClientHealthSection
+              healthData={clientHealthData}
+              healthDetails={clientHealthDetails}
+            />
+          )}
+
+          {/* Client Tenure */}
+          {clientTenureData.length > 0 && (
+            <div className="bg-muted/30 rounded-lg p-4 border transition-all duration-300 flex flex-col">
+              <ChartInfoModal title="Antigüedad de Clientes" info="Distribución de clientes según el tiempo desde su primera actividad registrada." data={clientTenureData} unit="clientes" details={clientTenureDetails} detailLabel="Clientes" />
+              <div className="flex-1 flex items-center justify-center min-h-[200px]">
+                <ChartContainer
+                  config={{ clientTenure: { label: "Antigüedad" } }}
+                  className="w-full h-full"
+                  style={{ aspectRatio: "auto" }}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={clientTenureData}
+                        cx="50%"
+                        cy="45%"
+                        outerRadius={65}
+                        dataKey="value"
+                      >
+                        {clientTenureData.map((_, index) => (
+                          <Cell
+                            key={`tenure-${index}`}
+                            fill={getChartColor(index)}
+                            fillOpacity={0.85}
+                          />
+                        ))}
+                      </Pie>
+                      <Legend
+                        verticalAlign="bottom"
+                        iconType="circle"
+                        iconSize={8}
+                        formatter={(value: string) => {
+                          const total = clientTenureData.reduce((s, d) => s + d.value, 0);
+                          const item = clientTenureData.find((d) => d.name === value);
+                          const pct = item && total > 0 ? ((item.value / total) * 100).toFixed(0) : "0";
+                          return <span className="text-xs text-foreground">{value}: {pct}%</span>;
+                        }}
+                        wrapperStyle={{ fontSize: "11px" }}
+                      />
+                      <ChartTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-sm font-medium">
+                                    {payload[0].name}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    {payload[0].value} clientes
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Row 3: Seasonality (full width) */}
+        {seasonalityData.some((d) => d.value > 0) && (
+          <div className="bg-muted/30 rounded-lg p-4 border transition-all duration-300 flex flex-col mt-4">
+            <ChartInfoModal title="Estacionalidad de Facturación" info="Patrón mensual de facturación en el período seleccionado. Permite identificar meses de mayor y menor actividad." data={seasonalityData} unit="$" />
+            <div className="min-h-[160px]">
+              <ChartContainer
+                config={{ seasonality: { label: "Facturación mensual" } }}
+                className="w-full"
+              >
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart
+                    data={seasonalityData}
+                    margin={{ top: 20, right: 10, left: 0, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      width={55}
+                      tickFormatter={(value) => {
+                        const millions = value / 1000000;
+                        return millions >= 1
+                          ? `$${millions.toFixed(1)}M`
+                          : `$${(value / 1000).toFixed(0)}K`;
+                      }}
+                    />
+                    <ChartTooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="rounded-lg border bg-background p-2 shadow-sm">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-sm font-medium">
+                                  {payload[0].payload.name}
+                                </span>
+                                <span className="text-sm text-muted-foreground">
+                                  ${Number(payload[0].value).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar
+                      dataKey="value"
+                      fill="hsl(var(--chart-5))"
+                      radius={[4, 4, 0, 0]}
+                    >
+                      <LabelList
+                        dataKey="value"
+                        position="top"
+                        formatter={(value: number) => {
+                          if (value === 0) return "";
+                          const millions = value / 1000000;
+                          return millions >= 1
+                            ? `$${millions.toFixed(1)}M`
+                            : `$${(value / 1000).toFixed(0)}K`;
+                        }}
+                        style={{
+                          fontSize: "9px",
+                          fill: "hsl(var(--muted-foreground))",
+                        }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

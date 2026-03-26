@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Activity, X } from "lucide-react";
+import { Activity, X, TrendingUp, Clock, Target, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -459,12 +459,70 @@ const UtilizacionContent = () => {
           .sort((a, b) => b.utilization - a.utilization)
       : [];
 
+    // --- KPI computations ---
+    // Firm-wide utilization
+    let totalActual = 0;
+    let totalExpected = 0;
+    utilizationByMonth.forEach((d) => {
+      totalActual += d.actualHours;
+      totalExpected += d.expectedHours;
+    });
+    const firmUtilization =
+      totalExpected > 0
+        ? Math.round((totalActual / totalExpected) * 1000) / 10
+        : 0;
+
+    // Non-billable ratio
+    let totalHours = 0;
+    let totalNonBillable = 0;
+    filteredTimeEntries.forEach((entry) => {
+      totalHours += entry.hours / 60;
+      const entryAny = entry as RelationalTimeEntry & { non_billable_hours?: number };
+      totalNonBillable += (entryAny.non_billable_hours ?? entry.non_billable ?? 0) / 60;
+    });
+    const nonBillableRatio =
+      totalHours > 0
+        ? Math.round((totalNonBillable / totalHours) * 1000) / 10
+        : 0;
+
+    // Average daily hours per professional
+    const uniqueDays = new Set<string>();
+    filteredTimeEntries.forEach((entry) => {
+      const d = normalizeDate(entry.date);
+      if (d) uniqueDays.add(d.toISOString().slice(0, 10));
+    });
+    const numDays = uniqueDays.size || 1;
+    const avgDailyHours =
+      filteredUsuarios.length > 0
+        ? Math.round((totalHours / numDays / filteredUsuarios.length) * 10) / 10
+        : 0;
+
+    // Average daily goal for comparison
+    const avgDailyGoal =
+      filteredUsuarios.length > 0
+        ? Math.round(
+            (filteredUsuarios.reduce((s, u) => s + u.daily_goal, 0) /
+              filteredUsuarios.length) *
+              10
+          ) / 10
+        : 0;
+
+    // Professionals count
+    const professionalsCount = filteredUsuarios.length;
+
     return {
       seniorityChartData,
       areaChartData,
       dateChartData,
       individualSeniorityData,
       individualAreaData,
+      firmUtilization,
+      nonBillableRatio,
+      avgDailyHours,
+      avgDailyGoal,
+      professionalsCount,
+      totalActual,
+      totalExpected,
     };
   }, [usuarios, timeEntries, filters]);
 
@@ -585,6 +643,85 @@ const UtilizacionContent = () => {
             </Button>
           </div>
         )}
+
+        {/* KPI Summary Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="border-border/50 hover:shadow-md transition-shadow">
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="bg-blue-100 dark:bg-blue-950/40 p-1.5 rounded-md">
+                <TrendingUp className="h-4 w-4 text-blue-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground truncate">
+                  Utilización General
+                </p>
+                <div className="text-lg font-bold text-foreground">
+                  {utilizationData.firmUtilization.toFixed(1)}%
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {utilizationData.totalActual.toFixed(0)}h / {utilizationData.totalExpected.toFixed(0)}h
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 hover:shadow-md transition-shadow">
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="bg-amber-100 dark:bg-amber-950/40 p-1.5 rounded-md">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground truncate">
+                  Horas No Facturables
+                </p>
+                <div className="text-lg font-bold text-foreground">
+                  {utilizationData.nonBillableRatio.toFixed(1)}%
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  del total de horas registradas
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 hover:shadow-md transition-shadow">
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="bg-emerald-100 dark:bg-emerald-950/40 p-1.5 rounded-md">
+                <Clock className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground truncate">
+                  Promedio Diario
+                </p>
+                <div className="text-lg font-bold text-foreground">
+                  {utilizationData.avgDailyHours}h
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  meta: {utilizationData.avgDailyGoal}h/día
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 hover:shadow-md transition-shadow">
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="bg-violet-100 dark:bg-violet-950/40 p-1.5 rounded-md">
+                <Target className="h-4 w-4 text-violet-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground truncate">
+                  Profesionales
+                </p>
+                <div className="text-lg font-bold text-foreground">
+                  {utilizationData.professionalsCount}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  incluidos en el análisis
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* First two charts side by side */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
