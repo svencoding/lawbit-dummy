@@ -2791,11 +2791,11 @@
   },
   {
     "id": 2100004,
-    "title": "Litigios",
+    "title": "Proyecto Lawbit",
     "client": "MetroLink Solutions",
     "user_code": "SLO",
     "charge_type": "HITOS",
-    "amount": 18497925.53,
+    "amount": 20000,
     "project_type": "Juicio",
     "practice_area": "Procesal",
     "created_date": "10/23/2014",

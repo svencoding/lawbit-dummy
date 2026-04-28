@@ -2065,3 +2065,297 @@ export function getAllPracticeAreas(): string[] {
   });
   return Array.from(areas).sort();
 }
+
+export interface BudgetVsActualTeamRow {
+  level: string;
+  label: string;
+  budgetedHours: number;
+  actualHours: number;
+  budgetedRate: number;
+  actualRate: number;
+  actualCost: number;
+  budgetedCost: number;
+}
+
+export interface BudgetVsActualRow {
+  asuntoId: number;
+  displayId: string;
+  project: string;
+  area: string;
+  date: string;
+  budgetedPrice: number;
+  actualPrice: number;
+  budgetedHours: number;
+  actualHours: number;
+  status: "completed" | "in_progress";
+  budgetedRate: number;
+  actualRate: number;
+  team: BudgetVsActualTeamRow[];
+  lastActivity: number;
+}
+
+const PRACTICE_AREA_TITLES = new Set([
+  "Asuntos Internos",
+  "Consultoría",
+  "Corporativo",
+  "Laboral",
+  "Litigios",
+  "Penal",
+  "Procesal",
+]);
+
+function buildProjectLabel(asunto: Asunto, clienteName: string | null | undefined): string {
+  const title = asunto.title?.trim();
+  if (title && !PRACTICE_AREA_TITLES.has(title)) return title;
+  const fallback = asunto.project_type || asunto.practice_area || "Asunto";
+  return `${fallback} – ${clienteName || `Cliente ${asunto.cliente_id ?? ""}`}`;
+}
+
+const CATEGORY_TO_LEVEL: Record<string, { level: string; label: string; order: number }> = {
+  "Socio": { level: "partner", label: "Socio", order: 0 },
+  "Asociado Sr": { level: "senior", label: "Asociado Senior", order: 1 },
+  "Asociado": { level: "associate", label: "Asociado", order: 2 },
+};
+
+/**
+ * Build budgeted-vs-actual rows from real asuntos.
+ * - budgetedPrice  = asunto.amount (real quoted contract value)
+ * - actualPrice    = sum of payments for the asunto, falling back to actual cost
+ * - actualHours    = sum of time entries
+ * - budgetedHours  = budgetedPrice / blended actual rate
+ * - status         = "completed" if billed >= 85% of amount, else "in_progress"
+ * - team breakdown = real time entries aggregated by usuario.category;
+ *                    budgeted hours per level distributed proportionally
+ */
+export function getBudgetVsActualComparison(limit = 10): BudgetVsActualRow[] {
+  const entries = getTransformedTimeEntries();
+  const payments = getFacturacion();
+  const users = getUsuarios();
+  const clientsById = new Map(getClientes().map((c) => [c.id, c]));
+
+  const usersById = new Map(users.map((u) => [u.id, u]));
+  const avgRateByCategory = new Map<string, number>();
+  const grouped = new Map<string, { rateSum: number; n: number }>();
+  users.forEach((u) => {
+    const g = grouped.get(u.category) || { rateSum: 0, n: 0 };
+    g.rateSum += u.rate || 0;
+    g.n += 1;
+    grouped.set(u.category, g);
+  });
+  grouped.forEach((g, cat) => avgRateByCategory.set(cat, g.n > 0 ? g.rateSum / g.n : 0));
+
+  const paymentsByAsunto = new Map<number, number>();
+  payments.forEach((p) => {
+    if (p.asunto_id == null) return;
+    paymentsByAsunto.set(p.asunto_id, (paymentsByAsunto.get(p.asunto_id) || 0) + (p.amount_charged || 0));
+  });
+
+  type Acc = {
+    totalHours: number;
+    totalCost: number;
+    lastEntry: number;
+    byCategory: Map<string, { hours: number; cost: number }>;
+  };
+  const accByAsunto = new Map<number, Acc>();
+  let globalMaxEntry = 0;
+  entries.forEach((e) => {
+    const u = usersById.get(e.user_id);
+    if (!u) return;
+    const cost = e.originalEntry.total_cost ?? (e.duration * (e.originalEntry.hourly_cost || 0));
+    const ts = e.date ? new Date(e.date).getTime() : 0;
+    if (ts > globalMaxEntry) globalMaxEntry = ts;
+    let acc = accByAsunto.get(e.project_id);
+    if (!acc) {
+      acc = { totalHours: 0, totalCost: 0, lastEntry: 0, byCategory: new Map() };
+      accByAsunto.set(e.project_id, acc);
+    }
+    acc.totalHours += e.duration;
+    acc.totalCost += cost;
+    if (ts > acc.lastEntry) acc.lastEntry = ts;
+    const c = acc.byCategory.get(u.category) || { hours: 0, cost: 0 };
+    c.hours += e.duration;
+    c.cost += cost;
+    acc.byCategory.set(u.category, c);
+  });
+
+  const rows: BudgetVsActualRow[] = [];
+  for (const a of getAsuntos()) {
+    const amount = a.amount || 0;
+    if (amount < 1000) continue;
+    const acc = accByAsunto.get(a.id);
+    if (!acc || acc.totalHours <= 0) continue;
+
+    const billed = paymentsByAsunto.get(a.id) || 0;
+    const actualPrice = billed > 0 ? billed : acc.totalCost;
+    const actualHours = acc.totalHours;
+    const blendedActualRate = actualHours > 0 ? acc.totalCost / actualHours : 0;
+    const budgetedRate = blendedActualRate > 0 ? blendedActualRate : 1500;
+    const budgetedHours = Math.max(1, Math.round(amount / budgetedRate));
+    const idleDays = globalMaxEntry > 0 && acc.lastEntry > 0
+      ? (globalMaxEntry - acc.lastEntry) / (1000 * 60 * 60 * 24)
+      : 0;
+    const status: "completed" | "in_progress" =
+      billed >= amount * 0.5 || idleDays >= 45 ? "completed" : "in_progress";
+
+    const cliente = a.cliente_id != null ? clientsById.get(a.cliente_id) : null;
+    const projectLabel = buildProjectLabel(a, cliente?.name);
+
+    const team: BudgetVsActualTeamRow[] = [];
+    Object.entries(CATEGORY_TO_LEVEL).forEach(([cat, info]) => {
+      const c = acc.byCategory.get(cat);
+      if (!c || c.hours <= 0) return;
+      const proportion = c.hours / actualHours;
+      const tBudgetedHours = Math.round(budgetedHours * proportion);
+      const actualRate = c.hours > 0 ? c.cost / c.hours : 0;
+      const tBudgetedRate = avgRateByCategory.get(cat) || actualRate;
+      team.push({
+        level: info.level,
+        label: info.label,
+        budgetedHours: tBudgetedHours,
+        actualHours: Math.round(c.hours),
+        budgetedRate: Math.round(tBudgetedRate),
+        actualRate: Math.round(actualRate),
+        actualCost: Math.round(c.cost),
+        budgetedCost: Math.round(tBudgetedHours * tBudgetedRate),
+      });
+    });
+    team.sort((x, y) => {
+      const ox = Object.values(CATEGORY_TO_LEVEL).find((v) => v.level === x.level)?.order ?? 99;
+      const oy = Object.values(CATEGORY_TO_LEVEL).find((v) => v.level === y.level)?.order ?? 99;
+      return ox - oy;
+    });
+
+    rows.push({
+      asuntoId: a.id,
+      displayId: `AS-${a.id}`,
+      project: projectLabel,
+      area: a.practice_area || "—",
+      date: normalizeDate(a.created_date || "") || a.created_date || "",
+      budgetedPrice: Math.round(amount),
+      actualPrice: Math.round(actualPrice),
+      budgetedHours,
+      actualHours: Math.round(actualHours),
+      status,
+      budgetedRate: Math.round(budgetedRate),
+      actualRate: Math.round(blendedActualRate),
+      team,
+      lastActivity: acc.lastEntry,
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (b.lastActivity !== a.lastActivity) return b.lastActivity - a.lastActivity;
+    return b.budgetedPrice - a.budgetedPrice;
+  });
+  return rows.slice(0, limit);
+}
+
+/**
+ * Build the same budget-vs-actual breakdown for a single asunto.
+ * Returns null if the asunto has no quoted amount or no time entries.
+ */
+export function getBudgetVsActualForAsunto(asuntoId: number): BudgetVsActualRow | null {
+  const asunto = getAsuntos().find((a) => a.id === asuntoId);
+  if (!asunto) return null;
+  const amount = asunto.amount || 0;
+  if (amount <= 0) return null;
+
+  const entries = getTransformedTimeEntries().filter((e) => e.project_id === asuntoId);
+  if (entries.length === 0) return null;
+
+  const users = getUsuarios();
+  const usersById = new Map(users.map((u) => [u.id, u]));
+  const avgRateByCategory = new Map<string, number>();
+  const grouped = new Map<string, { rateSum: number; n: number }>();
+  users.forEach((u) => {
+    const g = grouped.get(u.category) || { rateSum: 0, n: 0 };
+    g.rateSum += u.rate || 0;
+    g.n += 1;
+    grouped.set(u.category, g);
+  });
+  grouped.forEach((g, cat) => avgRateByCategory.set(cat, g.n > 0 ? g.rateSum / g.n : 0));
+
+  let totalHours = 0;
+  let totalCost = 0;
+  let lastEntry = 0;
+  const byCategory = new Map<string, { hours: number; cost: number }>();
+  // Find global max entry timestamp so idle-day status is consistent with the comparison list
+  let globalMaxEntry = 0;
+  getTransformedTimeEntries().forEach((e) => {
+    const ts = e.date ? new Date(e.date).getTime() : 0;
+    if (ts > globalMaxEntry) globalMaxEntry = ts;
+  });
+  entries.forEach((e) => {
+    const u = usersById.get(e.user_id);
+    if (!u) return;
+    const cost = e.originalEntry.total_cost ?? (e.duration * (e.originalEntry.hourly_cost || 0));
+    totalHours += e.duration;
+    totalCost += cost;
+    const ts = e.date ? new Date(e.date).getTime() : 0;
+    if (ts > lastEntry) lastEntry = ts;
+    const c = byCategory.get(u.category) || { hours: 0, cost: 0 };
+    c.hours += e.duration;
+    c.cost += cost;
+    byCategory.set(u.category, c);
+  });
+  if (totalHours <= 0) return null;
+
+  const billed = getFacturacion()
+    .filter((p) => p.asunto_id === asuntoId)
+    .reduce((s, p) => s + (p.amount_charged || 0), 0);
+
+  const actualPrice = billed > 0 ? billed : totalCost;
+  const blendedActualRate = totalCost / totalHours;
+  const budgetedRate = blendedActualRate > 0 ? blendedActualRate : 1500;
+  const budgetedHours = Math.max(1, Math.round(amount / budgetedRate));
+  const idleDays = globalMaxEntry > 0 && lastEntry > 0
+    ? (globalMaxEntry - lastEntry) / (1000 * 60 * 60 * 24)
+    : 0;
+  const status: "completed" | "in_progress" =
+    billed >= amount * 0.5 || idleDays >= 45 ? "completed" : "in_progress";
+
+  const clientes = getClientes();
+  const cliente = asunto.cliente_id != null ? clientes.find((c) => c.id === asunto.cliente_id) : null;
+
+  const team: BudgetVsActualTeamRow[] = [];
+  Object.entries(CATEGORY_TO_LEVEL).forEach(([cat, info]) => {
+    const c = byCategory.get(cat);
+    if (!c || c.hours <= 0) return;
+    const proportion = c.hours / totalHours;
+    const tBudgetedHours = Math.round(budgetedHours * proportion);
+    const actualRate = c.hours > 0 ? c.cost / c.hours : 0;
+    const tBudgetedRate = avgRateByCategory.get(cat) || actualRate;
+    team.push({
+      level: info.level,
+      label: info.label,
+      budgetedHours: tBudgetedHours,
+      actualHours: Math.round(c.hours),
+      budgetedRate: Math.round(tBudgetedRate),
+      actualRate: Math.round(actualRate),
+      actualCost: Math.round(c.cost),
+      budgetedCost: Math.round(tBudgetedHours * tBudgetedRate),
+    });
+  });
+  team.sort((x, y) => {
+    const ox = Object.values(CATEGORY_TO_LEVEL).find((v) => v.level === x.level)?.order ?? 99;
+    const oy = Object.values(CATEGORY_TO_LEVEL).find((v) => v.level === y.level)?.order ?? 99;
+    return ox - oy;
+  });
+
+  return {
+    asuntoId: asunto.id,
+    displayId: `AS-${asunto.id}`,
+    project: buildProjectLabel(asunto, cliente?.name),
+    area: asunto.practice_area || "—",
+    date: normalizeDate(asunto.created_date || "") || asunto.created_date || "",
+    budgetedPrice: Math.round(amount),
+    actualPrice: Math.round(actualPrice),
+    budgetedHours,
+    actualHours: Math.round(totalHours),
+    status,
+    budgetedRate: Math.round(budgetedRate),
+    actualRate: Math.round(blendedActualRate),
+    team,
+    lastActivity: lastEntry,
+  };
+}

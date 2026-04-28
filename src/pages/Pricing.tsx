@@ -71,154 +71,14 @@ import {
   getPricingData,
   getFullPricingData,
   getAsuntos,
+  getBudgetVsActualComparison,
 } from "@/lib/mockDataUtils";
-import type { HistoricalProject } from "@/lib/mockDataUtils";
+import type { HistoricalProject, BudgetVsActualRow } from "@/lib/mockDataUtils";
 import CasosPrecedentes from "@/components/CasosPrecedentes";
 
 // Set to true to use mock data for presentations (no database calls)
 const USE_MOCK_DATA = true;
 
-// Mock data for budgeted vs actual comparison
-interface ComparisonTeamBreakdown {
-  level: string;
-  label: string;
-  budgetedHours: number;
-  actualHours: number;
-  budgetedRate: number;
-  actualRate: number;
-}
-
-interface ComparisonProject {
-  id: string;
-  project: string;
-  area: string;
-  date: string;
-  budgetedPrice: number;
-  actualPrice: number;
-  budgetedHours: number;
-  actualHours: number;
-  status: "completed" | "in_progress";
-  budgetedRate: number;
-  actualRate: number;
-  team: ComparisonTeamBreakdown[];
-}
-
-const MOCK_COMPARISON_DATA: ComparisonProject[] = [
-  {
-    id: "COT-2024-001",
-    project: "Reestructuración Societaria - Grupo Alfa",
-    area: "Corporativo",
-    date: "2024-01-15",
-    budgetedPrice: 185000,
-    actualPrice: 212400,
-    budgetedHours: 120,
-    actualHours: 142,
-    status: "completed",
-    budgetedRate: 1542,
-    actualRate: 1496,
-    team: [
-      { level: "partner", label: "Socio", budgetedHours: 20, actualHours: 28, budgetedRate: 2800, actualRate: 2800 },
-      { level: "senior", label: "Asociado Senior", budgetedHours: 40, actualHours: 48, budgetedRate: 1800, actualRate: 1750 },
-      { level: "associate", label: "Asociado", budgetedHours: 35, actualHours: 38, budgetedRate: 1200, actualRate: 1200 },
-      { level: "junior", label: "Asociado Junior", budgetedHours: 25, actualHours: 28, budgetedRate: 650, actualRate: 650 },
-    ],
-  },
-  {
-    id: "COT-2024-002",
-    project: "Due Diligence - Adquisición TechCorp",
-    area: "M&A",
-    date: "2024-02-20",
-    budgetedPrice: 320000,
-    actualPrice: 298500,
-    budgetedHours: 200,
-    actualHours: 185,
-    status: "completed",
-    budgetedRate: 1600,
-    actualRate: 1614,
-    team: [
-      { level: "partner", label: "Socio", budgetedHours: 30, actualHours: 25, budgetedRate: 3000, actualRate: 3000 },
-      { level: "senior", label: "Asociado Senior", budgetedHours: 60, actualHours: 52, budgetedRate: 1900, actualRate: 1900 },
-      { level: "associate", label: "Asociado", budgetedHours: 70, actualHours: 68, budgetedRate: 1300, actualRate: 1350 },
-      { level: "junior", label: "Asociado Junior", budgetedHours: 40, actualHours: 40, budgetedRate: 700, actualRate: 700 },
-    ],
-  },
-  {
-    id: "COT-2024-003",
-    project: "Litigio Laboral - Constructora Beta",
-    area: "Laboral",
-    date: "2024-03-10",
-    budgetedPrice: 95000,
-    actualPrice: 118700,
-    budgetedHours: 65,
-    actualHours: 89,
-    status: "completed",
-    budgetedRate: 1462,
-    actualRate: 1334,
-    team: [
-      { level: "partner", label: "Socio", budgetedHours: 10, actualHours: 15, budgetedRate: 2500, actualRate: 2500 },
-      { level: "senior", label: "Asociado Senior", budgetedHours: 25, actualHours: 38, budgetedRate: 1600, actualRate: 1550 },
-      { level: "associate", label: "Asociado", budgetedHours: 20, actualHours: 24, budgetedRate: 1100, actualRate: 1100 },
-      { level: "junior", label: "Asociado Junior", budgetedHours: 10, actualHours: 12, budgetedRate: 600, actualRate: 600 },
-    ],
-  },
-  {
-    id: "COT-2024-004",
-    project: "Compliance GDPR - FinServ Corp",
-    area: "Regulatorio",
-    date: "2024-05-05",
-    budgetedPrice: 150000,
-    actualPrice: 132000,
-    budgetedHours: 100,
-    actualHours: 88,
-    status: "in_progress",
-    budgetedRate: 1500,
-    actualRate: 1500,
-    team: [
-      { level: "partner", label: "Socio", budgetedHours: 15, actualHours: 10, budgetedRate: 2800, actualRate: 2800 },
-      { level: "senior", label: "Asociado Senior", budgetedHours: 35, actualHours: 32, budgetedRate: 1700, actualRate: 1700 },
-      { level: "associate", label: "Asociado", budgetedHours: 30, actualHours: 28, budgetedRate: 1200, actualRate: 1200 },
-      { level: "junior", label: "Asociado Junior", budgetedHours: 20, actualHours: 18, budgetedRate: 650, actualRate: 650 },
-    ],
-  },
-  {
-    id: "COT-2024-005",
-    project: "Arbitraje Internacional - MinCo vs Estado",
-    area: "Arbitraje",
-    date: "2024-06-18",
-    budgetedPrice: 480000,
-    actualPrice: 245000,
-    budgetedHours: 300,
-    actualHours: 155,
-    status: "in_progress",
-    budgetedRate: 1600,
-    actualRate: 1581,
-    team: [
-      { level: "partner", label: "Socio", budgetedHours: 50, actualHours: 28, budgetedRate: 3200, actualRate: 3200 },
-      { level: "senior", label: "Asociado Senior", budgetedHours: 100, actualHours: 52, budgetedRate: 1800, actualRate: 1800 },
-      { level: "associate", label: "Asociado", budgetedHours: 90, actualHours: 45, budgetedRate: 1200, actualRate: 1200 },
-      { level: "junior", label: "Asociado Junior", budgetedHours: 60, actualHours: 30, budgetedRate: 650, actualRate: 650 },
-    ],
-  },
-  {
-    id: "COT-2024-006",
-    project: "Fusión Bancaria - Banco Sur + Banco Norte",
-    area: "M&A",
-    date: "2024-07-01",
-    budgetedPrice: 550000,
-    actualPrice: 72000,
-    budgetedHours: 350,
-    actualHours: 45,
-    status: "in_progress",
-    budgetedRate: 1571,
-    actualRate: 1600,
-    team: [
-      { level: "partner", label: "Socio", budgetedHours: 50, actualHours: 8, budgetedRate: 3000, actualRate: 3000 },
-      { level: "senior", label: "Asociado Senior", budgetedHours: 110, actualHours: 15, budgetedRate: 1900, actualRate: 1900 },
-      { level: "associate", label: "Asociado", budgetedHours: 120, actualHours: 14, budgetedRate: 1300, actualRate: 1300 },
-      { level: "junior", label: "Asociado Junior", budgetedHours: 70, actualHours: 8, budgetedRate: 700, actualRate: 700 },
-    ],
-  },
-];
 
 interface SeniorityLevel {
   level: string;
@@ -358,7 +218,7 @@ const Pricing = () => {
   const [showCostBreakdown, setShowCostBreakdown] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>("parametros");
   const [showComparison, setShowComparison] = useState<boolean>(false);
-  const [expandedComparisonId, setExpandedComparisonId] = useState<string | null>(null);
+  const comparisonData = useMemo<BudgetVsActualRow[]>(() => getBudgetVsActualComparison(10), []);
 
   // State for historical data
   const [pricingData, setPricingData] = useState<PricingData | null>(null);
@@ -991,9 +851,9 @@ const Pricing = () => {
 
       // Billing Method
       const billingMethodLabels: Record<string, string> = {
-        hourly: "Tarifa Horaria",
-        fixed: "Suma Alzada",
-        "value-based": "Honorario de Éxito",
+        hourly: "Tarifa Fija Mensual",
+        fixed: "Hitos",
+        "value-based": "Retainer",
       };
       doc.setFont("helvetica", "bold");
       doc.text("Método de Facturación:", margin, yPosition);
@@ -1195,7 +1055,7 @@ const Pricing = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground tracking-tight">
-                Checklist de Cotizador de Honorarios
+                Pricing
               </h1>
               <p className="text-sm text-muted-foreground">
                 Determine honorarios con base en el historial de la firma y parámetros ajustables
@@ -1203,6 +1063,179 @@ const Pricing = () => {
             </div>
           </div>
         </div>
+
+        {/* Comparison Section: Presupuestado vs Real */}
+        <Card className="border-border/40 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 shadow-sm">
+                  <GitCompare className="h-4 w-4 text-white" />
+                </div>
+                <div className="text-left">
+                  <CardTitle className="text-base">Presupuestado vs Real</CardTitle>
+                  <CardDescription className="text-xs">
+                    Seguimiento en tiempo real de cotizaciones contra facturación real
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                  {comparisonData.filter(d => d.status === "completed").length} completados
+                </span>
+                <span className="flex items-center gap-1">
+                  <Circle className="h-3 w-3 text-blue-500" />
+                  {comparisonData.filter(d => d.status === "in_progress").length} en curso
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {/* Summary KPIs */}
+            {(() => {
+              const completed = comparisonData.filter(d => d.status === "completed");
+              const totalBudgeted = completed.reduce((s, d) => s + d.budgetedPrice, 0);
+              const totalActual = completed.reduce((s, d) => s + d.actualPrice, 0);
+              const avgDeviation = totalBudgeted > 0 ? ((totalActual - totalBudgeted) / totalBudgeted) * 100 : 0;
+              const totalBudgetedHours = completed.reduce((s, d) => s + d.budgetedHours, 0);
+              const totalActualHours = completed.reduce((s, d) => s + d.actualHours, 0);
+
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50">
+                    <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium mb-0.5">Total Presupuestado</p>
+                    <p className="text-lg font-bold text-blue-900 dark:text-blue-100">${totalBudgeted.toLocaleString()}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50">
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mb-0.5">Total Real</p>
+                    <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">${totalActual.toLocaleString()}</p>
+                  </div>
+                  <div className={`p-3 rounded-lg border ${avgDeviation > 0 ? "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900/50" : "bg-green-50 dark:bg-green-950/30 border-green-100 dark:border-green-900/50"}`}>
+                    <p className={`text-[11px] font-medium mb-0.5 ${avgDeviation > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>Desviación Promedio</p>
+                    <p className={`text-lg font-bold flex items-center gap-1 ${avgDeviation > 0 ? "text-red-900 dark:text-red-100" : "text-green-900 dark:text-green-100"}`}>
+                      {avgDeviation > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                      {Math.abs(avgDeviation).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/50">
+                    <p className="text-[11px] text-purple-600 dark:text-purple-400 font-medium mb-0.5">Horas: Ppto vs Real</p>
+                    <p className="text-lg font-bold text-purple-900 dark:text-purple-100">{totalBudgetedHours} / {totalActualHours}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Comparison Table */}
+            <Collapsible open={showComparison} onOpenChange={setShowComparison}>
+              <CollapsibleTrigger className="w-full">
+                <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors text-xs text-muted-foreground">
+                  <span className="font-medium">
+                    {showComparison ? "Ocultar" : "Ver"} detalle por proyecto ({comparisonData.length})
+                  </span>
+                  {showComparison ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="rounded-lg border overflow-hidden mt-2">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-muted/50 border-b">
+                          <th className="text-left p-3 font-medium text-muted-foreground text-xs">Proyecto</th>
+                          <th className="text-left p-3 font-medium text-muted-foreground text-xs hidden md:table-cell">Área</th>
+                          <th className="text-right p-3 font-medium text-muted-foreground text-xs">Presupuestado</th>
+                          <th className="text-right p-3 font-medium text-muted-foreground text-xs">Real</th>
+                          <th className="text-right p-3 font-medium text-muted-foreground text-xs">Desviación</th>
+                          <th className="text-center p-3 font-medium text-muted-foreground text-xs">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparisonData.map((item) => {
+                          const deviation = item.budgetedPrice > 0
+                            ? ((item.actualPrice - item.budgetedPrice) / item.budgetedPrice) * 100
+                            : 0;
+                          const progressPct = item.status === "in_progress"
+                            ? Math.min(100, (item.actualPrice / item.budgetedPrice) * 100)
+                            : 100;
+                          const dateObj = item.date ? new Date(item.date) : null;
+                          const dateLabel = dateObj && !isNaN(dateObj.getTime())
+                            ? dateObj.toLocaleDateString("es-ES", { month: "short", year: "numeric" })
+                            : "";
+
+                          return (
+                            <React.Fragment key={item.asuntoId}>
+                              <tr
+                                className="border-b hover:bg-muted/30 transition-colors cursor-pointer select-none"
+                                onClick={() => navigate(`/dashboard/asuntos/${item.asuntoId}`)}
+                              >
+                                <td className="p-3">
+                                  <p className="font-medium text-foreground text-xs leading-tight">{item.project}</p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    {item.displayId}{dateLabel ? ` · ${dateLabel}` : ""}
+                                    <span className="ml-1 text-muted-foreground/50">· clic para abrir asunto</span>
+                                  </p>
+                                </td>
+                                <td className="p-3 hidden md:table-cell">
+                                  <Badge variant="outline" className="text-[10px] font-normal">{item.area}</Badge>
+                                </td>
+                                <td className="p-3 text-right">
+                                  <p className="font-medium text-xs">${item.budgetedPrice.toLocaleString()}</p>
+                                  <p className="text-[11px] text-muted-foreground">{item.budgetedHours}h</p>
+                                </td>
+                                <td className="p-3 text-right">
+                                  <p className="font-medium text-xs">${item.actualPrice.toLocaleString()}</p>
+                                  <p className="text-[11px] text-muted-foreground">{item.actualHours}h</p>
+                                </td>
+                                <td className="p-3 text-right">
+                                  {item.status === "completed" || deviation > 0 ? (
+                                    <span className={`text-xs font-semibold ${deviation > 5 ? "text-red-600" : deviation < -5 ? "text-emerald-600" : "text-foreground"}`}>
+                                      {deviation > 0 ? "+" : ""}{deviation.toFixed(1)}%
+                                    </span>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      <span className="text-xs text-muted-foreground">{progressPct.toFixed(0)}%</span>
+                                      <div className="w-full bg-muted rounded-full h-1.5">
+                                        <div
+                                          className="bg-blue-500 h-1.5 rounded-full transition-all"
+                                          style={{ width: `${Math.min(100, progressPct)}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {item.status === "completed" ? (
+                                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
+                                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                                      Cerrado
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[10px]">
+                                      <Circle className="h-3 w-3 mr-1" />
+                                      En curso
+                                    </Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-3 text-center italic">
+                  Datos derivados de los asuntos reales (presupuesto = monto cotizado; real = horas y facturación registradas). Haz clic en una fila para abrir el asunto.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Tabs */}
@@ -1281,9 +1314,9 @@ const Pricing = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="hourly">Tarifa Horaria</SelectItem>
-                      <SelectItem value="fixed">Suma Alzada</SelectItem>
-                      <SelectItem value="value-based">Honorario de Éxito</SelectItem>
+                      <SelectItem value="hourly">Tarifa Fija Mensual</SelectItem>
+                      <SelectItem value="fixed">Hitos</SelectItem>
+                      <SelectItem value="value-based">Retainer</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
@@ -2343,9 +2376,9 @@ const Pricing = () => {
                           Modalidad de cobro:
                         </span>
                         <span className="font-medium">
-                          {billingMethod === "hourly" && "Tarifa Horaria"}
-                          {billingMethod === "fixed" && "Suma Alzada"}
-                          {billingMethod === "value-based" && "Honorario de Éxito"}
+                          {billingMethod === "hourly" && "Tarifa Fija Mensual"}
+                          {billingMethod === "fixed" && "Hitos"}
+                          {billingMethod === "value-based" && "Retainer"}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
@@ -2626,259 +2659,6 @@ const Pricing = () => {
             </Card>
           </div>
         </div>
-
-        {/* Comparison Section: Presupuestado vs Real */}
-        <Collapsible open={showComparison} onOpenChange={setShowComparison}>
-          <Card className="border-border/40 shadow-sm">
-            <CollapsibleTrigger className="w-full">
-              <CardHeader className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors rounded-t-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 shadow-sm">
-                      <GitCompare className="h-4 w-4 text-white" />
-                    </div>
-                    <div className="text-left">
-                      <CardTitle className="text-base">Presupuestado vs Real</CardTitle>
-                      <CardDescription className="text-xs">
-                        Seguimiento en tiempo real de cotizaciones contra facturación real
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                        {MOCK_COMPARISON_DATA.filter(d => d.status === "completed").length} completados
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Circle className="h-3 w-3 text-blue-500" />
-                        {MOCK_COMPARISON_DATA.filter(d => d.status === "in_progress").length} en curso
-                      </span>
-                    </div>
-                    {showComparison ? (
-                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent className="pt-0">
-                {/* Summary KPIs */}
-                {(() => {
-                  const completed = MOCK_COMPARISON_DATA.filter(d => d.status === "completed");
-                  const totalBudgeted = completed.reduce((s, d) => s + d.budgetedPrice, 0);
-                  const totalActual = completed.reduce((s, d) => s + d.actualPrice, 0);
-                  const avgDeviation = totalBudgeted > 0 ? ((totalActual - totalBudgeted) / totalBudgeted) * 100 : 0;
-                  const totalBudgetedHours = completed.reduce((s, d) => s + d.budgetedHours, 0);
-                  const totalActualHours = completed.reduce((s, d) => s + d.actualHours, 0);
-
-                  return (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                      <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50">
-                        <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium mb-0.5">Total Presupuestado</p>
-                        <p className="text-lg font-bold text-blue-900 dark:text-blue-100">${totalBudgeted.toLocaleString()}</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50">
-                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mb-0.5">Total Real</p>
-                        <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">${totalActual.toLocaleString()}</p>
-                      </div>
-                      <div className={`p-3 rounded-lg border ${avgDeviation > 0 ? "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900/50" : "bg-green-50 dark:bg-green-950/30 border-green-100 dark:border-green-900/50"}`}>
-                        <p className={`text-[11px] font-medium mb-0.5 ${avgDeviation > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>Desviación Promedio</p>
-                        <p className={`text-lg font-bold flex items-center gap-1 ${avgDeviation > 0 ? "text-red-900 dark:text-red-100" : "text-green-900 dark:text-green-100"}`}>
-                          {avgDeviation > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                          {Math.abs(avgDeviation).toFixed(1)}%
-                        </p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/50">
-                        <p className="text-[11px] text-purple-600 dark:text-purple-400 font-medium mb-0.5">Horas: Ppto vs Real</p>
-                        <p className="text-lg font-bold text-purple-900 dark:text-purple-100">{totalBudgetedHours} / {totalActualHours}</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Comparison Table */}
-                <div className="rounded-lg border overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-muted/50 border-b">
-                          <th className="text-left p-3 font-medium text-muted-foreground text-xs">Proyecto</th>
-                          <th className="text-left p-3 font-medium text-muted-foreground text-xs hidden md:table-cell">Área</th>
-                          <th className="text-right p-3 font-medium text-muted-foreground text-xs">Presupuestado</th>
-                          <th className="text-right p-3 font-medium text-muted-foreground text-xs">Real</th>
-                          <th className="text-right p-3 font-medium text-muted-foreground text-xs">Desviación</th>
-                          <th className="text-center p-3 font-medium text-muted-foreground text-xs">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {MOCK_COMPARISON_DATA.map((item) => {
-                          const deviation = item.budgetedPrice > 0
-                            ? ((item.actualPrice - item.budgetedPrice) / item.budgetedPrice) * 100
-                            : 0;
-                          const progressPct = item.status === "in_progress"
-                            ? Math.min(100, (item.actualPrice / item.budgetedPrice) * 100)
-                            : 100;
-                          const isExpanded = expandedComparisonId === item.id;
-
-                          return (
-                            <React.Fragment key={item.id}>
-                              <tr
-                                className={`border-b hover:bg-muted/30 transition-colors cursor-pointer select-none ${isExpanded ? "bg-muted/20" : ""}`}
-                                onDoubleClick={() => setExpandedComparisonId(isExpanded ? null : item.id)}
-                              >
-                                <td className="p-3">
-                                  <p className="font-medium text-foreground text-xs leading-tight">{item.project}</p>
-                                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                                    {item.id} · {new Date(item.date).toLocaleDateString("es-ES", { month: "short", year: "numeric" })}
-                                    <span className="ml-1 text-muted-foreground/50">· doble clic para detalle</span>
-                                  </p>
-                                </td>
-                                <td className="p-3 hidden md:table-cell">
-                                  <Badge variant="outline" className="text-[10px] font-normal">{item.area}</Badge>
-                                </td>
-                                <td className="p-3 text-right">
-                                  <p className="font-medium text-xs">${item.budgetedPrice.toLocaleString()}</p>
-                                  <p className="text-[11px] text-muted-foreground">{item.budgetedHours}h</p>
-                                </td>
-                                <td className="p-3 text-right">
-                                  <p className="font-medium text-xs">${item.actualPrice.toLocaleString()}</p>
-                                  <p className="text-[11px] text-muted-foreground">{item.actualHours}h</p>
-                                </td>
-                                <td className="p-3 text-right">
-                                  {item.status === "completed" ? (
-                                    <span className={`text-xs font-semibold ${deviation > 5 ? "text-red-600" : deviation < -5 ? "text-emerald-600" : "text-foreground"}`}>
-                                      {deviation > 0 ? "+" : ""}{deviation.toFixed(1)}%
-                                    </span>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      <span className="text-xs text-muted-foreground">{progressPct.toFixed(0)}%</span>
-                                      <div className="w-full bg-muted rounded-full h-1.5">
-                                        <div
-                                          className="bg-blue-500 h-1.5 rounded-full transition-all"
-                                          style={{ width: `${Math.min(100, progressPct)}%` }}
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
-                                </td>
-                                <td className="p-3 text-center">
-                                  {item.status === "completed" ? (
-                                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
-                                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                                      Cerrado
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[10px]">
-                                      <Circle className="h-3 w-3 mr-1" />
-                                      En curso
-                                    </Badge>
-                                  )}
-                                </td>
-                              </tr>
-                              {/* Expanded detail row */}
-                              {isExpanded && (
-                                <tr className="border-b bg-muted/10">
-                                  <td colSpan={6} className="p-0">
-                                    <div className="p-4 space-y-3">
-                                      <div className="flex items-center justify-between">
-                                        <p className="text-xs font-semibold text-foreground flex items-center gap-2">
-                                          <Users className="h-3.5 w-3.5" />
-                                          Desglose por Nivel de Senioridad
-                                        </p>
-                                        <button
-                                          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                                          onClick={() => setExpandedComparisonId(null)}
-                                        >
-                                          Cerrar
-                                        </button>
-                                      </div>
-                                      <div className="rounded-lg border overflow-hidden bg-background">
-                                        <table className="w-full text-xs">
-                                          <thead>
-                                            <tr className="bg-muted/40 border-b">
-                                              <th className="text-left p-2.5 font-medium text-muted-foreground">Nivel</th>
-                                              <th className="text-right p-2.5 font-medium text-muted-foreground">Horas Ppto</th>
-                                              <th className="text-right p-2.5 font-medium text-muted-foreground">Horas Real</th>
-                                              <th className="text-right p-2.5 font-medium text-muted-foreground">Desv. Horas</th>
-                                              <th className="text-right p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Tarifa Ppto</th>
-                                              <th className="text-right p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Tarifa Real</th>
-                                              <th className="text-right p-2.5 font-medium text-muted-foreground">Monto Ppto</th>
-                                              <th className="text-right p-2.5 font-medium text-muted-foreground">Monto Real</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {item.team.map((member) => {
-                                              const hoursDev = member.budgetedHours > 0
-                                                ? ((member.actualHours - member.budgetedHours) / member.budgetedHours) * 100
-                                                : 0;
-                                              const budgetedAmount = member.budgetedHours * member.budgetedRate;
-                                              const actualAmount = member.actualHours * member.actualRate;
-                                              return (
-                                                <tr key={member.level} className="border-b last:border-0 hover:bg-muted/20">
-                                                  <td className="p-2.5">
-                                                    <span className="font-medium text-foreground">{member.label}</span>
-                                                  </td>
-                                                  <td className="p-2.5 text-right font-medium">{member.budgetedHours}h</td>
-                                                  <td className="p-2.5 text-right font-medium">{member.actualHours}h</td>
-                                                  <td className="p-2.5 text-right">
-                                                    <span className={`font-semibold ${hoursDev > 5 ? "text-red-600" : hoursDev < -5 ? "text-emerald-600" : "text-foreground"}`}>
-                                                      {hoursDev > 0 ? "+" : ""}{hoursDev.toFixed(0)}%
-                                                    </span>
-                                                  </td>
-                                                  <td className="p-2.5 text-right text-muted-foreground hidden sm:table-cell">${member.budgetedRate.toLocaleString()}/h</td>
-                                                  <td className="p-2.5 text-right text-muted-foreground hidden sm:table-cell">${member.actualRate.toLocaleString()}/h</td>
-                                                  <td className="p-2.5 text-right font-medium">${budgetedAmount.toLocaleString()}</td>
-                                                  <td className="p-2.5 text-right font-medium">${actualAmount.toLocaleString()}</td>
-                                                </tr>
-                                              );
-                                            })}
-                                            {/* Totals row */}
-                                            <tr className="bg-muted/30 font-semibold">
-                                              <td className="p-2.5 text-foreground">Total</td>
-                                              <td className="p-2.5 text-right">{item.team.reduce((s, m) => s + m.budgetedHours, 0)}h</td>
-                                              <td className="p-2.5 text-right">{item.team.reduce((s, m) => s + m.actualHours, 0)}h</td>
-                                              <td className="p-2.5 text-right">
-                                                {(() => {
-                                                  const totalB = item.team.reduce((s, m) => s + m.budgetedHours, 0);
-                                                  const totalA = item.team.reduce((s, m) => s + m.actualHours, 0);
-                                                  const dev = totalB > 0 ? ((totalA - totalB) / totalB) * 100 : 0;
-                                                  return (
-                                                    <span className={dev > 5 ? "text-red-600" : dev < -5 ? "text-emerald-600" : ""}>
-                                                      {dev > 0 ? "+" : ""}{dev.toFixed(0)}%
-                                                    </span>
-                                                  );
-                                                })()}
-                                              </td>
-                                              <td className="p-2.5 hidden sm:table-cell"></td>
-                                              <td className="p-2.5 hidden sm:table-cell"></td>
-                                              <td className="p-2.5 text-right">${item.team.reduce((s, m) => s + m.budgetedHours * m.budgetedRate, 0).toLocaleString()}</td>
-                                              <td className="p-2.5 text-right">${item.team.reduce((s, m) => s + m.actualHours * m.actualRate, 0).toLocaleString()}</td>
-                                            </tr>
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-3 text-center italic">
-                  Datos de ejemplo. Próximamente se conectará con la base de datos para seguimiento en tiempo real.
-                </p>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
       </div>
     </DashboardLayout>
   );

@@ -51,7 +51,7 @@ const menuItems = [
   { title: "Planificación", url: "/dashboard/planificacion", icon: Target },
   { title: "Información Externa", url: "/dashboard/informacion-externa", icon: Globe },
   { title: "Alertas", url: "/dashboard/alertas", icon: Bell },
-  { title: "Cotizador", url: "/dashboard/pricing", icon: Calculator },
+  { title: "Pricing", url: "/dashboard/pricing", icon: Calculator },
   { title: "Reportes", url: "/dashboard/reportes", icon: FileText },
   { title: "Configuración", url: "/dashboard/settings", icon: Settings },
 ];
