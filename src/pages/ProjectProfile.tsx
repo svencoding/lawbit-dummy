@@ -44,6 +44,7 @@ import {
   getFacturacion,
   getUsuarios,
   getBudgetVsActualForAsunto,
+  getTaskDistributionForAsunto,
 } from "@/lib/mockDataUtils";
 
 function formatCurrency(value: number): string {
@@ -188,6 +189,11 @@ const ProjectProfile = () => {
   const budgetVsActual = useMemo(() => {
     if (!asuntoId) return null;
     return getBudgetVsActualForAsunto(parseInt(asuntoId, 10));
+  }, [asuntoId]);
+
+  const taskDistribution = useMemo(() => {
+    if (!asuntoId) return [];
+    return getTaskDistributionForAsunto(parseInt(asuntoId, 10));
   }, [asuntoId]);
 
   useEffect(() => {
@@ -656,6 +662,106 @@ const ProjectProfile = () => {
             </Card>
           );
         })()}
+
+        {/* Distribución por Tipo de Tarea */}
+        {taskDistribution.length > 0 && (
+          <Card className="border-border/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-foreground">Distribución por Tipo de Tarea</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Costo calculado a Hora Costo (USD {COST_RATE_USD}) para todos los niveles
+              </p>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="overflow-x-auto rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="h-9 px-2 text-xs font-semibold">Tipo de tarea</TableHead>
+                      <TableHead className="h-9 px-2 text-xs font-semibold text-right">Horas</TableHead>
+                      <TableHead className="h-9 px-2 text-xs font-semibold text-right">%</TableHead>
+                      <TableHead className="h-9 px-2 text-xs font-semibold text-right">Costo USD</TableHead>
+                      <TableHead className="h-9 px-2 text-xs font-semibold text-center">Señal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {taskDistribution.map((row) => {
+                      const signalConfig: Record<
+                        typeof row.signal,
+                        { label: string; className: string }
+                      > = {
+                        muy_alto: {
+                          label: "Muy alto",
+                          className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400",
+                        },
+                        alto: {
+                          label: "Alto",
+                          className: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400",
+                        },
+                        normal: {
+                          label: "Normal",
+                          className: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400",
+                        },
+                        bajo: {
+                          label: "—",
+                          className: "bg-muted text-muted-foreground border-border",
+                        },
+                      };
+                      const sig = signalConfig[row.signal];
+                      const totalRow = taskDistribution.reduce((s, r) => s + r.pct, 0);
+                      const widthPct = totalRow > 0 ? (row.pct / totalRow) * 100 : 0;
+                      return (
+                        <TableRow key={row.taskType} className="border-b h-8 hover:bg-muted/30 transition-colors">
+                          <TableCell className="px-2 py-1.5 text-xs font-medium">
+                            {row.taskType}
+                          </TableCell>
+                          <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
+                            {row.hours.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="hidden sm:block w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className="h-full bg-foreground/40"
+                                  style={{ width: `${widthPct}%` }}
+                                />
+                              </div>
+                              <span>{row.pct.toFixed(1)}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums font-medium">
+                            {Math.round(row.costUsd).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="px-2 py-1.5 text-center">
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] px-1.5 py-0 ${sig.className}`}
+                            >
+                              {sig.label}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    <TableRow className="bg-muted/30 font-semibold">
+                      <TableCell className="px-2 py-1.5 text-xs">Total</TableCell>
+                      <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
+                        {taskDistribution.reduce((s, r) => s + r.hours, 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
+                        100.0%
+                      </TableCell>
+                      <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
+                        {Math.round(taskDistribution.reduce((s, r) => s + r.costUsd, 0)).toLocaleString()}
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Distribución por Abogado */}
         <Card className="border-border/50">

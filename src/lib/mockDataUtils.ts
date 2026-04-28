@@ -2359,3 +2359,95 @@ export function getBudgetVsActualForAsunto(asuntoId: number): BudgetVsActualRow 
     lastActivity: lastEntry,
   };
 }
+
+// ============================================================================
+// Task type distribution per asunto
+// ============================================================================
+
+export interface TaskTypeRow {
+  taskType: string;
+  hours: number;
+  pct: number;
+  costUsd: number;
+  signal: "muy_alto" | "alto" | "normal" | "bajo";
+}
+
+const TASK_TYPES: { name: string; weight: number }[] = [
+  { name: "Revisión documental, IRL, VDR", weight: 45.4 },
+  { name: "Coordinación interna", weight: 20.0 },
+  { name: "Redacción / Reportes", weight: 15.5 },
+  { name: "Reuniones", weight: 14.5 },
+  { name: "Gestión cliente", weight: 2.0 },
+  { name: "Otros", weight: 1.4 },
+  { name: "Llamadas", weight: 0.9 },
+  { name: "Supervisión", weight: 0.3 },
+];
+
+const TASK_COST_RATE_USD = 160;
+
+function hashString(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+
+function pickTaskType(seed: string): string {
+  const total = TASK_TYPES.reduce((s, t) => s + t.weight, 0);
+  const r = (hashString(seed) % 10000) / 10000 * total;
+  let acc = 0;
+  for (const t of TASK_TYPES) {
+    acc += t.weight;
+    if (r < acc) return t.name;
+  }
+  return TASK_TYPES[TASK_TYPES.length - 1].name;
+}
+
+function classifySignal(pct: number, taskType: string): TaskTypeRow["signal"] {
+  // Industry benchmarks: review-type and meetings should stay moderate
+  const isReviewOrMeeting =
+    taskType === "Revisión documental, IRL, VDR" ||
+    taskType === "Reuniones" ||
+    taskType === "Coordinación interna";
+  if (isReviewOrMeeting) {
+    if (pct >= 30) return "muy_alto";
+    if (pct >= 15) return "alto";
+    if (pct >= 3) return "normal";
+    return "bajo";
+  }
+  if (pct >= 25) return "alto";
+  if (pct >= 3) return "normal";
+  return "bajo";
+}
+
+export function getTaskDistributionForAsunto(asuntoId: number): TaskTypeRow[] {
+  const entries = getTransformedTimeEntries().filter((e) => e.project_id === asuntoId);
+  if (entries.length === 0) return [];
+
+  const map = new Map<string, number>();
+  TASK_TYPES.forEach((t) => map.set(t.name, 0));
+
+  entries.forEach((e) => {
+    const seed = `${e.date}|${e.user_id}|${e.project_id}|${e.duration}`;
+    const taskType = pickTaskType(seed);
+    map.set(taskType, (map.get(taskType) || 0) + e.duration);
+  });
+
+  const totalHours = Array.from(map.values()).reduce((s, h) => s + h, 0);
+  const rows: TaskTypeRow[] = TASK_TYPES.map((t) => {
+    const hours = map.get(t.name) || 0;
+    const pct = totalHours > 0 ? (hours / totalHours) * 100 : 0;
+    return {
+      taskType: t.name,
+      hours,
+      pct,
+      costUsd: hours * TASK_COST_RATE_USD,
+      signal: classifySignal(pct, t.name),
+    };
+  });
+
+  rows.sort((a, b) => b.hours - a.hours);
+  return rows.filter((r) => r.hours > 0);
+}
