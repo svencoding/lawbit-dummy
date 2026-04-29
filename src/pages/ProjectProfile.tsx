@@ -74,8 +74,6 @@ const CATEGORY_TO_LEVEL_LABEL: Record<string, string> = {
 };
 type SortOrder = "asc" | "desc";
 
-const COST_RATE_USD = 160;
-
 const categoryColors: Record<string, string> = {
   Socio: "bg-amber-100 text-amber-800 border-amber-200",
   "Asociado Sr": "bg-blue-100 text-blue-800 border-blue-200",
@@ -219,7 +217,7 @@ const ProjectProfile = () => {
 
     const enriched = projectData.professionals.map((p) => {
       const valorReferencial = p.total_hours * p.rate;
-      const horaCosto = p.total_hours * COST_RATE_USD;
+      const horaCosto = p.total_cost;
       const pctHours = total > 0 ? (p.total_hours / total) * 100 : 0;
       const levelLabel = CATEGORY_TO_LEVEL_LABEL[p.category] ?? p.category;
       const levelBudget = budgetedHoursByLevel.get(levelLabel) ?? 0;
@@ -323,7 +321,7 @@ const ProjectProfile = () => {
     );
   }
 
-  const { asunto, cliente, totalHours, professionals } = projectData;
+  const { asunto, cliente, totalHours, totalCost, professionals } = projectData;
 
   // === Derived KPIs (mirroring the "Resumen Financiero" reference) ===
   const budgetedPrice = budgetVsActual?.budgetedPrice ?? 0;
@@ -332,7 +330,8 @@ const ProjectProfile = () => {
     (s, p) => s + p.total_hours * p.rate,
     0,
   );
-  const costoInternoReal = totalHours * COST_RATE_USD;
+  const costoInternoReal = totalCost;
+  const tarifaCostoPromedio = totalHours > 0 ? totalCost / totalHours : 0;
   const margenReal = budgetedPrice - costoInternoReal;
   const margenPct = budgetedPrice > 0 ? (margenReal / budgetedPrice) * 100 : 0;
   const overrunScope = budgetedPrice > 0 ? valorTrabajado / budgetedPrice : 0;
@@ -373,8 +372,11 @@ const ProjectProfile = () => {
           : "text-emerald-600 dark:text-emerald-400",
     },
     {
-      title: "Hora Costo (2025)",
-      value: `$${COST_RATE_USD}/h`,
+      title: "Tarifa costo prom.",
+      value:
+        tarifaCostoPromedio > 0
+          ? `$${Math.round(tarifaCostoPromedio).toLocaleString()}/h`
+          : "—",
       icon: Gauge,
     },
     {
@@ -504,7 +506,7 @@ const ProjectProfile = () => {
                 {fmtMoney(costoInternoReal)}
               </p>
               <p className="text-[10px] text-muted-foreground tabular-nums">
-                {totalHours.toFixed(2)}h × ${COST_RATE_USD}
+                {totalHours.toFixed(2)}h · tarifa costo por nivel
               </p>
             </div>
             <div className="p-4">
@@ -669,7 +671,7 @@ const ProjectProfile = () => {
             <CardHeader className="pb-3">
               <CardTitle className="text-foreground">Distribución por Tipo de Tarea</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Costo calculado a Hora Costo (USD {COST_RATE_USD}) para todos los niveles
+                Costo calculado con tarifa costo por nivel de senioridad
               </p>
             </CardHeader>
             <CardContent className="pt-0">
@@ -856,7 +858,7 @@ const ProjectProfile = () => {
                         className="flex items-center gap-1 ml-auto hover:text-foreground"
                         onClick={() => handleProfSort("total_cost")}
                       >
-                        Hora Costo (USD {COST_RATE_USD})
+                        Costo Real USD
                         <ArrowUpDown className="h-3 w-3" />
                       </button>
                     </TableHead>
