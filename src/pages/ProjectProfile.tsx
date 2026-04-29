@@ -191,8 +191,12 @@ const ProjectProfile = () => {
 
   const taskDistribution = useMemo(() => {
     if (!asuntoId) return [];
-    return getTaskDistributionForAsunto(parseInt(asuntoId, 10));
-  }, [asuntoId]);
+    const rows = getTaskDistributionForAsunto(parseInt(asuntoId, 10));
+    const projTotalHours = projectData?.totalHours ?? 0;
+    const projTotalCost = projectData?.totalCost ?? 0;
+    const blended = projTotalHours > 0 ? projTotalCost / projTotalHours : 0;
+    return rows.map((r) => ({ ...r, costUsd: r.hours * blended }));
+  }, [asuntoId, projectData]);
 
   useEffect(() => {
     if (user && asuntoId) {
@@ -616,8 +620,7 @@ const ProjectProfile = () => {
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Horas Ppto</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Horas Real</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Desv. Horas</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Tarifa Ppto</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Tarifa Real</th>
+                          <th className="text-right p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Tarifa Costo</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Monto Ppto</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Monto Real</th>
                         </tr>
@@ -627,7 +630,7 @@ const ProjectProfile = () => {
                           const hDev = m.budgetedHours > 0
                             ? ((m.actualHours - m.budgetedHours) / m.budgetedHours) * 100
                             : 0;
-                          const bAmt = m.budgetedCost;
+                          const bAmt = m.budgetedHours * m.actualRate;
                           const aAmt = m.actualCost;
                           return (
                             <tr key={m.level} className="border-b last:border-0 hover:bg-muted/20">
@@ -639,9 +642,8 @@ const ProjectProfile = () => {
                                   {hDev > 0 ? "+" : ""}{hDev.toFixed(0)}%
                                 </span>
                               </td>
-                              <td className="p-2.5 text-right text-muted-foreground hidden sm:table-cell">${m.budgetedRate.toLocaleString()}/h</td>
                               <td className="p-2.5 text-right text-muted-foreground hidden sm:table-cell">${m.actualRate.toLocaleString()}/h</td>
-                              <td className="p-2.5 text-right font-medium">${bAmt.toLocaleString()}</td>
+                              <td className="p-2.5 text-right font-medium">${Math.round(bAmt).toLocaleString()}</td>
                               <td className="p-2.5 text-right font-medium">${aAmt.toLocaleString()}</td>
                             </tr>
                           );
@@ -652,8 +654,7 @@ const ProjectProfile = () => {
                           <td className="p-2.5 text-right">{bva.team.reduce((s, m) => s + m.actualHours, 0)}h</td>
                           <td className="p-2.5"></td>
                           <td className="p-2.5 hidden sm:table-cell"></td>
-                          <td className="p-2.5 hidden sm:table-cell"></td>
-                          <td className="p-2.5 text-right">${bva.team.reduce((s, m) => s + m.budgetedCost, 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right">${Math.round(bva.team.reduce((s, m) => s + m.budgetedHours * m.actualRate, 0)).toLocaleString()}</td>
                           <td className="p-2.5 text-right">${bva.team.reduce((s, m) => s + m.actualCost, 0).toLocaleString()}</td>
                         </tr>
                       </tbody>
@@ -890,7 +891,7 @@ const ProjectProfile = () => {
                         <TableCell className="px-2 py-1">
                           <Badge
                             variant="outline"
-                            className={`text-[10px] px-1.5 py-0 ${
+                            className={`text-[10px] px-1.5 py-0 whitespace-nowrap ${
                               categoryColors[prof.category] || ""
                             }`}
                           >
