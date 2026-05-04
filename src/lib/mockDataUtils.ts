@@ -2451,3 +2451,52 @@ export function getTaskDistributionForAsunto(asuntoId: number): TaskTypeRow[] {
   rows.sort((a, b) => b.hours - a.hours);
   return rows.filter((r) => r.hours > 0);
 }
+
+export interface TaskTypeBreakdownRow {
+  user_id: number;
+  user_name: string;
+  category: string;
+  rate: number;
+  hours: number;
+  costUsd: number;
+  pct: number;
+}
+
+export function getTaskTypeBreakdownForAsunto(
+  asuntoId: number,
+  taskType: string,
+): TaskTypeBreakdownRow[] {
+  const entries = getTransformedTimeEntries().filter((e) => e.project_id === asuntoId);
+  if (entries.length === 0) return [];
+  const usuarios = getUsuarios();
+
+  const map = new Map<number, { hours: number; cost: number }>();
+  entries.forEach((e) => {
+    const seed = `${e.date}|${e.user_id}|${e.project_id}|${e.duration}`;
+    if (pickTaskType(seed) !== taskType) return;
+    const cost =
+      e.originalEntry.total_cost ?? e.duration * (e.originalEntry.hourly_cost || 0);
+    const cur = map.get(e.user_id) || { hours: 0, cost: 0 };
+    cur.hours += e.duration;
+    cur.cost += cost;
+    map.set(e.user_id, cur);
+  });
+
+  const totalHours = Array.from(map.values()).reduce((s, v) => s + v.hours, 0);
+  const rows: TaskTypeBreakdownRow[] = [];
+  map.forEach((v, user_id) => {
+    const u = usuarios.find((x) => x.id === user_id);
+    const blendedCost = v.hours > 0 ? v.cost : v.hours * TASK_COST_RATE_USD;
+    rows.push({
+      user_id,
+      user_name: u?.name || `Usuario ${user_id}`,
+      category: u?.category || "—",
+      rate: u?.rate || 0,
+      hours: v.hours,
+      costUsd: blendedCost,
+      pct: totalHours > 0 ? (v.hours / totalHours) * 100 : 0,
+    });
+  });
+  rows.sort((a, b) => b.hours - a.hours);
+  return rows;
+}

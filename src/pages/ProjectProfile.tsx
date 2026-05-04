@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, Fragment } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,6 +25,8 @@ import {
   TimerReset,
   Gauge,
   Scale,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +47,7 @@ import {
   getUsuarios,
   getBudgetVsActualForAsunto,
   getTaskDistributionForAsunto,
+  getTaskTypeBreakdownForAsunto,
 } from "@/lib/mockDataUtils";
 
 function formatCurrency(value: number): string {
@@ -90,6 +93,7 @@ const ProjectProfile = () => {
 
   const [profSortField, setProfSortField] = useState<ProfSortField>("total_hours");
   const [profSortOrder, setProfSortOrder] = useState<SortOrder>("desc");
+  const [expandedTaskType, setExpandedTaskType] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -325,7 +329,7 @@ const ProjectProfile = () => {
     );
   }
 
-  const { asunto, cliente, totalHours, totalCost, professionals } = projectData;
+  const { asunto, cliente, totalHours, professionals } = projectData;
 
   // === Derived KPIs (mirroring the "Resumen Financiero" reference) ===
   const budgetedPrice = budgetVsActual?.budgetedPrice ?? 0;
@@ -334,8 +338,9 @@ const ProjectProfile = () => {
     (s, p) => s + p.total_hours * p.rate,
     0,
   );
-  const costoInternoReal = totalCost;
-  const tarifaCostoPromedio = totalHours > 0 ? totalCost / totalHours : 0;
+  const HOURLY_COST_2026 = 170;
+  const costoInternoReal = totalHours * HOURLY_COST_2026;
+  const tarifaCostoPromedio = HOURLY_COST_2026;
   const margenReal = budgetedPrice - costoInternoReal;
   const margenPct = budgetedPrice > 0 ? (margenReal / budgetedPrice) * 100 : 0;
   const overrunScope = budgetedPrice > 0 ? valorTrabajado / budgetedPrice : 0;
@@ -355,7 +360,7 @@ const ProjectProfile = () => {
   const secondaryKpis = [
     {
       title: "Horas trabajadas",
-      value: totalHours.toFixed(2),
+      value: Math.round(totalHours).toString(),
       icon: Clock,
     },
     {
@@ -367,7 +372,7 @@ const ProjectProfile = () => {
       title: "Horas excedidas",
       value:
         budgetedHours > 0
-          ? `${horasExcedidas > 0 ? "+" : ""}${horasExcedidas.toFixed(2)}h`
+          ? `${horasExcedidas > 0 ? "+" : ""}${Math.round(horasExcedidas)}h`
           : "—",
       icon: TimerReset,
       tone:
@@ -376,7 +381,7 @@ const ProjectProfile = () => {
           : "text-emerald-600 dark:text-emerald-400",
     },
     {
-      title: "Tarifa costo prom.",
+      title: "Valor Hora Costo 2026",
       value:
         tarifaCostoPromedio > 0
           ? `$${Math.round(tarifaCostoPromedio).toLocaleString()}/h`
@@ -505,12 +510,12 @@ const ProjectProfile = () => {
               <p className="text-[10px] text-muted-foreground">Σ horas × tarifa</p>
             </div>
             <div className="p-4">
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Costo interno</p>
+              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Valor Hora Costo 2026</p>
               <p className="text-xl font-semibold mt-0.5 tabular-nums">
                 {fmtMoney(costoInternoReal)}
               </p>
               <p className="text-[10px] text-muted-foreground tabular-nums">
-                {totalHours.toFixed(2)}h · tarifa costo por nivel
+                {Math.round(totalHours)} horas × $170
               </p>
             </div>
             <div className="p-4">
@@ -630,8 +635,8 @@ const ProjectProfile = () => {
                           const hDev = m.budgetedHours > 0
                             ? ((m.actualHours - m.budgetedHours) / m.budgetedHours) * 100
                             : 0;
-                          const bAmt = m.budgetedHours * m.actualRate;
-                          const aAmt = m.actualCost;
+                          const bAmt = m.budgetedHours * HOURLY_COST_2026;
+                          const aAmt = m.actualHours * HOURLY_COST_2026;
                           return (
                             <tr key={m.level} className="border-b last:border-0 hover:bg-muted/20">
                               <td className="p-2.5 font-medium text-foreground">{m.label}</td>
@@ -642,9 +647,9 @@ const ProjectProfile = () => {
                                   {hDev > 0 ? "+" : ""}{hDev.toFixed(0)}%
                                 </span>
                               </td>
-                              <td className="p-2.5 text-right text-muted-foreground hidden sm:table-cell">${m.actualRate.toLocaleString()}/h</td>
+                              <td className="p-2.5 text-right text-muted-foreground hidden sm:table-cell">${HOURLY_COST_2026}/h</td>
                               <td className="p-2.5 text-right font-medium">${Math.round(bAmt).toLocaleString()}</td>
-                              <td className="p-2.5 text-right font-medium">${aAmt.toLocaleString()}</td>
+                              <td className="p-2.5 text-right font-medium">${Math.round(aAmt).toLocaleString()}</td>
                             </tr>
                           );
                         })}
@@ -654,8 +659,8 @@ const ProjectProfile = () => {
                           <td className="p-2.5 text-right">{bva.team.reduce((s, m) => s + m.actualHours, 0)}h</td>
                           <td className="p-2.5"></td>
                           <td className="p-2.5 hidden sm:table-cell"></td>
-                          <td className="p-2.5 text-right">${Math.round(bva.team.reduce((s, m) => s + m.budgetedHours * m.actualRate, 0)).toLocaleString()}</td>
-                          <td className="p-2.5 text-right">${bva.team.reduce((s, m) => s + m.actualCost, 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right">${Math.round(bva.team.reduce((s, m) => s + m.budgetedHours * HOURLY_COST_2026, 0)).toLocaleString()}</td>
+                          <td className="p-2.5 text-right">${Math.round(bva.team.reduce((s, m) => s + m.actualHours * HOURLY_COST_2026, 0)).toLocaleString()}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -713,37 +718,115 @@ const ProjectProfile = () => {
                       const sig = signalConfig[row.signal];
                       const totalRow = taskDistribution.reduce((s, r) => s + r.pct, 0);
                       const widthPct = totalRow > 0 ? (row.pct / totalRow) * 100 : 0;
+                      const isExpanded = expandedTaskType === row.taskType;
+                      const breakdown = isExpanded && asuntoId
+                        ? getTaskTypeBreakdownForAsunto(parseInt(asuntoId, 10), row.taskType)
+                        : [];
                       return (
-                        <TableRow key={row.taskType} className="border-b h-8 hover:bg-muted/30 transition-colors">
-                          <TableCell className="px-2 py-1.5 text-xs font-medium">
-                            {row.taskType}
-                          </TableCell>
-                          <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
-                            {row.hours.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="hidden sm:block w-16 h-1.5 rounded-full bg-muted overflow-hidden">
-                                <div
-                                  className="h-full bg-foreground/40"
-                                  style={{ width: `${widthPct}%` }}
-                                />
+                        <Fragment key={row.taskType}>
+                          <TableRow
+                            className="border-b h-8 hover:bg-muted/30 transition-colors cursor-pointer"
+                            onClick={() =>
+                              setExpandedTaskType((cur) =>
+                                cur === row.taskType ? null : row.taskType,
+                              )
+                            }
+                          >
+                            <TableCell className="px-2 py-1.5 text-xs font-medium">
+                              <div className="flex items-center gap-1">
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                )}
+                                {row.taskType}
                               </div>
-                              <span>{row.pct.toFixed(1)}%</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums font-medium">
-                            {Math.round(row.costUsd).toLocaleString()}
-                          </TableCell>
-                          <TableCell className="px-2 py-1.5 text-center">
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] px-1.5 py-0 ${sig.className}`}
-                            >
-                              {sig.label}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
+                            </TableCell>
+                            <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
+                              {row.hours.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="hidden sm:block w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className="h-full bg-foreground/40"
+                                    style={{ width: `${widthPct}%` }}
+                                  />
+                                </div>
+                                <span>{row.pct.toFixed(1)}%</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums font-medium">
+                              {Math.round(row.costUsd).toLocaleString()}
+                            </TableCell>
+                            <TableCell className="px-2 py-1.5 text-center">
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] px-1.5 py-0 ${sig.className}`}
+                              >
+                                {sig.label}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                          {isExpanded && (
+                            <TableRow className="bg-muted/20 hover:bg-muted/20">
+                              <TableCell colSpan={5} className="p-0">
+                                <div className="px-4 py-3">
+                                  <div className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+                                    Detalle por profesional · {row.taskType}
+                                  </div>
+                                  {breakdown.length === 0 ? (
+                                    <div className="text-xs text-muted-foreground py-2">
+                                      Sin registros para esta tarea.
+                                    </div>
+                                  ) : (
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow className="border-b">
+                                          <TableHead className="h-7 px-2 text-[10px] font-semibold">Profesional</TableHead>
+                                          <TableHead className="h-7 px-2 text-[10px] font-semibold">Senioridad</TableHead>
+                                          <TableHead className="h-7 px-2 text-[10px] font-semibold text-right">Tarifa</TableHead>
+                                          <TableHead className="h-7 px-2 text-[10px] font-semibold text-right">Horas</TableHead>
+                                          <TableHead className="h-7 px-2 text-[10px] font-semibold text-right">% tarea</TableHead>
+                                          <TableHead className="h-7 px-2 text-[10px] font-semibold text-right">Costo USD</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {breakdown.map((b) => (
+                                          <TableRow key={b.user_id} className="border-b h-7">
+                                            <TableCell className="px-2 py-1 text-xs font-medium">
+                                              {b.user_name}
+                                            </TableCell>
+                                            <TableCell className="px-2 py-1 text-xs">
+                                              <Badge
+                                                variant="outline"
+                                                className={`text-[10px] px-1.5 py-0 ${categoryColors[b.category] || ""}`}
+                                              >
+                                                {b.category}
+                                              </Badge>
+                                            </TableCell>
+                                            <TableCell className="px-2 py-1 text-xs text-right tabular-nums text-muted-foreground">
+                                              {formatCurrency(b.rate)}/h
+                                            </TableCell>
+                                            <TableCell className="px-2 py-1 text-xs text-right tabular-nums">
+                                              {b.hours.toFixed(2)}
+                                            </TableCell>
+                                            <TableCell className="px-2 py-1 text-xs text-right tabular-nums">
+                                              {b.pct.toFixed(1)}%
+                                            </TableCell>
+                                            <TableCell className="px-2 py-1 text-xs text-right tabular-nums font-medium">
+                                              {Math.round(b.costUsd).toLocaleString()}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
                       );
                     })}
                     <TableRow className="bg-muted/30 font-semibold">
@@ -880,7 +963,14 @@ const ProjectProfile = () => {
                       <TableRow
                         key={prof.user_id}
                         className="border-b h-8 cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => navigate(`/user/${prof.user_code}`)}
+                        onClick={() => {
+                          const params = new URLSearchParams();
+                          params.set("projectId", String(asunto.id));
+                          if (asunto.title) params.set("projectName", asunto.title);
+                          if (cliente?.id != null) params.set("clientId", String(cliente.id));
+                          if (cliente?.name) params.set("clientName", cliente.name);
+                          navigate(`/user/${prof.user_code}?${params.toString()}`);
+                        }}
                       >
                         <TableCell className="px-2 py-1 text-xs font-medium">
                           {index + 1}

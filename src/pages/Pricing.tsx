@@ -52,6 +52,7 @@ import { getAreaColor } from "@/lib/constants";
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
@@ -1162,6 +1163,7 @@ const Pricing = () => {
                           const progressPct = item.status === "in_progress"
                             ? Math.min(100, (item.actualPrice / item.budgetedPrice) * 100)
                             : 100;
+                          const isAlert = item.status === "in_progress" && deviation > 100;
                           const dateObj = item.date ? new Date(item.date) : null;
                           const dateLabel = dateObj && !isNaN(dateObj.getTime())
                             ? dateObj.toLocaleDateString("es-ES", { month: "short", year: "numeric" })
@@ -1174,7 +1176,21 @@ const Pricing = () => {
                                 onClick={() => navigate(`/dashboard/asuntos/${item.asuntoId}`)}
                               >
                                 <td className="p-3">
-                                  <p className="font-medium text-foreground text-xs leading-tight">{item.project}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="font-medium text-foreground text-xs leading-tight">{item.project}</p>
+                                    {isAlert && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <AlertTriangle className="h-3 w-3 text-red-600 dark:text-red-400 shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p className="text-xs">Alerta: desviación supera el 100% y el asunto sigue abierto</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                  </div>
                                   <p className="text-[11px] text-muted-foreground mt-0.5">
                                     {item.displayId}{dateLabel ? ` · ${dateLabel}` : ""}
                                     <span className="ml-1 text-muted-foreground/50">· clic para abrir asunto</span>
@@ -1213,6 +1229,11 @@ const Pricing = () => {
                                     <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
                                       <CheckCircle2 className="h-3 w-3 mr-1" />
                                       Cerrado
+                                    </Badge>
+                                  ) : isAlert ? (
+                                    <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">
+                                      <AlertTriangle className="h-3 w-3 mr-1" />
+                                      Alerta
                                     </Badge>
                                   ) : (
                                     <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[10px]">

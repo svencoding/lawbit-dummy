@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -112,6 +112,23 @@ const UserProfile = () => {
   const { userCode } = useParams<{ userCode: string }>();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterProjectId = searchParams.get("projectId");
+  const filterProjectName = searchParams.get("projectName");
+  const filterClientId = searchParams.get("clientId");
+  const filterClientName = searchParams.get("clientName");
+  const clearProjectFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("projectId");
+    next.delete("projectName");
+    setSearchParams(next, { replace: true });
+  };
+  const clearClientFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("clientId");
+    next.delete("clientName");
+    setSearchParams(next, { replace: true });
+  };
   const [profileData, setProfileData] = useState<{
     user_id: number;
     user_name: string;
@@ -154,6 +171,9 @@ const UserProfile = () => {
   const [clientsSortOrder, setClientsSortOrder] = useState<SortOrder>("desc");
   const [clientsCurrentPage, setClientsCurrentPage] = useState(1);
 
+  // Time entries table state
+  const [entriesCurrentPage, setEntriesCurrentPage] = useState(1);
+
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/auth");
@@ -188,6 +208,13 @@ const UserProfile = () => {
   const filteredAndSortedProjects = useMemo(() => {
     if (!profileData) return [];
     let filtered = [...profileData.projects];
+
+    if (filterProjectId) {
+      const id = parseInt(filterProjectId, 10);
+      filtered = filtered.filter((p) => p.project_id === id);
+    } else if (filterClientName) {
+      filtered = filtered.filter((p) => p.client_name === filterClientName);
+    }
 
     // Apply search filter
     if (projectsSearchTerm) {
@@ -234,7 +261,7 @@ const UserProfile = () => {
     });
 
     return filtered;
-  }, [profileData, projectsSearchTerm, projectsSortField, projectsSortOrder]);
+  }, [profileData, projectsSearchTerm, projectsSortField, projectsSortOrder, filterProjectId, filterClientName]);
 
   // Paginate projects
   const paginatedProjects = useMemo(() => {
@@ -253,6 +280,10 @@ const UserProfile = () => {
   const filteredAndSortedClients = useMemo(() => {
     if (!profileData) return [];
     let filtered = [...profileData.clients];
+
+    if (filterClientName) {
+      filtered = filtered.filter((c) => c.client_name === filterClientName);
+    }
 
     // Apply search filter
     if (clientsSearchTerm) {
@@ -296,7 +327,7 @@ const UserProfile = () => {
     });
 
     return filtered;
-  }, [profileData, clientsSearchTerm, clientsSortField, clientsSortOrder]);
+  }, [profileData, clientsSearchTerm, clientsSortField, clientsSortOrder, filterClientName]);
 
   // Paginate clients
   const paginatedClients = useMemo(() => {
@@ -310,6 +341,94 @@ const UserProfile = () => {
   const clientsTotalPages = Math.ceil(
     filteredAndSortedClients.length / ITEMS_PER_PAGE
   );
+
+  // Time entries (raw, filtered by user + active project/client filter)
+  const filteredTimeEntries = useMemo(() => {
+    if (!profileData || !userCode) return [];
+    const all = getRawTimeEntries().filter(
+      (e) => e.user_name === userCode,
+    );
+
+    let filtered = all;
+    if (filterProjectId) {
+      const pid = parseInt(filterProjectId, 10);
+      filtered = filtered.filter((e) => Number(e.asunto_id) === pid);
+    } else if (filterClientName) {
+      const projectIdsForClient = new Set(
+        profileData.projects
+          .filter((p) => p.client_name === filterClientName)
+          .map((p) => p.project_id),
+      );
+      filtered = filtered.filter((e) =>
+        projectIdsForClient.has(Number(e.asunto_id)),
+      );
+    }
+
+    const MAX_HOURS_PER_DAY = 8;
+    const split: Array<{
+      date: Date;
+      asunto_id: number | string;
+      hours: number;
+      billable: number;
+      nonBillable: number;
+      cost: number;
+      production: number;
+    }> = [];
+
+    filtered.forEach((e) => {
+      const baseDate = normalizeDate(e.date);
+      if (!baseDate) return;
+      const totalHours = Number(e.hours ?? 0);
+      if (totalHours <= 0) return;
+
+      const totalBillable = Number((e as any).billable_hours ?? e.billable_hour ?? 0);
+      const totalNonBillable = Number((e as any).non_billable_hours ?? e.non_billable ?? 0);
+      const totalCost = Number(e.total_cost ?? 0);
+      const totalProduction = Number(e.production ?? 0);
+
+      let remaining = totalHours;
+      let cursor = new Date(baseDate);
+      while (remaining > 0) {
+        const day = cursor.getDay();
+        if (day !== 0 && day !== 6) {
+          const h = Math.min(MAX_HOURS_PER_DAY, remaining);
+          const ratio = h / totalHours;
+          split.push({
+            date: new Date(cursor),
+            asunto_id: e.asunto_id,
+            hours: h,
+            billable: totalBillable * ratio,
+            nonBillable: totalNonBillable * ratio,
+            cost: totalCost * ratio,
+            production: totalProduction * ratio,
+          });
+          remaining -= h;
+        }
+        cursor.setDate(cursor.getDate() - 1);
+      }
+    });
+
+    return split.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [profileData, userCode, filterProjectId, filterClientName]);
+
+  const paginatedEntries = useMemo(() => {
+    const startIndex = (entriesCurrentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTimeEntries.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredTimeEntries, entriesCurrentPage]);
+
+  const entriesTotalPages = Math.ceil(
+    filteredTimeEntries.length / ITEMS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setEntriesCurrentPage(1);
+  }, [filterProjectId, filterClientName]);
+
+  const projectNameByAsuntoId = useMemo(() => {
+    const map = new Map<number, string>();
+    profileData?.projects.forEach((p) => map.set(p.project_id, p.project_name));
+    return map;
+  }, [profileData]);
 
   const handleProjectsSort = (field: ProjectSortField) => {
     if (projectsSortField === field) {
@@ -575,6 +694,43 @@ const UserProfile = () => {
             </div>
           </div>
         </div>
+
+        {/* Active filter chips (from ProjectProfile click-through) */}
+        {(filterProjectName || filterClientName) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Filtrado por:</span>
+            {filterProjectName && (
+              <Badge
+                variant="secondary"
+                className="text-xs gap-1.5 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
+              >
+                Proyecto: {filterProjectName}
+                <button
+                  onClick={clearProjectFilter}
+                  className="hover:text-foreground"
+                  aria-label="Quitar filtro de proyecto"
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+            {filterClientName && (
+              <Badge
+                variant="secondary"
+                className="text-xs gap-1.5 bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400"
+              >
+                Cliente: {filterClientName}
+                <button
+                  onClick={clearClientFilter}
+                  className="hover:text-foreground"
+                  aria-label="Quitar filtro de cliente"
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -958,6 +1114,137 @@ const UserProfile = () => {
             ) : (
               <p className="text-center text-muted-foreground py-8">
                 No hay clientes registrados
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Time entries detail */}
+        <Card className="border-border/40 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle className="text-foreground text-base">Detalle de horas</CardTitle>
+                <CardDescription className="text-xs">
+                  {filteredTimeEntries.length} registros
+                  {filterProjectName ? ` · ${filterProjectName}` : ""}
+                  {!filterProjectName && filterClientName ? ` · ${filterClientName}` : ""}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {filteredTimeEntries.length > 0 ? (
+              <>
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Fecha</TableHead>
+                        <TableHead className="text-xs">Proyecto</TableHead>
+                        <TableHead className="text-right text-xs">Horas</TableHead>
+                        <TableHead className="text-right text-xs">Billable</TableHead>
+                        <TableHead className="text-right text-xs">No billable</TableHead>
+                        <TableHead className="text-right text-xs">Costo</TableHead>
+                        <TableHead className="text-right text-xs">Producción</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedEntries.map((entry, idx) => {
+                        const dateLabel = entry.date.toLocaleDateString("es-ES", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        });
+                        const projectName =
+                          projectNameByAsuntoId.get(Number(entry.asunto_id)) ??
+                          `Asunto ${entry.asunto_id}`;
+                        const fmtHours = (h: number) =>
+                          h % 1 === 0 ? `${h}h` : `${h.toFixed(1)}h`;
+                        return (
+                          <TableRow key={`${entry.date.toISOString()}-${entry.asunto_id}-${idx}`}>
+                            <TableCell className="text-xs whitespace-nowrap">{dateLabel}</TableCell>
+                            <TableCell className="text-xs">
+                              <span className="font-medium">{projectName}</span>
+                            </TableCell>
+                            <TableCell className="text-right text-xs tabular-nums">{fmtHours(entry.hours)}</TableCell>
+                            <TableCell className="text-right text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
+                              {entry.billable > 0 ? fmtHours(entry.billable) : "—"}
+                            </TableCell>
+                            <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
+                              {entry.nonBillable > 0 ? fmtHours(entry.nonBillable) : "—"}
+                            </TableCell>
+                            <TableCell className="text-right text-xs tabular-nums">
+                              ${Math.round(entry.cost).toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right text-xs tabular-nums">
+                              ${Math.round(entry.production).toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                {entriesTotalPages > 1 && (
+                  <div className="mt-4 flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() =>
+                              setEntriesCurrentPage((prev) => Math.max(1, prev - 1))
+                            }
+                            className={
+                              entriesCurrentPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                        {Array.from({ length: entriesTotalPages }, (_, i) => i + 1)
+                          .filter(
+                            (page) =>
+                              page === 1 ||
+                              page === entriesTotalPages ||
+                              Math.abs(page - entriesCurrentPage) <= 1,
+                          )
+                          .map((page, i, arr) => (
+                            <PaginationItem key={page}>
+                              {i > 0 && page - arr[i - 1] > 1 && (
+                                <span className="px-2 text-muted-foreground">…</span>
+                              )}
+                              <PaginationLink
+                                onClick={() => setEntriesCurrentPage(page)}
+                                isActive={page === entriesCurrentPage}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() =>
+                              setEntriesCurrentPage((prev) =>
+                                Math.min(entriesTotalPages, prev + 1),
+                              )
+                            }
+                            className={
+                              entriesCurrentPage === entriesTotalPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-muted-foreground py-8 text-sm">
+                No hay registros de horas para los filtros seleccionados
               </p>
             )}
           </CardContent>
