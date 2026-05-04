@@ -33,6 +33,7 @@ import {
   getUserProfileData,
   getUsuarios,
   getRawTimeEntries,
+  getTimeEntryDescription,
 } from "@/lib/mockDataUtils";
 import { Badge } from "@/components/ui/badge";
 import type { TimeEntry as RelationalTimeEntry } from "@/lib/mock/types";
@@ -373,6 +374,8 @@ const UserProfile = () => {
       nonBillable: number;
       cost: number;
       production: number;
+      description: string;
+      taskType: string;
     }> = [];
 
     filtered.forEach((e) => {
@@ -385,6 +388,12 @@ const UserProfile = () => {
       const totalNonBillable = Number((e as any).non_billable_hours ?? e.non_billable ?? 0);
       const totalCost = Number(e.total_cost ?? 0);
       const totalProduction = Number(e.production ?? 0);
+      const { taskType, description } = getTimeEntryDescription(
+        e.date,
+        e.user_name,
+        e.asunto_id,
+        totalHours,
+      );
 
       let remaining = totalHours;
       let cursor = new Date(baseDate);
@@ -401,6 +410,8 @@ const UserProfile = () => {
             nonBillable: totalNonBillable * ratio,
             cost: totalCost * ratio,
             production: totalProduction * ratio,
+            description,
+            taskType,
           });
           remaining -= h;
         }
@@ -1142,6 +1153,7 @@ const UserProfile = () => {
                       <TableRow>
                         <TableHead className="text-xs">Fecha</TableHead>
                         <TableHead className="text-xs">Proyecto</TableHead>
+                        <TableHead className="text-xs">Descripción</TableHead>
                         <TableHead className="text-right text-xs">Horas</TableHead>
                         <TableHead className="text-right text-xs">Billable</TableHead>
                         <TableHead className="text-right text-xs">No billable</TableHead>
@@ -1166,6 +1178,12 @@ const UserProfile = () => {
                             <TableCell className="text-xs whitespace-nowrap">{dateLabel}</TableCell>
                             <TableCell className="text-xs">
                               <span className="font-medium">{projectName}</span>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div className="flex flex-col">
+                                <span className="text-foreground">{entry.description}</span>
+                                <span className="text-[10px] text-muted-foreground">{entry.taskType}</span>
+                              </div>
                             </TableCell>
                             <TableCell className="text-right text-xs tabular-nums">{fmtHours(entry.hours)}</TableCell>
                             <TableCell className="text-right text-xs tabular-nums text-emerald-600 dark:text-emerald-400">

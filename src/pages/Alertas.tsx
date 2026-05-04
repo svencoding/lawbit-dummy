@@ -36,8 +36,10 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { getBudgetVsActualComparison } from "@/lib/mockDataUtils";
-import type { BudgetVsActualRow } from "@/lib/mockDataUtils";
+import { getBudgetVsActualComparison, getTaskDistributionForAsunto } from "@/lib/mockDataUtils";
+import type { BudgetVsActualRow, TaskTypeRow } from "@/lib/mockDataUtils";
+import jsPDF from "jspdf";
+import { Download } from "lucide-react";
 
 interface MonthlyRetainer {
   id: string;
@@ -785,6 +787,295 @@ const Alertas = () => {
   );
 };
 
+type AlertPdfContent = {
+  subject: string;
+  severity: "critical" | "warning" | "info";
+  category: string;
+  intro: string;
+  recommendations: string[];
+  highlights: { label: string; value: string; tone?: "neutral" | "negative" | "positive" }[];
+  rows: { label: string; value: string }[];
+  team?: { level: string; label: string; budgetedHours: number; actualHours: number }[];
+  tasks?: TaskTypeRow[];
+};
+
+const SEVERITY_STYLE: Record<
+  AlertPdfContent["severity"],
+  { label: string; rgb: [number, number, number]; soft: [number, number, number] }
+> = {
+  critical: { label: "CRÍTICA", rgb: [220, 38, 38], soft: [254, 226, 226] },
+  warning: { label: "ADVERTENCIA", rgb: [217, 119, 6], soft: [254, 243, 199] },
+  info: { label: "INFORMATIVA", rgb: [37, 99, 235], soft: [219, 234, 254] },
+};
+
+const downloadAlertPdf = (content: AlertPdfContent, recipient: string) => {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const maxWidth = pageWidth - margin * 2;
+  const sev = SEVERITY_STYLE[content.severity];
+
+  const ensureSpace = (needed: number, y: number): number => {
+    if (y + needed > pageHeight - 18) {
+      doc.addPage();
+      return 22;
+    }
+    return y;
+  };
+
+  // === Top severity bar ===
+  doc.setFillColor(sev.rgb[0], sev.rgb[1], sev.rgb[2]);
+  doc.rect(0, 0, pageWidth, 14, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`ALERTA ${sev.label}`, margin, 9);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text(content.category.toUpperCase(), pageWidth - margin, 9, { align: "right" });
+
+  let y = 24;
+
+  // === Subject ===
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(17, 24, 39);
+  const subjectLines = doc.splitTextToSize(content.subject, maxWidth);
+  doc.text(subjectLines, margin, y);
+  y += subjectLines.length * 6 + 2;
+
+  // === Email metadata ===
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(107, 114, 128);
+  doc.text(
+    `De: alertas@lawbit.app  ·  Para: ${recipient}  ·  ${format(new Date(), "dd MMM yyyy HH:mm", { locale: es })}`,
+    margin,
+    y,
+  );
+  y += 7;
+
+  // === Highlight cards ===
+  if (content.highlights && content.highlights.length > 0) {
+    const cardCount = content.highlights.length;
+    const gap = 3;
+    const cardW = (maxWidth - gap * (cardCount - 1)) / cardCount;
+    const cardH = 18;
+    content.highlights.forEach((h, i) => {
+      const x = margin + i * (cardW + gap);
+      const tone = h.tone || "neutral";
+      const fill: [number, number, number] =
+        tone === "negative"
+          ? [254, 226, 226]
+          : tone === "positive"
+          ? [220, 252, 231]
+          : [243, 244, 246];
+      const text: [number, number, number] =
+        tone === "negative"
+          ? [185, 28, 28]
+          : tone === "positive"
+          ? [22, 101, 52]
+          : [55, 65, 81];
+      doc.setFillColor(...fill);
+      doc.roundedRect(x, y, cardW, cardH, 1.5, 1.5, "F");
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(107, 114, 128);
+      doc.text(h.label.toUpperCase(), x + 3, y + 5);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(...text);
+      doc.text(h.value, x + 3, y + 13);
+    });
+    y += cardH + 6;
+  }
+
+  // === Intro / context ===
+  y = ensureSpace(20, y);
+  doc.setFillColor(sev.soft[0], sev.soft[1], sev.soft[2]);
+  doc.setDrawColor(sev.rgb[0], sev.rgb[1], sev.rgb[2]);
+  const introLines = doc.splitTextToSize(content.intro, maxWidth - 6);
+  const introH = introLines.length * 4.2 + 6;
+  doc.roundedRect(margin, y, maxWidth, introH, 1.5, 1.5, "FD");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(31, 41, 55);
+  doc.text(introLines, margin + 3, y + 5);
+  y += introH + 6;
+
+  // === Section helper ===
+  const sectionTitle = (label: string) => {
+    y = ensureSpace(10, y);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(17, 24, 39);
+    doc.text(label, margin, y);
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + 1.5, pageWidth - margin, y + 1.5);
+    y += 6;
+  };
+
+  // === Detalle (key/value rows with zebra) ===
+  sectionTitle("Detalle de la alerta");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  content.rows.forEach((row, i) => {
+    y = ensureSpace(7, y);
+    if (i % 2 === 0) {
+      doc.setFillColor(249, 250, 251);
+      doc.rect(margin, y - 4, maxWidth, 6.5, "F");
+    }
+    doc.setTextColor(107, 114, 128);
+    doc.text(row.label, margin + 2, y);
+    doc.setTextColor(31, 41, 55);
+    doc.setFont("helvetica", "bold");
+    const valueLines = doc.splitTextToSize(row.value, maxWidth - 80);
+    doc.text(valueLines, margin + 70, y);
+    doc.setFont("helvetica", "normal");
+    y += Math.max(6.5, valueLines.length * 4.5);
+  });
+  y += 4;
+
+  // === Recomendaciones ===
+  if (content.recommendations && content.recommendations.length > 0) {
+    sectionTitle("Acciones recomendadas");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(31, 41, 55);
+    content.recommendations.forEach((rec) => {
+      const lines = doc.splitTextToSize(rec, maxWidth - 6);
+      const h = lines.length * 4.2 + 1;
+      y = ensureSpace(h, y);
+      doc.setFillColor(sev.rgb[0], sev.rgb[1], sev.rgb[2]);
+      doc.circle(margin + 1.5, y - 1.5, 0.9, "F");
+      doc.text(lines, margin + 5, y);
+      y += h;
+    });
+    y += 4;
+  }
+
+  // === Equipo ===
+  if (content.team && content.team.length > 0) {
+    sectionTitle("Desglose por equipo");
+    const colX = [margin + 2, margin + 90, margin + 120, margin + 150];
+    doc.setFillColor(243, 244, 246);
+    doc.rect(margin, y - 4, maxWidth, 6, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(75, 85, 99);
+    doc.text("NIVEL", colX[0], y);
+    doc.text("PPTO H", colX[1], y, { align: "right" });
+    doc.text("REAL H", colX[2], y, { align: "right" });
+    doc.text("DESV.", colX[3], y, { align: "right" });
+    y += 5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    content.team.forEach((m, i) => {
+      y = ensureSpace(6, y);
+      const dev = m.budgetedHours > 0
+        ? ((m.actualHours - m.budgetedHours) / m.budgetedHours) * 100
+        : 0;
+      if (i % 2 === 0) {
+        doc.setFillColor(249, 250, 251);
+        doc.rect(margin, y - 4, maxWidth, 6, "F");
+      }
+      doc.setTextColor(31, 41, 55);
+      doc.text(m.label, colX[0], y);
+      doc.text(`${m.budgetedHours}h`, colX[1], y, { align: "right" });
+      doc.text(`${m.actualHours}h`, colX[2], y, { align: "right" });
+      if (dev > 0) doc.setTextColor(185, 28, 28);
+      else if (dev < 0) doc.setTextColor(22, 101, 52);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${dev > 0 ? "+" : ""}${dev.toFixed(0)}%`, colX[3], y, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      y += 5.5;
+    });
+    y += 4;
+  }
+
+  // === Distribución de tareas ===
+  if (content.tasks && content.tasks.length > 0) {
+    sectionTitle("Distribución por tipo de tarea");
+    const colX = [margin + 2, margin + 110, margin + 140, margin + 170];
+    doc.setFillColor(243, 244, 246);
+    doc.rect(margin, y - 4, maxWidth, 6, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(75, 85, 99);
+    doc.text("TIPO DE TAREA", colX[0], y);
+    doc.text("HORAS", colX[1], y, { align: "right" });
+    doc.text("%", colX[2], y, { align: "right" });
+    doc.text("COSTO", colX[3], y, { align: "right" });
+    y += 5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const totalCost = content.tasks.reduce((s, t) => s + t.costUsd, 0);
+    content.tasks.slice(0, 8).forEach((t, i) => {
+      y = ensureSpace(8, y);
+      if (i % 2 === 0) {
+        doc.setFillColor(249, 250, 251);
+        doc.rect(margin, y - 4, maxWidth, 6, "F");
+      }
+      // Mini bar
+      const barW = 40;
+      const filled = (t.pct / 100) * barW;
+      doc.setFillColor(229, 231, 235);
+      doc.rect(margin + 60, y - 2.5, barW, 2, "F");
+      const sigColor: [number, number, number] =
+        t.signal === "muy_alto"
+          ? [220, 38, 38]
+          : t.signal === "alto"
+          ? [217, 119, 6]
+          : t.signal === "bajo"
+          ? [37, 99, 235]
+          : [22, 101, 52];
+      doc.setFillColor(...sigColor);
+      doc.rect(margin + 60, y - 2.5, filled, 2, "F");
+
+      doc.setTextColor(31, 41, 55);
+      const taskLines = doc.splitTextToSize(t.taskType, 55);
+      doc.text(taskLines[0], colX[0], y);
+      doc.text(`${t.hours.toFixed(0)}h`, colX[1], y, { align: "right" });
+      doc.setFont("helvetica", "bold");
+      doc.text(`${t.pct.toFixed(0)}%`, colX[2], y, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.text(`$${Math.round(t.costUsd).toLocaleString()}`, colX[3], y, { align: "right" });
+      y += 6;
+    });
+    y += 1;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(107, 114, 128);
+    doc.text(
+      `Costo total estimado de tareas: $${Math.round(totalCost).toLocaleString()} · ${content.tasks.length} categorías activas`,
+      margin,
+      y,
+    );
+    y += 5;
+  }
+
+  // === Footer on every page ===
+  const pageCount = doc.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.2);
+    doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(156, 163, 175);
+    doc.text("Generado automáticamente por Lawbit · Sistema de monitoreo de alertas", margin, pageHeight - 7);
+    doc.text(`Página ${p} de ${pageCount}`, pageWidth - margin, pageHeight - 7, { align: "right" });
+  }
+
+  const safeSubject = content.subject.replace(/[^a-zA-Z0-9]+/g, "_").slice(0, 60);
+  doc.save(`Alerta_${safeSubject}_${format(new Date(), "yyyyMMdd")}.pdf`);
+};
+
 interface EmailPreviewDialogProps {
   preview: EmailPreview | null;
   userEmail: string | null;
@@ -794,7 +1085,7 @@ interface EmailPreviewDialogProps {
 const EmailPreviewDialog = ({ preview, userEmail, onClose }: EmailPreviewDialogProps) => {
   const recipient = userEmail || "responsable@firma.com";
 
-  const buildContent = () => {
+  const buildContent = (): AlertPdfContent | null => {
     if (!preview) return null;
 
     if (preview.kind === "budget") {
@@ -803,15 +1094,35 @@ const EmailPreviewDialog = ({ preview, userEmail, onClose }: EmailPreviewDialogP
       const hoursDev = r.budgetedHours > 0
         ? ((r.actualHours - r.budgetedHours) / r.budgetedHours) * 100
         : 0;
+      const overrunAmount = r.actualPrice - r.budgetedPrice;
+      const tasks = getTaskDistributionForAsunto(r.asuntoId);
+      const topTask = tasks[0];
       return {
-        subject: `🚨 Alerta de Presupuesto: ${r.project} (+${dev.toFixed(0)}% sobre cotizado)`,
-        intro: `El asunto ${r.displayId} — ${r.project} ha superado el presupuesto cotizado en más de un 100% y permanece en curso. Se recomienda revisar el alcance y comunicar al cliente.`,
+        subject: `Alerta de Presupuesto: ${r.project} (+${dev.toFixed(0)}% sobre cotizado)`,
+        severity: "critical",
+        category: "Desviación de presupuesto",
+        intro: `El asunto ${r.displayId} — ${r.project} ha superado el presupuesto cotizado en más de un 100% y permanece en curso. La desviación acumulada asciende a $${overrunAmount.toLocaleString()} sobre los $${r.budgetedPrice.toLocaleString()} originalmente presupuestados. Se recomienda revisar el alcance del trabajo, validar nuevas tareas con el cliente y reevaluar el cronograma.`,
+        recommendations: [
+          "Programar reunión con el socio responsable para revisar alcance.",
+          "Documentar tareas adicionales no contempladas en la cotización inicial.",
+          "Comunicar al cliente y, si procede, emitir cotización complementaria.",
+          topTask
+            ? `Concentración elevada en "${topTask.taskType}" (${topTask.pct.toFixed(0)}% de horas) — validar eficiencia.`
+            : "Revisar concentración por tipo de tarea.",
+        ],
+        highlights: [
+          { label: "Desviación monto", value: `+${dev.toFixed(0)}%`, tone: "negative" },
+          { label: "Sobrecosto", value: `$${overrunAmount.toLocaleString()}`, tone: "negative" },
+          { label: "Horas reales", value: `${r.actualHours}h`, tone: "negative" },
+          { label: "Desviación horas", value: `${hoursDev > 0 ? "+" : ""}${hoursDev.toFixed(0)}%`, tone: "negative" },
+        ],
         rows: [
           { label: "Asunto", value: `${r.displayId} — ${r.project}` },
           { label: "Área", value: r.area },
           { label: "Estado", value: "En curso" },
           { label: "Presupuestado", value: `$${r.budgetedPrice.toLocaleString()}` },
           { label: "Facturado / Real", value: `$${r.actualPrice.toLocaleString()}` },
+          { label: "Sobrecosto", value: `$${overrunAmount.toLocaleString()}` },
           { label: "Desviación monto", value: `+${dev.toFixed(1)}%` },
           { label: "Horas presupuestadas", value: `${r.budgetedHours}h` },
           { label: "Horas reales", value: `${r.actualHours}h` },
@@ -819,43 +1130,89 @@ const EmailPreviewDialog = ({ preview, userEmail, onClose }: EmailPreviewDialogP
           { label: "Última actividad", value: r.lastActivity ? format(new Date(r.lastActivity), "dd MMM yyyy", { locale: es }) : "—" },
         ],
         team: r.team,
+        tasks,
       };
     }
 
     if (preview.kind === "retainer") {
       const r = preview.row;
+      const isOverdue = r.alertaEstado === "vencido";
       return {
-        subject: `${r.alertaEstado === "vencido" ? "🚨" : "⏰"} Retainer ${r.alertaEstado === "vencido" ? "VENCIDO" : "por vencer"}: ${r.cliente}`,
-        intro: r.alertaEstado === "vencido"
-          ? `El retainer mensual del cliente ${r.cliente} se encuentra vencido hace ${Math.abs(r.diasRestantes)} días. Se requiere gestión de cobro.`
-          : `El retainer mensual del cliente ${r.cliente} vence en ${r.diasRestantes} días. Se recomienda anticipar la facturación.`,
+        subject: `Retainer ${isOverdue ? "VENCIDO" : "por vencer"}: ${r.cliente}`,
+        severity: isOverdue ? "critical" : "warning",
+        category: "Pago de retainer",
+        intro: isOverdue
+          ? `El retainer mensual del cliente ${r.cliente} se encuentra vencido hace ${Math.abs(r.diasRestantes)} días por un monto de $${r.monto.toLocaleString()}. Se requiere gestión de cobro inmediata para evitar afectar el flujo de caja del periodo.`
+          : `El retainer mensual del cliente ${r.cliente} vence en ${r.diasRestantes} días por un monto de $${r.monto.toLocaleString()}. Se recomienda anticipar la facturación y confirmar disponibilidad de pago con el cliente.`,
+        recommendations: isOverdue
+          ? [
+              "Contactar al área de cuentas por cobrar del cliente hoy mismo.",
+              "Validar emisión de factura y verificar recepción.",
+              "Escalar al socio responsable si supera 15 días vencido.",
+            ]
+          : [
+              "Emitir factura con anticipación de al menos 7 días.",
+              "Confirmar canal de pago vigente con el cliente.",
+              "Revisar consumo de horas del retainer para informar al cliente.",
+            ],
+        highlights: [
+          { label: "Monto", value: `$${r.monto.toLocaleString()}`, tone: "neutral" },
+          { label: "Vence", value: format(r.fechaProximoPago, "dd MMM", { locale: es }), tone: isOverdue ? "negative" : "neutral" },
+          {
+            label: isOverdue ? "Días vencido" : "Días restantes",
+            value: isOverdue ? `${Math.abs(r.diasRestantes)}d` : `${r.diasRestantes}d`,
+            tone: isOverdue ? "negative" : "neutral",
+          },
+          { label: "Frecuencia", value: r.frecuencia, tone: "neutral" },
+        ],
         rows: [
           { label: "Cliente", value: r.cliente },
           { label: "Monto retainer", value: `$${r.monto.toLocaleString()}` },
           { label: "Frecuencia", value: r.frecuencia },
           { label: "Próximo pago", value: format(r.fechaProximoPago, "dd MMM yyyy", { locale: es }) },
+          { label: "Inicio", value: format(r.fechaInicio, "dd MMM yyyy", { locale: es }) },
           { label: "Estado", value: r.estado },
           { label: "Días restantes", value: r.diasRestantes < 0 ? `${Math.abs(r.diasRestantes)} días vencido` : `${r.diasRestantes} días` },
           { label: "Alerta", value: r.alertaEstado },
         ],
-        team: undefined as undefined,
       };
     }
 
     const r = preview.row;
+    const isClient = r.tipoAlerta === "cliente";
+    const horasRestantes = r.horasTotales - r.horasUsadas;
     return {
-      subject: `📊 Consumo de horas al ${r.porcentajeUsado}% — ${r.cliente}`,
-      intro: `${r.cliente} ha consumido ${r.horasUsadas} de ${r.horasTotales} horas asignadas (${r.porcentajeUsado}%) en el periodo actual. ${preview.kind === "hours" && r.tipoAlerta === "cliente" ? "Se sugiere comunicar al cliente para coordinar el alcance restante." : "Se sugiere revisar internamente la asignación de horas."}`,
+      subject: `Consumo de horas al ${r.porcentajeUsado}% — ${r.cliente}`,
+      severity: r.porcentajeUsado >= 90 ? "critical" : "warning",
+      category: isClient ? "Consumo de horas (cliente)" : "Consumo de horas (interno)",
+      intro: `${r.cliente} ha consumido ${r.horasUsadas} de ${r.horasTotales} horas asignadas (${r.porcentajeUsado}%) en el periodo actual. ${isClient ? "Se sugiere comunicar al cliente para coordinar el alcance restante y, si aplica, ampliación de horas." : "Se sugiere revisar internamente la asignación de horas y eficiencia del equipo."}`,
+      recommendations: isClient
+        ? [
+            "Notificar al cliente del consumo actual.",
+            "Validar tareas pendientes vs. horas restantes.",
+            r.porcentajeUsado >= 90 ? "Preparar propuesta de ampliación de horas." : "Monitorear consumo semanal.",
+          ]
+        : [
+            "Revisar eficiencia del equipo asignado.",
+            "Identificar tareas no críticas para postergar.",
+            "Reasignar carga si es necesario antes de superar el 100%.",
+          ],
+      highlights: [
+        { label: "Consumido", value: `${r.porcentajeUsado}%`, tone: r.porcentajeUsado >= 90 ? "negative" : "neutral" },
+        { label: "Horas usadas", value: `${r.horasUsadas}h`, tone: "neutral" },
+        { label: "Restantes", value: `${horasRestantes}h`, tone: horasRestantes <= 2 ? "negative" : "positive" },
+        { label: "Tipo", value: isClient ? "Cliente" : "Interna", tone: "neutral" },
+      ],
       rows: [
         { label: "Cliente", value: r.cliente },
         { label: "Horas usadas", value: `${r.horasUsadas}h` },
         { label: "Horas totales", value: `${r.horasTotales}h` },
+        { label: "Horas restantes", value: `${horasRestantes}h` },
         { label: "% Consumido", value: `${r.porcentajeUsado}%` },
-        { label: "Tipo de alerta", value: r.tipoAlerta === "cliente" ? "Externa (cliente)" : "Interna" },
+        { label: "Tipo de alerta", value: isClient ? "Externa (cliente)" : "Interna" },
         { label: "Periodo", value: `${format(r.fechaInicio, "dd MMM yyyy", { locale: es })} – ${format(r.fechaFin, "dd MMM yyyy", { locale: es })}` },
         { label: "Estado", value: r.estado },
       ],
-      team: undefined as undefined,
     };
   };
 
@@ -958,10 +1315,20 @@ const EmailPreviewDialog = ({ preview, userEmail, onClose }: EmailPreviewDialogP
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>
             Cerrar
           </Button>
+          {content && (
+            <Button
+              size="sm"
+              className="gap-1.5"
+              onClick={() => downloadAlertPdf(content, recipient)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Descargar PDF
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

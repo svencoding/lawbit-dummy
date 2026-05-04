@@ -48,6 +48,7 @@ import {
   getBudgetVsActualForAsunto,
   getTaskDistributionForAsunto,
   getTaskTypeBreakdownForAsunto,
+  getTaskTypeEntrySamplesForAsunto,
 } from "@/lib/mockDataUtils";
 
 function formatCurrency(value: number): string {
@@ -722,6 +723,9 @@ const ProjectProfile = () => {
                       const breakdown = isExpanded && asuntoId
                         ? getTaskTypeBreakdownForAsunto(parseInt(asuntoId, 10), row.taskType)
                         : [];
+                      const samples = isExpanded && asuntoId
+                        ? getTaskTypeEntrySamplesForAsunto(parseInt(asuntoId, 10), row.taskType, 8)
+                        : [];
                       return (
                         <Fragment key={row.taskType}>
                           <TableRow
@@ -821,6 +825,34 @@ const ProjectProfile = () => {
                                         ))}
                                       </TableBody>
                                     </Table>
+                                  )}
+                                  {samples.length > 0 && (
+                                    <div className="mt-4">
+                                      <div className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+                                        Actividades recientes
+                                      </div>
+                                      <div className="rounded-md border bg-background divide-y">
+                                        {samples.map((s, i) => (
+                                          <div
+                                            key={`${s.date}-${s.user_name}-${i}`}
+                                            className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs"
+                                          >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                              <span className="text-muted-foreground tabular-nums whitespace-nowrap text-[11px] w-20">
+                                                {s.date}
+                                              </span>
+                                              <span className="text-muted-foreground whitespace-nowrap text-[11px] w-24 truncate">
+                                                {s.user_name}
+                                              </span>
+                                              <span className="truncate">{s.description}</span>
+                                            </div>
+                                            <span className="tabular-nums text-muted-foreground whitespace-nowrap">
+                                              {s.hours.toFixed(2)}h
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
                                   )}
                                 </div>
                               </TableCell>

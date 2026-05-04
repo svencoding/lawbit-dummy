@@ -2405,6 +2405,118 @@ function pickTaskType(seed: string): string {
   return TASK_TYPES[TASK_TYPES.length - 1].name;
 }
 
+const TASK_DESCRIPTIONS: Record<string, string[]> = {
+  "Revisión documental, IRL, VDR": [
+    "Revisión de contratos en VDR — carpeta legal",
+    "Análisis de IRL y solicitud de documentos faltantes",
+    "Revisión de cláusulas de no competencia en MSA",
+    "Due diligence sobre litigios pendientes",
+    "Revisión de actas de directorio últimos 3 años",
+    "Análisis de poderes vigentes y limitaciones",
+    "Revisión de contratos laborales clave",
+    "Verificación de licencias y permisos regulatorios",
+    "Revisión de propiedad intelectual registrada",
+    "Análisis de contratos con clientes top 10",
+  ],
+  "Coordinación interna": [
+    "Coordinación con equipo tributario sobre estructura",
+    "Sync con equipo de M&A sobre timeline",
+    "Distribución de cargas con asociados",
+    "Reunión interna de status del asunto",
+    "Coordinación con paralegal sobre filings",
+    "Alineación con socio responsable",
+    "Revisión interna de borrador antes de envío",
+    "Handoff a equipo de cierre",
+    "Coordinación con equipo regulatorio",
+    "Briefing a nuevo asociado del equipo",
+  ],
+  "Redacción / Reportes": [
+    "Redacción de memorando de hallazgos DD",
+    "Redacción de cláusulas reps & warranties",
+    "Preparación de reporte ejecutivo para cliente",
+    "Redacción de side letter",
+    "Preparación de informe de litigios",
+    "Redacción de disclosure schedule",
+    "Borrador de SPA — secciones 4 y 5",
+    "Redacción de opinión legal",
+    "Reporte de avance semanal al cliente",
+    "Redacción de minuta de cierre",
+  ],
+  "Reuniones": [
+    "Reunión con cliente — kickoff",
+    "Call con contraparte sobre puntos abiertos",
+    "Reunión con asesores financieros",
+    "Reunión de negociación SPA",
+    "Call de status con cliente",
+    "Reunión con auditores",
+    "Reunión presencial en oficinas del cliente",
+    "Call con regulador",
+    "Reunión de cierre",
+    "Reunión preparatoria con cliente",
+  ],
+  "Gestión cliente": [
+    "Gestión de expectativas del cliente",
+    "Atención de consulta urgente del cliente",
+    "Envío de update y próximos pasos",
+    "Resolución de duda sobre fees",
+    "Comunicación de cambio de scope",
+    "Onboarding de nuevo contacto del cliente",
+    "Respuesta a comentarios del cliente",
+    "Coordinación de billing con cliente",
+    "Seguimiento post-cierre con cliente",
+    "Gestión de feedback del cliente",
+  ],
+  Otros: [
+    "Investigación jurisprudencial puntual",
+    "Búsqueda de precedentes regulatorios",
+    "Tareas administrativas del expediente",
+    "Archivo y organización de documentación",
+    "Actualización de matriz de seguimiento",
+    "Investigación de derecho comparado",
+    "Soporte a área de conocimiento",
+    "Preparación de checklist de cierre",
+    "Revisión de notas de equipo",
+    "Tareas misceláneas del asunto",
+  ],
+  Llamadas: [
+    "Llamada breve con cliente",
+    "Llamada con contraparte",
+    "Llamada con asesor externo",
+    "Llamada de seguimiento",
+    "Llamada con regulador",
+    "Llamada interna de coordinación",
+    "Llamada para aclarar puntos del contrato",
+    "Llamada de actualización con socio",
+    "Llamada con notario",
+    "Llamada con equipo de M&A",
+  ],
+  "Supervisión": [
+    "Supervisión de trabajo de asociados",
+    "Revisión y feedback sobre borrador",
+    "Supervisión de DD por asociados",
+    "Revisión final de memorando",
+    "Supervisión de cierre",
+    "Mentoría sobre estrategia de caso",
+    "Revisión de calidad de output",
+    "Supervisión de filings regulatorios",
+    "Aprobación de versión final",
+    "Revisión de tiempos y presupuesto",
+  ],
+};
+
+export function getTimeEntryDescription(
+  date: string,
+  userId: number | string,
+  asuntoId: number | string,
+  hours: number,
+): { taskType: string; description: string } {
+  const seed = `${date}|${userId}|${asuntoId}|${hours}`;
+  const taskType = pickTaskType(seed);
+  const templates = TASK_DESCRIPTIONS[taskType] || TASK_DESCRIPTIONS.Otros;
+  const idx = (hashString(seed + "|desc") >>> 0) % templates.length;
+  return { taskType, description: templates[idx] };
+}
+
 function classifySignal(pct: number, taskType: string): TaskTypeRow["signal"] {
   // Industry benchmarks: review-type and meetings should stay moderate
   const isReviewOrMeeting =
@@ -2499,4 +2611,38 @@ export function getTaskTypeBreakdownForAsunto(
   });
   rows.sort((a, b) => b.hours - a.hours);
   return rows;
+}
+
+export interface TaskTypeEntrySample {
+  date: string;
+  user_name: string;
+  hours: number;
+  description: string;
+}
+
+export function getTaskTypeEntrySamplesForAsunto(
+  asuntoId: number,
+  taskType: string,
+  limit = 8,
+): TaskTypeEntrySample[] {
+  const entries = getTransformedTimeEntries().filter((e) => e.project_id === asuntoId);
+  const samples: TaskTypeEntrySample[] = [];
+  for (const e of entries) {
+    const seedKey = `${e.date}|${e.user_id}|${e.project_id}|${e.duration}`;
+    if (pickTaskType(seedKey) !== taskType) continue;
+    const { description } = getTimeEntryDescription(
+      e.date,
+      e.user_id,
+      e.project_id,
+      e.duration,
+    );
+    samples.push({
+      date: e.date,
+      user_name: e.user_name,
+      hours: e.duration,
+      description,
+    });
+  }
+  samples.sort((a, b) => (a.date < b.date ? 1 : -1));
+  return samples.slice(0, limit);
 }
