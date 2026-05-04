@@ -196,12 +196,8 @@ const ProjectProfile = () => {
 
   const taskDistribution = useMemo(() => {
     if (!asuntoId) return [];
-    const rows = getTaskDistributionForAsunto(parseInt(asuntoId, 10));
-    const projTotalHours = projectData?.totalHours ?? 0;
-    const projTotalCost = projectData?.totalCost ?? 0;
-    const blended = projTotalHours > 0 ? projTotalCost / projTotalHours : 0;
-    return rows.map((r) => ({ ...r, costUsd: r.hours * blended }));
-  }, [asuntoId, projectData]);
+    return getTaskDistributionForAsunto(parseInt(asuntoId, 10));
+  }, [asuntoId]);
 
   useEffect(() => {
     if (user && asuntoId) {

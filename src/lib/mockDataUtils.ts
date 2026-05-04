@@ -2161,7 +2161,7 @@ export function getBudgetVsActualComparison(limit = 10): BudgetVsActualRow[] {
   entries.forEach((e) => {
     const u = usersById.get(e.user_id);
     if (!u) return;
-    const cost = e.originalEntry.total_cost ?? (e.duration * (e.originalEntry.hourly_cost || 0));
+    const cost = e.duration * HOURLY_COST_USD;
     const ts = e.date ? new Date(e.date).getTime() : 0;
     if (ts > globalMaxEntry) globalMaxEntry = ts;
     let acc = accByAsunto.get(e.project_id);
@@ -2288,7 +2288,7 @@ export function getBudgetVsActualForAsunto(asuntoId: number): BudgetVsActualRow 
   entries.forEach((e) => {
     const u = usersById.get(e.user_id);
     if (!u) return;
-    const cost = e.originalEntry.total_cost ?? (e.duration * (e.originalEntry.hourly_cost || 0));
+    const cost = e.duration * HOURLY_COST_USD;
     totalHours += e.duration;
     totalCost += cost;
     const ts = e.date ? new Date(e.date).getTime() : 0;
@@ -2383,7 +2383,7 @@ const TASK_TYPES: { name: string; weight: number }[] = [
   { name: "Supervisión", weight: 0.3 },
 ];
 
-const TASK_COST_RATE_USD = 160;
+const HOURLY_COST_USD = 170;
 
 function hashString(s: string): number {
   let h = 2166136261 >>> 0;
@@ -2555,7 +2555,7 @@ export function getTaskDistributionForAsunto(asuntoId: number): TaskTypeRow[] {
       taskType: t.name,
       hours,
       pct,
-      costUsd: hours * TASK_COST_RATE_USD,
+      costUsd: hours * HOURLY_COST_USD,
       signal: classifySignal(pct, t.name),
     };
   });
@@ -2598,7 +2598,7 @@ export function getTaskTypeBreakdownForAsunto(
   const rows: TaskTypeBreakdownRow[] = [];
   map.forEach((v, user_id) => {
     const u = usuarios.find((x) => x.id === user_id);
-    const blendedCost = v.hours > 0 ? v.cost : v.hours * TASK_COST_RATE_USD;
+    const blendedCost = v.hours > 0 ? v.cost : v.hours * HOURLY_COST_USD;
     rows.push({
       user_id,
       user_name: u?.name || `Usuario ${user_id}`,
