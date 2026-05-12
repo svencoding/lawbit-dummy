@@ -52,6 +52,8 @@ import {
   Scale,
   Layers,
   Pencil,
+  Search,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getHistoricalProjectsByArea,
@@ -101,6 +103,7 @@ export default function CasosPrecedentes({
 }: CasosPrecedentesProps) {
   const [projectTypeFilter, setProjectTypeFilter] = useState<string>("all");
   const [chargeTypeFilter, setChargeTypeFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showComparison, setShowComparison] = useState(false);
   const [sortField, setSortField] = useState<SortField>("total_billed");
@@ -131,6 +134,7 @@ export default function CasosPrecedentes({
   }, [allProjects]);
 
   const filteredProjects = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return allProjects
       .filter(
         (p) =>
@@ -140,6 +144,13 @@ export default function CasosPrecedentes({
         (p) =>
           chargeTypeFilter === "all" || p.charge_type === chargeTypeFilter,
       )
+      .filter((p) => {
+        if (!q) return true;
+        return (
+          (p.title?.toLowerCase().includes(q) ?? false) ||
+          (p.client_name?.toLowerCase().includes(q) ?? false)
+        );
+      })
       .sort((a, b) => {
         const aVal = a[sortField] as number;
         const bVal = b[sortField] as number;
@@ -149,6 +160,7 @@ export default function CasosPrecedentes({
     allProjects,
     projectTypeFilter,
     chargeTypeFilter,
+    searchQuery,
     sortField,
     sortDirection,
   ]);
@@ -245,6 +257,15 @@ export default function CasosPrecedentes({
         <CardContent className="space-y-6">
           {/* Filter Bar */}
           <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-[260px]">
+              <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar por asunto o cliente..."
+                className="pl-8"
+              />
+            </div>
             <Select
               value={projectTypeFilter}
               onValueChange={setProjectTypeFilter}
@@ -668,6 +689,44 @@ export default function CasosPrecedentes({
                 }
                 getNumeric={(p) => p.duration_days}
               />
+              {(() => {
+                // Factor de Complejidad — same scale as the Pricing form (~0.5–1.5x).
+                // Current estimate uses the user-selected factor directly. Historical
+                // projects don't store one, so we infer it from realized signals:
+                // team size (coordination) + non-billable ratio (rework / write-off).
+                const inferFactor = (p: HistoricalProject) => {
+                  const nonBillableRatio =
+                    p.total_hours > 0
+                      ? Math.max(0, p.total_hours - p.billable_hours) / p.total_hours
+                      : 0;
+                  const raw =
+                    1.0 +
+                    Math.max(0, p.team_size - 1) * 0.05 +
+                    (nonBillableRatio - 0.2) * 0.5;
+                  return Math.min(1.5, Math.max(0.5, raw));
+                };
+                const factorLabel = (f: number) => {
+                  if (f <= 0.7) return "Muy Baja";
+                  if (f <= 0.9) return "Baja";
+                  if (f <= 1.1) return "Media";
+                  if (f <= 1.3) return "Alta";
+                  return "Muy Alta";
+                };
+                return (
+                  <ComparisonRow
+                    label="Factor de Complejidad"
+                    icon={<AlertTriangle className="h-4 w-4" />}
+                    currentValue={`${factorLabel(currentEstimate.complexityFactor)} · ${currentEstimate.complexityFactor.toFixed(1)}x`}
+                    currentNumeric={currentEstimate.complexityFactor}
+                    projects={selectedProjects}
+                    getValue={(p) => {
+                      const f = inferFactor(p);
+                      return `${factorLabel(f)} · ${f.toFixed(2)}x`;
+                    }}
+                    getNumeric={(p) => inferFactor(p)}
+                  />
+                );
+              })()}
             </div>
 
             <Separator className="my-4" />

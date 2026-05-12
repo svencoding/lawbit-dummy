@@ -16,21 +16,28 @@ import {
   Building2,
   Users,
   GitCompare,
-  ArrowUpRight,
-  ArrowDownRight,
   CheckCircle2,
   Circle,
-  AlertTriangle,
   Timer,
   TimerReset,
   Gauge,
   Scale,
   ChevronDown,
   ChevronRight,
+  Wallet,
+  Receipt,
+  TrendingUp,
+  TrendingDown,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -338,10 +345,25 @@ const ProjectProfile = () => {
   const HOURLY_COST_2026 = 170;
   const costoInternoReal = totalHours * HOURLY_COST_2026;
   const tarifaCostoPromedio = HOURLY_COST_2026;
-  const margenReal = budgetedPrice - costoInternoReal;
+  const isInProgress = budgetVsActual?.status !== "completed";
+  // Costo en curso: lo ya gastado (horas reales × tarifa de costo). Es lo que
+  // refleja la situación financiera actual del proyecto.
+  const costoEnCurso = costoInternoReal;
+  // Costo proyectado al cierre (peor caso): asume que se consume todo el budget
+  // de horas. Sirve como cota inferior del margen final.
+  const costoProyectado = isInProgress
+    ? Math.max(budgetedHours, totalHours) * HOURLY_COST_2026
+    : costoInternoReal;
+  const margenReal = budgetedPrice - costoProyectado;
   const margenPct = budgetedPrice > 0 ? (margenReal / budgetedPrice) * 100 : 0;
-  const overrunScope = budgetedPrice > 0 ? valorTrabajado / budgetedPrice : 0;
+  const pctBudgetConsumido =
+    budgetedHours > 0 ? Math.min(100, (totalHours / budgetedHours) * 100) : 0;
+  // Sólo mostramos margen cuando es informativo: proyecto cerrado o ya se
+  // excedieron las horas presupuestadas. En cualquier otro caso "en curso" el
+  // margen sería una proyección worst-case que confunde más que ayuda.
+  const showMargen = !isInProgress || totalHours > budgetedHours;
   const horasExcedidas = totalHours - budgetedHours;
+  const horasRestantes = budgetedHours - totalHours;
   const tarifaPromedioPonderada = totalHours > 0 ? valorTrabajado / totalHours : 0;
   const areasInvolucradas = new Set<string>();
   const allUsuariosForAreas = getUsuarios();
@@ -366,10 +388,14 @@ const ProjectProfile = () => {
       icon: Timer,
     },
     {
-      title: "Horas excedidas",
+      // Cuando aún no se supera el budget mostramos "Horas restantes" en vez
+      // de "Horas excedidas" con signo negativo, que se lee como un error.
+      title: horasExcedidas > 0 ? "Horas excedidas" : "Horas restantes",
       value:
         budgetedHours > 0
-          ? `${horasExcedidas > 0 ? "+" : ""}${Math.round(horasExcedidas)}h`
+          ? horasExcedidas > 0
+            ? `+${Math.round(horasExcedidas)}h`
+            : `${Math.round(horasRestantes)}h`
           : "—",
       icon: TimerReset,
       tone:
@@ -384,20 +410,13 @@ const ProjectProfile = () => {
           ? `$${Math.round(tarifaCostoPromedio).toLocaleString()}/h`
           : "—",
       icon: Gauge,
+      info: "Costo interno por hora trabajada en 2026 ($170/h). Refleja lo que le cuesta a la firma cada hora de trabajo, sin importar la tarifa cobrada al cliente.",
     },
     {
       title: "Tarifa prom.",
       value: `$${Math.round(tarifaPromedioPonderada).toLocaleString()}/h`,
       icon: Scale,
-    },
-    {
-      title: "Overrun de scope",
-      value: budgetedPrice > 0 ? `${overrunScope.toFixed(2)}×` : "—",
-      icon: AlertTriangle,
-      tone:
-        overrunScope > 1
-          ? "text-orange-600 dark:text-orange-400"
-          : "text-emerald-600 dark:text-emerald-400",
+      info: "Tarifa promedio ponderada por horas: Valor trabajado (Σ horas × tarifa cliente) ÷ horas trabajadas. Indica cuánto se le cobra al cliente por hora en promedio.",
     },
   ];
 
@@ -470,73 +489,192 @@ const ProjectProfile = () => {
                   ))}
                 </div>
               )}
-              {budgetedPrice > 0 && (
-                <Badge
-                  variant="secondary"
-                  className={`text-[11px] ${
-                    margenReal >= 0
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                  }`}
-                >
-                  {margenReal >= 0 ? (
-                    <ArrowUpRight className="h-3 w-3 mr-0.5" />
-                  ) : (
-                    <ArrowDownRight className="h-3 w-3 mr-0.5" />
-                  )}
-                  Margen {margenPct.toFixed(1)}%
-                </Badge>
-              )}
             </div>
           </div>
 
-          {/* Primary money KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 [&>*:nth-child(-n+2)]:border-b md:[&>*:nth-child(-n+2)]:border-b-0">
-            <div className="p-4">
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Honorarios</p>
-              <p className="text-xl font-semibold mt-0.5 tabular-nums">
+          {/* Primary financial cards — Ingreso / Costo en curso / Costo al cierre / Margen */}
+          <div className={`p-4 grid grid-cols-1 gap-3 ${
+            isInProgress
+              ? showMargen
+                ? "md:grid-cols-2 xl:grid-cols-4"
+                : "md:grid-cols-3"
+              : "md:grid-cols-3"
+          }`}>
+            {/* Ingreso */}
+            <div className="rounded-xl border border-emerald-200/60 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50 to-emerald-50/40 dark:from-emerald-950/30 dark:to-emerald-950/10 p-4 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+                    <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                    Ingreso
+                  </p>
+                </div>
+              </div>
+              <p className="text-2xl font-bold tabular-nums text-emerald-900 dark:text-emerald-100">
                 {budgetedPrice > 0 ? fmtMoney(budgetedPrice) : "—"}
               </p>
-              <p className="text-[10px] text-muted-foreground">Budget cliente</p>
-            </div>
-            <div className="p-4">
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Valor trabajado</p>
-              <p className="text-xl font-semibold mt-0.5 tabular-nums">
-                {fmtMoney(valorTrabajado)}
-              </p>
-              <p className="text-[10px] text-muted-foreground">Σ horas × tarifa</p>
-            </div>
-            <div className="p-4">
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Valor Hora Costo 2026</p>
-              <p className="text-xl font-semibold mt-0.5 tabular-nums">
-                {fmtMoney(costoInternoReal)}
-              </p>
-              <p className="text-[10px] text-muted-foreground tabular-nums">
-                {Math.round(totalHours)} horas × $170
+              <p className="text-[11px] text-emerald-700/70 dark:text-emerald-300/70">
+                Honorarios · Budget cliente
               </p>
             </div>
-            <div className="p-4">
-              <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Margen real</p>
+
+            {/* Costo en curso — sólo en proyectos en curso */}
+            {isInProgress && (
+              <div className="rounded-xl border border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-br from-amber-50 to-amber-50/40 dark:from-amber-950/30 dark:to-amber-950/10 p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
+                      <Receipt className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                      Costo en curso
+                    </p>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="text-amber-600/70 hover:text-amber-700 dark:text-amber-400/70">
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs text-xs">
+                      Costo interno ya incurrido: horas reales trabajadas × tarifa de costo por hora 2026 ($170). Refleja lo que llevamos gastado hasta hoy.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <p className="text-2xl font-bold tabular-nums text-amber-900 dark:text-amber-100">
+                  {fmtMoney(costoEnCurso)}
+                </p>
+                <p className="text-[11px] text-amber-700/70 dark:text-amber-300/70 tabular-nums">
+                  {Math.round(totalHours)}h × ${HOURLY_COST_2026}/h · {pctBudgetConsumido.toFixed(0)}% del budget
+                </p>
+              </div>
+            )}
+
+            {/* Costo al cierre (peor caso si en curso, real si cerrado) */}
+            <div className="rounded-xl border border-orange-200/60 dark:border-orange-900/40 bg-gradient-to-br from-orange-50 to-orange-50/40 dark:from-orange-950/30 dark:to-orange-950/10 p-4 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-orange-500/15 flex items-center justify-center">
+                    <Receipt className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                    {isInProgress ? "Costo al cierre" : "Costo real"}
+                  </p>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button className="text-orange-600/70 hover:text-orange-700 dark:text-orange-400/70">
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs text-xs">
+                    {isInProgress
+                      ? "Cota máxima de costo asumiendo que se consume el 100% de las horas presupuestadas: budget de horas × $170/h. Sirve para acotar el margen mínimo del proyecto."
+                      : "Costo interno real acumulado: horas trabajadas × tarifa de costo por hora 2026 ($170)."}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <p className="text-2xl font-bold tabular-nums text-orange-900 dark:text-orange-100">
+                {fmtMoney(costoProyectado)}
+              </p>
+              <p className="text-[11px] text-orange-700/70 dark:text-orange-300/70 tabular-nums">
+                {Math.round(
+                  isInProgress
+                    ? Math.max(budgetedHours, totalHours)
+                    : totalHours,
+                )}
+                h × ${HOURLY_COST_2026}/h
+              </p>
+            </div>
+
+            {/* Margen — sólo si está cerrado o ya se excedieron las horas budget */}
+            {showMargen && (
+            <div
+              className={`rounded-xl border p-4 flex flex-col gap-2 ${
+                margenReal >= 0
+                  ? "border-emerald-200/60 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50 to-emerald-50/40 dark:from-emerald-950/30 dark:to-emerald-950/10"
+                  : "border-red-200/60 dark:border-red-900/40 bg-gradient-to-br from-red-50 to-red-50/40 dark:from-red-950/30 dark:to-red-950/10"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                      margenReal >= 0 ? "bg-emerald-500/15" : "bg-red-500/15"
+                    }`}
+                  >
+                    {margenReal >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    )}
+                  </div>
+                  <p
+                    className={`text-[11px] font-medium uppercase tracking-wide ${
+                      margenReal >= 0
+                        ? "text-emerald-700 dark:text-emerald-300"
+                        : "text-red-700 dark:text-red-300"
+                    }`}
+                  >
+                    {isInProgress ? "Margen al cierre" : "Margen real"}
+                  </p>
+                </div>
+                {budgetedPrice > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className={`text-[10px] tabular-nums ${
+                      margenReal >= 0
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                        : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                    }`}
+                  >
+                    {margenPct.toFixed(1)}%
+                  </Badge>
+                )}
+              </div>
               <p
-                className={`text-xl font-semibold mt-0.5 tabular-nums ${
+                className={`text-2xl font-bold tabular-nums ${
                   margenReal >= 0
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-red-600 dark:text-red-400"
+                    ? "text-emerald-900 dark:text-emerald-100"
+                    : "text-red-900 dark:text-red-100"
                 }`}
               >
                 {budgetedPrice > 0 ? fmtMoney(margenReal) : "—"}
               </p>
-              <p className="text-[10px] text-muted-foreground">Honorarios − Costo</p>
+              <p
+                className={`text-[11px] ${
+                  margenReal >= 0
+                    ? "text-emerald-700/70 dark:text-emerald-300/70"
+                    : "text-red-700/70 dark:text-red-300/70"
+                }`}
+              >
+                {isInProgress ? "Ingreso − Costo al cierre" : "Ingreso − Costo"}
+              </p>
             </div>
+            )}
           </div>
 
           {/* Secondary operational KPIs — single dense row */}
-          <div className="border-t bg-muted/10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x">
+          <div className="border-t bg-muted/10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x">
             {secondaryKpis.map((k) => (
               <div key={k.title} className="px-3 py-2.5">
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <k.icon className="h-3 w-3 shrink-0" />
                   <p className="text-[10px] whitespace-nowrap">{k.title}</p>
+                  {"info" in k && k.info ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button className="text-muted-foreground/60 hover:text-foreground">
+                          <Info className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs text-xs">
+                        {k.info}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
                 </div>
                 <p className={`text-sm font-semibold mt-0.5 tabular-nums ${k.tone || ""}`}>
                   {k.value}
@@ -549,12 +687,7 @@ const ProjectProfile = () => {
         {/* Presupuestado vs Real */}
         {budgetVsActual && (() => {
           const bva = budgetVsActual;
-          const deviation = bva.budgetedPrice > 0
-            ? ((bva.actualPrice - bva.budgetedPrice) / bva.budgetedPrice) * 100
-            : 0;
-          const hoursDeviation = bva.budgetedHours > 0
-            ? ((bva.actualHours - bva.budgetedHours) / bva.budgetedHours) * 100
-            : 0;
+          const inProgress = bva.status !== "completed";
           return (
             <Card className="border-border/40 shadow-sm">
               <CardHeader className="pb-3">
@@ -582,31 +715,6 @@ const ProjectProfile = () => {
                 </div>
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50">
-                    <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium mb-0.5">Presupuestado</p>
-                    <p className="text-lg font-bold text-blue-900 dark:text-blue-100">${bva.budgetedPrice.toLocaleString()}</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50">
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mb-0.5">Real</p>
-                    <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">${bva.actualPrice.toLocaleString()}</p>
-                  </div>
-                  <div className={`p-3 rounded-lg border ${deviation > 0 ? "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-900/50" : "bg-green-50 dark:bg-green-950/30 border-green-100 dark:border-green-900/50"}`}>
-                    <p className={`text-[11px] font-medium mb-0.5 ${deviation > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>Desviación</p>
-                    <p className={`text-lg font-bold flex items-center gap-1 ${deviation > 0 ? "text-red-900 dark:text-red-100" : "text-green-900 dark:text-green-100"}`}>
-                      {deviation > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                      {Math.abs(deviation).toFixed(1)}%
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/50">
-                    <p className="text-[11px] text-purple-600 dark:text-purple-400 font-medium mb-0.5">Horas: Ppto vs Real</p>
-                    <p className="text-lg font-bold text-purple-900 dark:text-purple-100">{bva.budgetedHours} / {bva.actualHours}</p>
-                    <p className={`text-[10px] font-medium mt-0.5 ${hoursDeviation > 5 ? "text-red-600" : hoursDeviation < -5 ? "text-emerald-600" : "text-muted-foreground"}`}>
-                      {hoursDeviation > 0 ? "+" : ""}{hoursDeviation.toFixed(1)}%
-                    </p>
-                  </div>
-                </div>
-
                 {bva.team.length > 0 && (
                   <div className="rounded-lg border overflow-hidden bg-background">
                     <div className="px-3 py-2 bg-muted/40 border-b">
@@ -621,7 +729,7 @@ const ProjectProfile = () => {
                           <th className="text-left p-2.5 font-medium text-muted-foreground">Nivel</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Horas Ppto</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Horas Real</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground">Desv. Horas</th>
+                          <th className="text-right p-2.5 font-medium text-muted-foreground">{inProgress ? "Avance" : "Desv. Horas"}</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Tarifa Costo</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Monto Ppto</th>
                           <th className="text-right p-2.5 font-medium text-muted-foreground">Monto Real</th>
@@ -632,6 +740,10 @@ const ProjectProfile = () => {
                           const hDev = m.budgetedHours > 0
                             ? ((m.actualHours - m.budgetedHours) / m.budgetedHours) * 100
                             : 0;
+                          const hProgress = m.budgetedHours > 0
+                            ? (m.actualHours / m.budgetedHours) * 100
+                            : 0;
+                          const showProgress = inProgress && hDev < 0;
                           const bAmt = m.budgetedHours * HOURLY_COST_2026;
                           const aAmt = m.actualHours * HOURLY_COST_2026;
                           return (
@@ -641,7 +753,9 @@ const ProjectProfile = () => {
                               <td className="p-2.5 text-right font-medium">{m.actualHours}h</td>
                               <td className="p-2.5 text-right">
                                 <span className={`font-semibold ${hDev > 5 ? "text-red-600" : hDev < -5 ? "text-emerald-600" : "text-foreground"}`}>
-                                  {hDev > 0 ? "+" : ""}{hDev.toFixed(0)}%
+                                  {showProgress
+                                    ? `${hProgress.toFixed(0)}%`
+                                    : `${hDev > 0 ? "+" : ""}${hDev.toFixed(0)}%`}
                                 </span>
                               </td>
                               <td className="p-2.5 text-right text-muted-foreground hidden sm:table-cell">${HOURLY_COST_2026}/h</td>

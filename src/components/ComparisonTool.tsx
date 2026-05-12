@@ -293,10 +293,12 @@ const ComparisonTool = () => {
 
   // Metrics definition per mode
   const getMetrics = () => {
-    const base = [
-      { key: "hours", label: "Horas Totales", format: "number" as const, icon: Clock },
-      { key: "revenue", label: "Facturación", format: "currency" as const, icon: DollarSign },
-      { key: "cost", label: "Costo Total", format: "currency" as const, icon: BarChart3 },
+    type MetricFormat = "number" | "currency" | "percentage" | "rate";
+    type MetricDef = { key: string; label: string; format: MetricFormat; icon: typeof Clock };
+    const base: MetricDef[] = [
+      { key: "hours", label: "Horas Totales", format: "number", icon: Clock },
+      { key: "revenue", label: "Facturación", format: "currency", icon: DollarSign },
+      { key: "cost", label: "Costo Total", format: "currency", icon: BarChart3 },
     ];
     if (mode === "clients" || mode === "projects") {
       base.push(
