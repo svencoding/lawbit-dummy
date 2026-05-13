@@ -95,7 +95,7 @@ const Alertas = () => {
           const dev = r.budgetedPrice > 0
             ? ((r.actualPrice - r.budgetedPrice) / r.budgetedPrice) * 100
             : 0;
-          return r.status === "in_progress" && dev > 100;
+          return r.status === "in_progress" && dev > 70;
         }),
       );
     }
