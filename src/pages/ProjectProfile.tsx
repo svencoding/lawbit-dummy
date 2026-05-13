@@ -409,7 +409,7 @@ const ProjectProfile = () => {
     },
     {
       title: "Tarifa prom.",
-      value: `$${Math.round(tarifaPromedioPonderada / 1.95).toLocaleString()}/h`,
+      value: `$${Math.round(tarifaPromedioPonderada).toLocaleString()}/h`,
       icon: Scale,
       info: "Tarifa promedio ponderada por horas: Valor trabajado (Σ horas × tarifa cliente) ÷ horas trabajadas. Indica cuánto se le cobra al cliente por hora en promedio.",
     },
@@ -565,7 +565,7 @@ const ProjectProfile = () => {
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs text-xs">
-                    Producción: horas reales trabajadas × tarifa cliente por profesional. Indica el valor económico generado a tarifa lista, independiente de lo facturado al cliente.
+                    Valor trabajado: horas reales trabajadas × tarifa cliente por profesional. Indica el valor económico generado a tarifa lista, independiente de lo facturado al cliente.
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -1150,7 +1150,7 @@ const ProjectProfile = () => {
                           {prof.pct_hours.toFixed(1)}%
                         </TableCell>
                         <TableCell className="px-2 py-1 text-xs text-right">
-                          {Math.round(prof.rate / 1.95).toLocaleString()}
+                          {Math.round(prof.rate).toLocaleString()}
                         </TableCell>
                         <TableCell className="px-2 py-1 text-xs text-right font-medium text-emerald-600">
                           {Math.round(prof.valor_referencial).toLocaleString()}

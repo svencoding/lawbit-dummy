@@ -70,10 +70,20 @@ type SortOrder = "asc" | "desc";
 
 const ITEMS_PER_PAGE = 8;
 
-// Helper function to format numbers in millions
+// Helper function to format currency compactly: M for millions, K for thousands,
+// otherwise plain. Keeps one decimal only when needed.
 function formatMillions(value: number): string {
-  const millions = value / 1000000;
-  return millions % 1 === 0 ? `$${millions}M` : `$${millions.toFixed(1)}M`;
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1_000_000) {
+    const m = abs / 1_000_000;
+    return `${sign}$${m % 1 === 0 ? m : m.toFixed(1)}M`;
+  }
+  if (abs >= 1_000) {
+    const k = abs / 1_000;
+    return `${sign}$${k % 1 === 0 ? k : k.toFixed(1)}K`;
+  }
+  return `${sign}$${Math.round(abs).toLocaleString()}`;
 }
 
 // Helper function to normalize dates from "M/D/YYYY" to Date object
@@ -1158,7 +1168,7 @@ const UserProfile = () => {
                         <TableHead className="text-right text-xs">Billable</TableHead>
                         <TableHead className="text-right text-xs">No billable</TableHead>
                         <TableHead className="text-right text-xs">Costo</TableHead>
-                        <TableHead className="text-right text-xs">Producción</TableHead>
+                        <TableHead className="text-right text-xs">Valor trabajado</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1193,10 +1203,24 @@ const UserProfile = () => {
                               {entry.nonBillable > 0 ? fmtHours(entry.nonBillable) : "—"}
                             </TableCell>
                             <TableCell className="text-right text-xs tabular-nums">
-                              ${Math.round(entry.cost).toLocaleString()}
+                              <div className="flex flex-col items-end">
+                                <span>${Math.round(entry.cost).toLocaleString()}</span>
+                                {entry.hours > 0 && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    ${Math.round(entry.cost / entry.hours).toLocaleString()}/h
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="text-right text-xs tabular-nums">
-                              ${Math.round(entry.production).toLocaleString()}
+                              <div className="flex flex-col items-end">
+                                <span>${Math.round(entry.production).toLocaleString()}</span>
+                                {entry.hours > 0 && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    ${Math.round(entry.production / entry.hours).toLocaleString()}/h
+                                  </span>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         );

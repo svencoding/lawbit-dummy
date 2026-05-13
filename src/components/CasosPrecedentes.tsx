@@ -552,7 +552,7 @@ export default function CasosPrecedentes({
             <div
               className="grid gap-4 mb-4"
               style={{
-                gridTemplateColumns: `180px repeat(${selectedProjects.length + 1}, 1fr)`,
+                gridTemplateColumns: `180px repeat(${selectedProjects.length + 1}, minmax(0, 1fr))`,
               }}
             >
               <div />
@@ -740,7 +740,7 @@ export default function CasosPrecedentes({
               <div
                 className="grid gap-4"
                 style={{
-                  gridTemplateColumns: `180px repeat(${selectedProjects.length + 1}, 1fr)`,
+                  gridTemplateColumns: `180px repeat(${selectedProjects.length + 1}, minmax(0, 1fr))`,
                 }}
               >
                 <div />
@@ -771,7 +771,7 @@ export default function CasosPrecedentes({
             <div
               className="grid gap-4"
               style={{
-                gridTemplateColumns: `180px repeat(${selectedProjects.length + 1}, 1fr)`,
+                gridTemplateColumns: `180px repeat(${selectedProjects.length + 1}, minmax(0, 1fr))`,
               }}
             >
               <div />
@@ -904,7 +904,7 @@ function ComparisonRow({
     <div
       className="grid gap-4 items-center"
       style={{
-        gridTemplateColumns: `180px repeat(${projects.length + 1}, 1fr)`,
+        gridTemplateColumns: `180px repeat(${projects.length + 1}, minmax(0, 1fr))`,
       }}
     >
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
