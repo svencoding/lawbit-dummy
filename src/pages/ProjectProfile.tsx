@@ -349,19 +349,14 @@ const ProjectProfile = () => {
   // Costo en curso: lo ya gastado (horas reales × tarifa de costo). Es lo que
   // refleja la situación financiera actual del proyecto.
   const costoEnCurso = costoInternoReal;
-  // Costo proyectado al cierre (peor caso): asume que se consume todo el budget
-  // de horas. Sirve como cota inferior del margen final.
-  const costoProyectado = isInProgress
-    ? Math.max(budgetedHours, totalHours) * HOURLY_COST_2026
-    : costoInternoReal;
-  const margenReal = budgetedPrice - costoProyectado;
+  const margenReal = budgetedPrice - costoEnCurso;
   const margenPct = budgetedPrice > 0 ? (margenReal / budgetedPrice) * 100 : 0;
   const pctBudgetConsumido =
     budgetedHours > 0 ? Math.min(100, (totalHours / budgetedHours) * 100) : 0;
   // Sólo mostramos margen cuando es informativo: proyecto cerrado o ya se
   // excedieron las horas presupuestadas. En cualquier otro caso "en curso" el
   // margen sería una proyección worst-case que confunde más que ayuda.
-  const showMargen = !isInProgress || totalHours > budgetedHours;
+  const showMargen = true;
   const horasExcedidas = totalHours - budgetedHours;
   const horasRestantes = budgetedHours - totalHours;
   const tarifaPromedioPonderada = totalHours > 0 ? valorTrabajado / totalHours : 0;
@@ -414,7 +409,7 @@ const ProjectProfile = () => {
     },
     {
       title: "Tarifa prom.",
-      value: `$${Math.round(tarifaPromedioPonderada).toLocaleString()}/h`,
+      value: `$${Math.round(tarifaPromedioPonderada / 1.95).toLocaleString()}/h`,
       icon: Scale,
       info: "Tarifa promedio ponderada por horas: Valor trabajado (Σ horas × tarifa cliente) ÷ horas trabajadas. Indica cuánto se le cobra al cliente por hora en promedio.",
     },
@@ -492,7 +487,7 @@ const ProjectProfile = () => {
             </div>
           </div>
 
-          {/* Primary financial cards — Ingreso / Costo en curso / Costo al cierre / Margen */}
+          {/* Primary financial cards — Ingreso / Costo en curso / Valor trabajado / Margen */}
           <div className={`p-4 grid grid-cols-1 gap-3 ${
             isInProgress
               ? showMargen
@@ -552,40 +547,33 @@ const ProjectProfile = () => {
               </div>
             )}
 
-            {/* Costo al cierre (peor caso si en curso, real si cerrado) */}
-            <div className="rounded-xl border border-orange-200/60 dark:border-orange-900/40 bg-gradient-to-br from-orange-50 to-orange-50/40 dark:from-orange-950/30 dark:to-orange-950/10 p-4 flex flex-col gap-2">
+            {/* Valor trabajado (Producción) — horas reales × tarifa cliente */}
+            <div className="rounded-xl border border-sky-200/60 dark:border-sky-900/40 bg-gradient-to-br from-sky-50 to-sky-50/40 dark:from-sky-950/30 dark:to-sky-950/10 p-4 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-orange-500/15 flex items-center justify-center">
-                    <Receipt className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <div className="h-8 w-8 rounded-lg bg-sky-500/15 flex items-center justify-center">
+                    <TrendingUp className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                   </div>
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-orange-700 dark:text-orange-300">
-                    {isInProgress ? "Costo al cierre" : "Costo real"}
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                    Valor trabajado
                   </p>
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button className="text-orange-600/70 hover:text-orange-700 dark:text-orange-400/70">
+                    <button className="text-sky-600/70 hover:text-sky-700 dark:text-sky-400/70">
                       <Info className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs text-xs">
-                    {isInProgress
-                      ? "Cota máxima de costo asumiendo que se consume el 100% de las horas presupuestadas: budget de horas × $170/h. Sirve para acotar el margen mínimo del proyecto."
-                      : "Costo interno real acumulado: horas trabajadas × tarifa de costo por hora 2026 ($170)."}
+                    Producción: horas reales trabajadas × tarifa cliente por profesional. Indica el valor económico generado a tarifa lista, independiente de lo facturado al cliente.
                   </TooltipContent>
                 </Tooltip>
               </div>
-              <p className="text-2xl font-bold tabular-nums text-orange-900 dark:text-orange-100">
-                {fmtMoney(costoProyectado)}
+              <p className="text-2xl font-bold tabular-nums text-sky-900 dark:text-sky-100">
+                {fmtMoney(valorTrabajado / 1.95)}
               </p>
-              <p className="text-[11px] text-orange-700/70 dark:text-orange-300/70 tabular-nums">
-                {Math.round(
-                  isInProgress
-                    ? Math.max(budgetedHours, totalHours)
-                    : totalHours,
-                )}
-                h × ${HOURLY_COST_2026}/h
+              <p className="text-[11px] text-sky-700/70 dark:text-sky-300/70 tabular-nums">
+                {Math.round(totalHours)}h × ${Math.round(tarifaPromedioPonderada / 1.95).toLocaleString()}/h prom.
               </p>
             </div>
 
@@ -618,7 +606,7 @@ const ProjectProfile = () => {
                         : "text-red-700 dark:text-red-300"
                     }`}
                   >
-                    {isInProgress ? "Margen al cierre" : "Margen real"}
+                    Margen
                   </p>
                 </div>
                 {budgetedPrice > 0 && (
@@ -650,7 +638,7 @@ const ProjectProfile = () => {
                     : "text-red-700/70 dark:text-red-300/70"
                 }`}
               >
-                {isInProgress ? "Ingreso − Costo al cierre" : "Ingreso − Costo"}
+                Ingreso − Costo en curso
               </p>
             </div>
             )}
@@ -1162,7 +1150,7 @@ const ProjectProfile = () => {
                           {prof.pct_hours.toFixed(1)}%
                         </TableCell>
                         <TableCell className="px-2 py-1 text-xs text-right">
-                          {prof.rate.toLocaleString()}
+                          {Math.round(prof.rate / 1.95).toLocaleString()}
                         </TableCell>
                         <TableCell className="px-2 py-1 text-xs text-right font-medium text-emerald-600">
                           {Math.round(prof.valor_referencial).toLocaleString()}
