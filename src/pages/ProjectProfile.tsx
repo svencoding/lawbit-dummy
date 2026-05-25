@@ -570,10 +570,10 @@ const ProjectProfile = () => {
                 </Tooltip>
               </div>
               <p className="text-2xl font-bold tabular-nums text-sky-900 dark:text-sky-100">
-                {fmtMoney(valorTrabajado / 1.95)}
+                {fmtMoney(valorTrabajado)}
               </p>
               <p className="text-[11px] text-sky-700/70 dark:text-sky-300/70 tabular-nums">
-                {Math.round(totalHours)}h × ${Math.round(tarifaPromedioPonderada / 1.95).toLocaleString()}/h prom.
+                {Math.round(totalHours)}h × ${Math.round(tarifaPromedioPonderada).toLocaleString()}/h prom.
               </p>
             </div>
 

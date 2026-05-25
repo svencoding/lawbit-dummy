@@ -58,6 +58,8 @@ import {
   getClientCosts,
   getRevenueByUser,
 } from "@/lib/mockDataUtils";
+import facturacionData from "@/lib/mock/facturacion.json";
+import clientesData from "@/lib/mock/clientes.json";
 import { formatDateLocal } from "@/lib/utils";
 import {
   FacturacionFiltersProvider,
@@ -419,10 +421,32 @@ const FacturacionContent = () => {
       const filteredByIndustry = filters.industry
         ? clientCosts.filter((c) => (c.industry || "Otros") === filters.industry)
         : clientCosts;
+
+      // Build revenue map per client from facturacion.json (real billed amounts)
+      const clienteNameToIdMap = new Map<string, number>();
+      (clientesData as Array<{ id: number; name: string }>).forEach((c) => {
+        clienteNameToIdMap.set(c.name, c.id);
+      });
+      const revenueByClientName = new Map<string, number>();
+      (facturacionData as Array<{ cliente_id: number; month: string; amount_charged: number }>).forEach((p) => {
+        if (!p.month || !p.cliente_id) return;
+        const [m, d, y] = p.month.split("/").map(Number);
+        if (!m || !d || !y) return;
+        const date = new Date(y, m - 1, d);
+        if (startDate && date < new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())) return;
+        if (endDate && date > new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())) return;
+        const cliente = (clientesData as Array<{ id: number; name: string }>).find((c) => c.id === p.cliente_id);
+        if (!cliente) return;
+        revenueByClientName.set(
+          cliente.name,
+          (revenueByClientName.get(cliente.name) || 0) + (p.amount_charged || 0),
+        );
+      });
+
       const clientsData = filteredByIndustry
         .map((client) => ({
           nombre: client.client_name,
-          totalFacturado: client.total_cost,
+          totalFacturado: revenueByClientName.get(client.client_name) ?? client.total_cost,
         }))
         .sort((a, b) => b.totalFacturado - a.totalFacturado);
       setAllClients(clientsData);
@@ -432,7 +456,8 @@ const FacturacionContent = () => {
       const industryClientMap = new Map<string, string[]>();
       clientCosts.forEach((client) => {
         const industry = client.industry || "Otros";
-        industryMap.set(industry, (industryMap.get(industry) || 0) + client.total_cost);
+        const clientRevenue = revenueByClientName.get(client.client_name) ?? client.total_cost;
+        industryMap.set(industry, (industryMap.get(industry) || 0) + clientRevenue);
         const existing = industryClientMap.get(industry) || [];
         existing.push(client.client_name);
         industryClientMap.set(industry, existing);
