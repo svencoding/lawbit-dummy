@@ -105,6 +105,7 @@ export default function Planificacion() {
     allAreas,
     professionalCounts,
     actuals,
+    monthsElapsed,
     updateBudgetForArea,
     setAnnualTargets,
     setNote,
@@ -311,26 +312,35 @@ export default function Planificacion() {
       value: string;
     }> = [];
 
+    // The plan is annual but actuals are year-to-date, so compare against the
+    // pro-rated plan (annual × fraction of the year elapsed) to judge pace.
+    const elapsedFrac = monthsElapsed / 12;
+
     breakdownData.forEach((row) => {
-      // Revenue significantly under budget
-      if (row.revenue_pct > 0 && row.revenue_pct < 85) {
-        items.push({
-          area: row.practice_area,
-          type: "revenue_low",
-          message: `Ingresos ${Math.round(100 - row.revenue_pct)}% bajo presupuesto`,
-          severity: row.revenue_pct < 70 ? "danger" : "warning",
-          value: `${row.revenue_pct}% del plan`,
-        });
+      // Revenue running behind the expected pace
+      const expectedRevenue = row.planned_revenue * elapsedFrac;
+      if (expectedRevenue > 0) {
+        const revenuePace = Math.round((row.actual_revenue / expectedRevenue) * 100);
+        if (revenuePace < 85) {
+          items.push({
+            area: row.practice_area,
+            type: "revenue_low",
+            message: `Ingresos ${Math.round(100 - revenuePace)}% bajo el ritmo esperado`,
+            severity: revenuePace < 70 ? "danger" : "warning",
+            value: `${revenuePace}% del plan a la fecha`,
+          });
+        }
       }
-      // Cost significantly over budget
-      if (row.planned_cost > 0 && row.actual_cost > row.planned_cost * 1.15) {
-        const overPct = Math.round(((row.actual_cost - row.planned_cost) / row.planned_cost) * 100);
+      // Cost overspending vs the expected pace
+      const expectedCost = row.planned_cost * elapsedFrac;
+      if (expectedCost > 0 && row.actual_cost > expectedCost * 1.15) {
+        const overPct = Math.round(((row.actual_cost - expectedCost) / expectedCost) * 100);
         items.push({
           area: row.practice_area,
           type: "cost_over",
-          message: `Costos ${overPct}% sobre presupuesto`,
+          message: `Costos ${overPct}% sobre el ritmo esperado`,
           severity: overPct > 30 ? "danger" : "warning",
-          value: formatCurrency(row.actual_cost - row.planned_cost) + " excedente",
+          value: formatCurrency(row.actual_cost - expectedCost) + " sobre lo esperado",
         });
       }
       // Utilization significantly below target
@@ -347,7 +357,7 @@ export default function Planificacion() {
 
     // Sort: danger first, then warning
     return items.sort((a, b) => (a.severity === "danger" ? 0 : 1) - (b.severity === "danger" ? 0 : 1));
-  }, [breakdownData]);
+  }, [breakdownData, monthsElapsed]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -1120,25 +1130,32 @@ export default function Planificacion() {
                             {formatCurrency(row.revenue_variance)}
                           </TableCell>
                           <TableCell className="text-center">
-                            <div className="flex items-center gap-2 justify-center">
-                              <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full ${
-                                    row.revenue_pct >= 100
-                                      ? "bg-green-500"
-                                      : row.revenue_pct >= 70
-                                        ? "bg-yellow-500"
-                                        : "bg-red-500"
-                                  }`}
-                                  style={{
-                                    width: `${Math.min(row.revenue_pct, 100)}%`,
-                                  }}
-                                />
-                              </div>
-                              <span className="text-xs text-muted-foreground w-10">
-                                {row.revenue_pct}%
-                              </span>
-                            </div>
+                            {(() => {
+                              // Color by pace: progress vs the % of the year elapsed,
+                              // not a fixed threshold (17% mid-year is on pace, not "red").
+                              const expectedProgress = (monthsElapsed / 12) * 100;
+                              const paceColor =
+                                row.revenue_pct >= expectedProgress * 0.95
+                                  ? "bg-green-500"
+                                  : row.revenue_pct >= expectedProgress * 0.7
+                                    ? "bg-yellow-500"
+                                    : "bg-red-500";
+                              return (
+                                <div className="flex items-center gap-2 justify-center">
+                                  <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${paceColor}`}
+                                      style={{
+                                        width: `${Math.min(row.revenue_pct, 100)}%`,
+                                      }}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground w-10">
+                                    {row.revenue_pct}%
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="text-sm text-right">
                             {formatCurrency(row.planned_cost)}

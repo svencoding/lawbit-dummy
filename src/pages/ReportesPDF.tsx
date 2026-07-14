@@ -106,8 +106,7 @@ function getWorkingDaysInMonth(): number {
 }
 
 function getBillableHours(entry: RelationalTimeEntry): number {
-  const entryAny = entry as RelationalTimeEntry & { billable_hours?: number };
-  return entryAny.billable_hours ?? entry.billable_hour ?? 0;
+  return entry.billable_hours ?? 0;
 }
 
 function formatCurrency(value: number): string {
@@ -405,9 +404,238 @@ function computeGerencialData(
   };
 }
 
+// ===================== AI INSIGHTS =====================
+
+interface Insight {
+  text: string;
+  tone: "positive" | "warning" | "neutral";
+}
+
+/** Extra analytics derived from the gerencial dataset (used in both preview + PDF). */
+interface GerencialAnalytics {
+  metaAttainment: number;
+  clientConcentration: number; // % of billable hours from top 3 clients
+  revenueMomentum: number; // % change last month vs first month
+  topArea: { area: string; facturacion: number } | null;
+  billableRatio: number;
+  avgRevenuePerClient: number;
+}
+
+function computeGerencialAnalytics(data: GerencialReportData): GerencialAnalytics {
+  const totalClientHours = data.topClients.reduce((s, c) => s + c.hours, 0);
+  const top3Hours = data.topClients.slice(0, 3).reduce((s, c) => s + c.hours, 0);
+  const clientConcentration = totalClientHours > 0 ? (top3Hours / totalClientHours) * 100 : 0;
+
+  const months = data.monthlyRevenue;
+  let revenueMomentum = 0;
+  if (months.length >= 2) {
+    const first = months[0].revenue;
+    const last = months[months.length - 1].revenue;
+    if (first > 0) revenueMomentum = ((last - first) / first) * 100;
+  }
+
+  const topArea =
+    data.areaBreakdown.length > 0
+      ? [...data.areaBreakdown].sort((a, b) => b.facturacion - a.facturacion)[0]
+      : null;
+
+  return {
+    metaAttainment:
+      data.metaFacturacion > 0 ? (data.totalFacturado / data.metaFacturacion) * 100 : 0,
+    clientConcentration,
+    revenueMomentum,
+    topArea: topArea ? { area: topArea.area, facturacion: topArea.facturacion } : null,
+    billableRatio: data.totalHours > 0 ? (data.totalHorasFacturables / data.totalHours) * 100 : 0,
+    avgRevenuePerClient:
+      data.clientesUnicos > 0 ? data.totalFacturado / data.clientesUnicos : 0,
+  };
+}
+
+function generateGerencialInsights(data: GerencialReportData): Insight[] {
+  const a = computeGerencialAnalytics(data);
+  const out: Insight[] = [];
+
+  // Goal attainment
+  if (data.metaFacturacion > 0) {
+    if (a.metaAttainment >= 100) {
+      out.push({
+        tone: "positive",
+        text: `La firma superó su meta de facturación, alcanzando el ${a.metaAttainment.toFixed(0)}% del objetivo (${formatCurrency(data.totalFacturado)} frente a una meta de ${formatCurrency(data.metaFacturacion)}).`,
+      });
+    } else if (a.metaAttainment >= 80) {
+      out.push({
+        tone: "neutral",
+        text: `La facturación alcanzó el ${a.metaAttainment.toFixed(0)}% de la meta; un cierre adicional de ${formatCurrency(data.metaFacturacion - data.totalFacturado)} completaría el objetivo del periodo.`,
+      });
+    } else {
+      out.push({
+        tone: "warning",
+        text: `La facturación se ubicó en ${a.metaAttainment.toFixed(0)}% de la meta, ${formatCurrency(data.metaFacturacion - data.totalFacturado)} por debajo del objetivo. Conviene revisar la asignación de horas facturables.`,
+      });
+    }
+  }
+
+  // Growth vs previous period
+  if (data.prevPeriod && data.prevPeriod.totalFacturado > 0) {
+    const d = formatDelta(data.totalFacturado, data.prevPeriod.totalFacturado);
+    if (d.direction === "up") {
+      out.push({
+        tone: "positive",
+        text: `Los ingresos crecieron ${Math.abs(d.percent).toFixed(1)}% respecto al periodo anterior${data.topClients[0] ? `, con ${data.topClients[0].name} como principal motor de actividad` : ""}.`,
+      });
+    } else if (d.direction === "down") {
+      out.push({
+        tone: "warning",
+        text: `Los ingresos cayeron ${Math.abs(d.percent).toFixed(1)}% frente al periodo anterior. Se sugiere analizar los clientes con menor actividad para revertir la tendencia.`,
+      });
+    }
+  }
+
+  // Client concentration / risk
+  if (data.topClients.length >= 3) {
+    if (a.clientConcentration >= 60) {
+      out.push({
+        tone: "warning",
+        text: `Existe una alta concentración de cartera: los 3 clientes principales representan el ${a.clientConcentration.toFixed(0)}% de las horas facturables. Diversificar la base de clientes reduciría el riesgo de dependencia.`,
+      });
+    } else {
+      out.push({
+        tone: "positive",
+        text: `La cartera está sanamente distribuida: los 3 clientes principales concentran solo el ${a.clientConcentration.toFixed(0)}% de las horas facturables.`,
+      });
+    }
+  }
+
+  // Margin health
+  if (data.avgMarginPercent >= 40) {
+    out.push({
+      tone: "positive",
+      text: `El margen promedio de ${data.avgMarginPercent.toFixed(1)}% supera el estándar del sector legal (~35%), lo que refleja una operación eficiente en costos.`,
+    });
+  } else if (data.avgMarginPercent > 0 && data.avgMarginPercent < 20) {
+    out.push({
+      tone: "warning",
+      text: `El margen promedio de ${data.avgMarginPercent.toFixed(1)}% es ajustado; revisar tarifas por hora y la mezcla de proyectos podría mejorar la rentabilidad.`,
+    });
+  }
+
+  // Utilization
+  if (data.utilizationRate > 0 && data.utilizationRate < 60) {
+    out.push({
+      tone: "warning",
+      text: `La utilización de ${data.utilizationRate.toFixed(1)}% indica capacidad ociosa. Reorientar horas no facturables hacia trabajo facturable elevaría los ingresos sin sumar personal.`,
+    });
+  } else if (data.utilizationRate >= 80) {
+    out.push({
+      tone: "positive",
+      text: `La utilización de ${data.utilizationRate.toFixed(1)}% es sólida y muestra que el equipo sostiene una alta proporción de horas facturables.`,
+    });
+  }
+
+  // Top practice area
+  if (a.topArea && a.topArea.facturacion > 0) {
+    out.push({
+      tone: "neutral",
+      text: `El área de ${a.topArea.area} lidera la facturación con ${formatCurrency(a.topArea.facturacion)}, posicionándose como la práctica más rentable del periodo.`,
+    });
+  }
+
+  return out.slice(0, 5);
+}
+
+function generateIndividualInsights(data: IndividualReportData): Insight[] {
+  const out: Insight[] = [];
+  const billableRatio = data.totalHours > 0 ? (data.billableHours / data.totalHours) * 100 : 0;
+  const firstName = data.usuario.name.split(" ")[0];
+
+  if (data.utilizationRate >= 100) {
+    out.push({
+      tone: "positive",
+      text: `${firstName} superó su meta de utilización alcanzando ${data.utilizationRate.toFixed(0)}%, un desempeño sobresaliente para el periodo.`,
+    });
+  } else if (data.utilizationRate > 0 && data.utilizationRate < 70) {
+    out.push({
+      tone: "warning",
+      text: `La utilización de ${data.utilizationRate.toFixed(0)}% está por debajo del objetivo; incrementar las horas facturables mejoraría la contribución a la firma.`,
+    });
+  } else {
+    out.push({
+      tone: "neutral",
+      text: `La utilización se ubicó en ${data.utilizationRate.toFixed(0)}%, dentro del rango esperado para su categoría.`,
+    });
+  }
+
+  out.push({
+    tone: billableRatio >= 70 ? "positive" : "neutral",
+    text: `El ${billableRatio.toFixed(0)}% de las horas registradas fueron facturables (${data.billableHours.toFixed(0)}h de ${Math.round(data.totalHours)}h totales).`,
+  });
+
+  if (data.clients.length > 0) {
+    const totalH = data.clients.reduce((s, c) => s + c.hours, 0);
+    const top = data.clients[0];
+    if (totalH > 0 && top) {
+      const share = (top.hours / totalH) * 100;
+      out.push({
+        tone: share >= 50 ? "warning" : "neutral",
+        text: `${top.clientName} concentra el ${share.toFixed(0)}% del tiempo dedicado${share >= 50 ? ", una dependencia que conviene equilibrar con otros clientes" : ", siendo el cliente más relevante de la cartera"}.`,
+      });
+    }
+  }
+
+  if (data.prevPeriod) {
+    const d = formatDelta(data.billableHours, data.prevPeriod.billableHours);
+    if (d.direction === "up") {
+      out.push({
+        tone: "positive",
+        text: `Las horas facturables crecieron ${Math.abs(d.percent).toFixed(1)}% respecto al periodo anterior.`,
+      });
+    } else if (d.direction === "down") {
+      out.push({
+        tone: "warning",
+        text: `Las horas facturables disminuyeron ${Math.abs(d.percent).toFixed(1)}% respecto al periodo anterior.`,
+      });
+    }
+  }
+
+  return out.slice(0, 4);
+}
+
 // ===================== SUB-COMPONENTS =====================
 
 /* SchedulePanel removed — feature not yet implemented */
+
+/** Renders the AI insights block in the on-screen preview. */
+function AIInsightsPanel({ insights }: { insights: Insight[] }) {
+  if (insights.length === 0) return null;
+  const toneStyles: Record<Insight["tone"], string> = {
+    positive: "bg-emerald-500",
+    warning: "bg-orange-500",
+    neutral: "bg-slate-400",
+  };
+  return (
+    <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50/40 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-sm">
+          <Sparkles className="h-4 w-4 text-white" />
+        </div>
+        <h4 className="text-sm font-semibold text-slate-800">Análisis Inteligente</h4>
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
+          Generado por IA
+        </span>
+      </div>
+      <ul className="space-y-2.5">
+        {insights.map((ins, i) => (
+          <li key={i} className="flex items-start gap-2.5">
+            <span
+              className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${toneStyles[ins.tone]}`}
+            />
+            <span className="text-xs leading-relaxed text-slate-700">{ins.text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** Delta badge for KPI cards */
 function DeltaBadge({
@@ -594,6 +822,8 @@ function GerencialPreviewContent({
 }) {
   const maxAreaRevenue = Math.max(...gerData.areaBreakdown.map((a) => a.facturacion), 1);
   const maxCategoryHours = Math.max(...gerData.categoryBreakdown.map((c) => c.billableHours), 1);
+  const analytics = computeGerencialAnalytics(gerData);
+  const insights = generateGerencialInsights(gerData);
 
   return (
     <div className="space-y-6">
@@ -671,6 +901,51 @@ function GerencialPreviewContent({
           </p>
         </div>
       </div>
+
+      {/* Derived analytics — key ratios */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-lg border border-border/50 p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Target className="h-3 w-3" />
+            Cumplimiento de Meta
+          </div>
+          <div className={`text-lg font-bold ${analytics.metaAttainment >= 100 ? "text-emerald-600" : "text-amber-600"}`}>
+            {gerData.metaFacturacion > 0 ? `${analytics.metaAttainment.toFixed(0)}%` : "—"}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border/50 p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <Users className="h-3 w-3" />
+            Concentración Top 3
+          </div>
+          <div className={`text-lg font-bold ${analytics.clientConcentration >= 60 ? "text-red-600" : "text-emerald-600"}`}>
+            {analytics.clientConcentration.toFixed(0)}%
+          </div>
+        </div>
+        <div className="rounded-lg border border-border/50 p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <DollarSign className="h-3 w-3" />
+            Ingreso / Cliente
+          </div>
+          <div className="text-lg font-bold text-foreground">
+            {formatCurrency(analytics.avgRevenuePerClient)}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border/50 p-3">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <TrendingUp className="h-3 w-3" />
+            Momentum Ingresos
+          </div>
+          <div className={`text-lg font-bold ${analytics.revenueMomentum >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+            {gerData.monthlyRevenue.length >= 2
+              ? `${analytics.revenueMomentum >= 0 ? "+" : ""}${analytics.revenueMomentum.toFixed(0)}%`
+              : "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* AI Insights */}
+      <AIInsightsPanel insights={insights} />
 
       {/* Revenue by Practice Area */}
       {gerData.areaBreakdown.length > 0 && (
@@ -951,6 +1226,9 @@ function IndividualPreviewContent({
         ))}
       </div>
 
+      {/* AI Insights */}
+      <AIInsightsPanel insights={generateIndividualInsights(indData)} />
+
       {/* Client breakdown */}
       {indData.clients.length > 0 && (
         <div>
@@ -1034,16 +1312,21 @@ async function generatePDFDoc(opts: {
   const m = 18;
   let y = 0;
 
-  const navy = { r: 26, g: 54, b: 93 };
-  const gold = { r: 196, g: 164, b: 75 };
-  const lightBg = { r: 248, g: 249, b: 252 };
-  const midGray = { r: 120, g: 120, b: 120 };
+  // Professional corporate palette — deep navy + a single clean blue accent.
+  // (Replaces the previous navy + tan/gold scheme.)
+  const navy = { r: 22, g: 35, b: 56 }; // primary — deep navy
+  const gold = { r: 45, g: 106, b: 197 }; // accent — clean blue (kept name for existing refs)
+  const accent = gold;
+  const ink = { r: 15, g: 23, b: 42 }; // slate-900 headings
+  const lightBg = { r: 247, g: 249, b: 252 };
+  const midGray = { r: 100, g: 116, b: 139 }; // slate-500
+  const hairline = { r: 226, g: 232, b: 240 }; // slate-200
 
-  // Top accent
+  // Top accent — slim navy band with a thin accent line beneath
   doc.setFillColor(navy.r, navy.g, navy.b);
-  doc.rect(0, 0, pw, 4, "F");
-  doc.setFillColor(gold.r, gold.g, gold.b);
-  doc.rect(0, 4, pw, 1.5, "F");
+  doc.rect(0, 0, pw, 3, "F");
+  doc.setFillColor(accent.r, accent.g, accent.b);
+  doc.rect(0, 3, pw, 0.8, "F");
   y = 14;
 
   // Logo — constrained to max 22mm wide, 14mm tall so it doesn't crowd the title
@@ -1218,6 +1501,78 @@ async function generatePDFDoc(opts: {
     y += boxH + 14;
   }
 
+  function drawInsights(insights: Insight[]) {
+    if (insights.length === 0) return;
+    if (y > ph - 45) {
+      doc.addPage();
+      y = m;
+    }
+
+    // Section heading + "GENERADO POR IA" badge
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(ink.r, ink.g, ink.b);
+    const heading = "Analisis Inteligente";
+    doc.text(heading, m, y);
+    const headingW = doc.getTextWidth(heading);
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    const badge = "GENERADO POR IA";
+    const badgeW = doc.getTextWidth(badge) + 5;
+    doc.setFillColor(accent.r, accent.g, accent.b);
+    doc.roundedRect(m + headingW + 4, y - 3.4, badgeW, 5, 1, 1, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.text(badge, m + headingW + 4 + badgeW / 2, y + 0.2, { align: "center" });
+    y += 6;
+
+    // Pre-measure wrapped lines to size the container
+    const textW = tableWidth - 16;
+    const lineH = 4.4;
+    const blockGap = 3.2;
+    const blocks = insights.map((ins) => {
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      return { ins, lines: doc.splitTextToSize(ins.text, textW) as string[] };
+    });
+    let contentH = 6;
+    blocks.forEach((b) => {
+      contentH += b.lines.length * lineH + blockGap;
+    });
+    contentH += 1;
+
+    if (y + contentH > ph - 16) {
+      doc.addPage();
+      y = m;
+    }
+
+    // Container
+    doc.setFillColor(lightBg.r, lightBg.g, lightBg.b);
+    doc.setDrawColor(hairline.r, hairline.g, hairline.b);
+    doc.roundedRect(m, y, tableWidth, contentH, 2.5, 2.5, "FD");
+    doc.setFillColor(accent.r, accent.g, accent.b);
+    doc.rect(m, y, 1.5, contentH, "F");
+
+    let iy = y + 7;
+    blocks.forEach(({ ins, lines }) => {
+      const tone =
+        ins.tone === "positive"
+          ? { r: 16, g: 185, b: 129 }
+          : ins.tone === "warning"
+            ? { r: 234, g: 88, b: 12 }
+            : { r: 100, g: 116, b: 139 };
+      doc.setFillColor(tone.r, tone.g, tone.b);
+      doc.circle(m + 6, iy - 1.4, 1.1, "F");
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(51, 65, 85);
+      lines.forEach((ln, i) => {
+        doc.text(ln, m + 10, iy + i * lineH);
+      });
+      iy += lines.length * lineH + blockGap;
+    });
+    y += contentH + 12;
+  }
+
   // ── TYPE-SPECIFIC CONTENT ──
   if (opts.type === "individual" && opts.individual) {
     const data = opts.individual;
@@ -1284,6 +1639,8 @@ async function generatePDFDoc(opts: {
         accent: { r: 16, g: 185, b: 129 },
       },
     ]);
+
+    drawInsights(generateIndividualInsights(data));
 
     drawTable(
       "Desglose por Cliente",
@@ -1368,6 +1725,41 @@ async function generatePDFDoc(opts: {
         accent: { r: 168, g: 85, b: 247 },
       },
     ]);
+
+    // Derived analytics — key ratios beyond headline KPIs
+    const analytics = computeGerencialAnalytics(data);
+    drawKPIBoxes([
+      {
+        label: "Cumplim. de Meta",
+        value: data.metaFacturacion > 0 ? `${analytics.metaAttainment.toFixed(0)}%` : "—",
+        accent: analytics.metaAttainment >= 100
+          ? { r: 16, g: 185, b: 129 }
+          : { r: 245, g: 158, b: 11 },
+      },
+      {
+        label: "Concentr. Top 3",
+        value: `${analytics.clientConcentration.toFixed(0)}%`,
+        accent: analytics.clientConcentration >= 60
+          ? { r: 239, g: 68, b: 68 }
+          : { r: 16, g: 185, b: 129 },
+      },
+      {
+        label: "Ingreso / Cliente",
+        value: formatCurrency(analytics.avgRevenuePerClient),
+        accent: { r: 45, g: 106, b: 197 },
+      },
+      {
+        label: "Momentum Ingresos",
+        value: data.monthlyRevenue.length >= 2
+          ? `${analytics.revenueMomentum >= 0 ? "+" : ""}${analytics.revenueMomentum.toFixed(0)}%`
+          : "—",
+        accent: analytics.revenueMomentum >= 0
+          ? { r: 16, g: 185, b: 129 }
+          : { r: 239, g: 68, b: 68 },
+      },
+    ]);
+
+    drawInsights(generateGerencialInsights(data));
 
     // Top Clients with margin
     drawTable(

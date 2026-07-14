@@ -1898,7 +1898,7 @@ export function getHistoricalProjectsByArea(
     for (const entry of entries) {
       const hours = typeof entry.hours === "number" ? entry.hours : 0;
       const bh =
-        typeof entry.billable_hour === "number" ? entry.billable_hour : 0;
+        typeof entry.billable_hours === "number" ? entry.billable_hours : 0;
       const cost = typeof entry.total_cost === "number" ? entry.total_cost : 0;
       totalHours += hours;
       billableHours += bh;
@@ -2030,7 +2030,8 @@ export function getActualsByAreaAndMonth(
     if (!asunto?.practice_area) return;
 
     const hours = typeof entry.hours === "number" ? entry.hours : 0;
-    const bh = typeof entry.billable_hour === "number" ? entry.billable_hour : 0;
+    const bh =
+      typeof entry.billable_hours === "number" ? entry.billable_hours : 0;
     const cost = typeof entry.total_cost === "number" ? entry.total_cost : 0;
 
     const bucket = ensureBucket(asunto.practice_area, date.getMonth() + 1);

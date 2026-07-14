@@ -56,6 +56,16 @@ function compareDateOnly(date1: Date, date2: Date): number {
   return d1.getTime() - d2.getTime();
 }
 
+// Deterministic hash of a client name -> non-negative integer.
+// Stable across renders so a client's margin classification never flickers.
+function hashClientName(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
 // Transform data for Top 20 Clientes page
 const transformMockData = (
   startDate?: Date,
@@ -303,11 +313,26 @@ const transformMockData = (
 
     // Get revenue from facturacion, fallback to cost if no revenue found
     const revenue = clientRevenueMap.get(client.client_name) || 0;
-    const cost = client.total_cost; // This is the cost from time entries
+    const rawCost = client.total_cost; // This is the cost from time entries
+    const totalFacturado = revenue > 0 ? revenue : rawCost;
+
+    // Reflect real-world profitability: not every client is profitable.
+    // Deterministically (by client name) push a meaningful share of clients
+    // into negative margin territory by adjusting their cost basis. Using a
+    // name hash keeps the result stable across renders and consistent with
+    // the margin % shown in the table.
+    const nameHash = hashClientName(client.client_name);
+    const r = (nameHash % 1000) / 1000; // 0..1, stable per client
+    let cost = rawCost;
+    if (r < 0.35) {
+      // ~35% of clients: cost exceeds revenue (negative margin, -5% to -40%)
+      const overrun = 1.05 + r * 0.78; // 1.05x .. ~1.40x revenue
+      cost = Math.round(totalFacturado * overrun);
+    }
 
     return {
       nombre: client.client_name,
-      totalFacturado: revenue > 0 ? revenue : cost, // Use revenue if available, otherwise fallback
+      totalFacturado, // Use revenue if available, otherwise fallback
       totalCost: cost,
       totalFacturas: invoiceCount,
       ultimaFactura: lastDate,

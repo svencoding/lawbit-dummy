@@ -73,8 +73,8 @@ export interface TimeEntry {
   user_name: string; // string
   input_date: string; // date
   hours: number; // number
-  billable_hour: number | null; // number (nullable, can be "-")
-  non_billable: number | null; // number (nullable, can be "-")
+  billable_hours: number | null; // number (nullable, can be "-")
+  non_billable_hours: number | null; // number (nullable, can be "-")
   hourly_cost: number; // number
   total_cost: number | null; // number (nullable, can be "-")
   rate: number; // number

@@ -114,9 +114,7 @@ function getWorkingDaysInMonth(year: number, month: number): number {
 
 // Helper function to get billable hours from time entry (handles both field names)
 function getBillableHours(entry: RelationalTimeEntry): number {
-  // Handle both billable_hours (plural) and billable_hour (singular) field names
-  const entryAny = entry as RelationalTimeEntry & { billable_hours?: number };
-  return entryAny.billable_hours ?? entry.billable_hour ?? 0;
+  return entry.billable_hours ?? 0;
 }
 
 const UserProfile = () => {
@@ -394,8 +392,8 @@ const UserProfile = () => {
       const totalHours = Number(e.hours ?? 0);
       if (totalHours <= 0) return;
 
-      const totalBillable = Number((e as any).billable_hours ?? e.billable_hour ?? 0);
-      const totalNonBillable = Number((e as any).non_billable_hours ?? e.non_billable ?? 0);
+      const totalBillable = Number(e.billable_hours ?? 0);
+      const totalNonBillable = Number(e.non_billable_hours ?? 0);
       const totalCost = Number(e.total_cost ?? 0);
       const totalProduction = Number(e.production ?? 0);
       const { taskType, description } = getTimeEntryDescription(

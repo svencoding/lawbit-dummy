@@ -13,7 +13,9 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-const STORAGE_KEY_ENTRIES = "lawbit-budget-entries";
+// Bump the version suffix whenever generateDefaultBudget changes so stale
+// budgets cached in localStorage are regenerated instead of reused.
+const STORAGE_KEY_ENTRIES = "lawbit-budget-entries-v2";
 const STORAGE_KEY_NOTES = "lawbit-budget-notes";
 
 function generateId(): string {
@@ -21,28 +23,54 @@ function generateId(): string {
 }
 
 /**
- * Generate a default budget based on actuals × 1.1, distributed uniformly.
+ * Per-area planning factors so the default budget is NOT a flat multiple of
+ * actuals. A plan is set independently of what actually happened, so each area
+ * deviates: some are budgeted optimistically (plan > actual → below target),
+ * others conservatively (plan < actual → over budget). Applied deterministically
+ * by area index so the demo is stable across reloads and still produces a
+ * realistic spread of consumption %, variances and deviation alerts.
+ */
+const PLAN_FACTORS: Array<{ revenue: number; cost: number; utilization: number }> = [
+  { revenue: 1.18, cost: 1.05, utilization: 78 }, // ambitious revenue, tight cost cap
+  { revenue: 0.92, cost: 1.22, utilization: 72 }, // modest revenue goal, loose cost cap
+  { revenue: 1.28, cost: 1.12, utilization: 80 }, // stretch target → likely revenue-low alert
+  { revenue: 1.02, cost: 0.94, utilization: 75 }, // tight cost cap → likely cost-over alert
+  { revenue: 0.88, cost: 1.30, utilization: 70 },
+  { revenue: 1.12, cost: 1.00, utilization: 82 },
+  { revenue: 1.35, cost: 1.15, utilization: 76 }, // very ambitious → revenue-low alert
+];
+
+/**
+ * Generate a default budget from actuals, annualized and varied per area.
  */
 function generateDefaultBudget(year: number): BudgetEntry[] {
   const actuals = getActualsByAreaAndMonth(year);
   const areas = getAllPracticeAreas();
   const entries: BudgetEntry[] = [];
 
-  areas.forEach((area) => {
+  areas.forEach((area, i) => {
     const areaActuals = actuals.get(area);
     let totalRevenue = 0;
     let totalCost = 0;
+    let monthsWithActivity = 0;
 
     if (areaActuals) {
       areaActuals.forEach((v) => {
         totalRevenue += v.revenue;
         totalCost += v.cost;
+        if (v.revenue > 0 || v.cost > 0) monthsWithActivity++;
       });
     }
 
-    // Apply 1.1× growth factor (same pattern as getDashboardData meta)
-    const annualRevenueTarget = Math.round(totalRevenue * 1.1);
-    const annualCostCap = Math.round(totalCost * 1.1);
+    // Annualize: for a partial year (e.g. only Jan–Feb loaded) the actuals cover
+    // just a few months, so extrapolate the run rate to a full 12 months before
+    // building the annual budget. Otherwise a 2-month total would be treated as
+    // the whole year's plan and consumption would read ~90% by construction.
+    const annualizer = monthsWithActivity > 0 ? 12 / monthsWithActivity : 1;
+    const factor = PLAN_FACTORS[i % PLAN_FACTORS.length];
+
+    const annualRevenueTarget = Math.round(totalRevenue * annualizer * factor.revenue);
+    const annualCostCap = Math.round(totalCost * annualizer * factor.cost);
     const monthlyRevenue = Math.round(annualRevenueTarget / 12);
     const monthlyCost = Math.round(annualCostCap / 12);
 
@@ -54,7 +82,7 @@ function generateDefaultBudget(year: number): BudgetEntry[] {
         month,
         planned_revenue: monthlyRevenue,
         planned_cost: monthlyCost,
-        target_utilization: 75, // Industry standard for law firms
+        target_utilization: factor.utilization,
       });
     }
   });
@@ -159,6 +187,18 @@ export function useBudgetData(year: number) {
   const professionalCounts = useMemo(() => getProfessionalCountByArea(), []);
   const allAreas = useMemo(() => getAllPracticeAreas(), []);
 
+  // Months elapsed with real activity (revenue or cost) across all areas.
+  // Used to pro-rate the annual plan when judging YTD pace on a partial year.
+  const monthsElapsed = useMemo(() => {
+    const months = new Set<number>();
+    actuals.forEach((areaMap) => {
+      areaMap.forEach((v, month) => {
+        if (v.revenue > 0 || v.cost > 0) months.add(month);
+      });
+    });
+    return Math.max(months.size, 1);
+  }, [actuals]);
+
   // Entries for current year
   const yearEntries = useMemo(
     () => budgetEntries.filter((e) => e.year === year),
@@ -258,26 +298,34 @@ export function useBudgetData(year: number) {
             ? ((actualRevenue - actualCost) / actualRevenue) * 100
             : 0;
 
+        // Variances compare YTD actuals against the pro-rated plan (annual ×
+        // fraction of year elapsed), so a partial year reads as pace-vs-target
+        // instead of a large gap against the full-year plan.
+        const elapsedFrac = monthsElapsed / 12;
+        const expectedRevenue = plannedRevenue * elapsedFrac;
+        const expectedCost = plannedCost * elapsedFrac;
+
         return {
           practice_area: area,
           professional_count: professionalCounts.get(area) || 0,
           planned_revenue: Math.round(plannedRevenue),
           actual_revenue: Math.round(actualRevenue),
-          revenue_variance: Math.round(actualRevenue - plannedRevenue),
+          revenue_variance: Math.round(actualRevenue - expectedRevenue),
+          // Progress toward the annual goal (naturally ~elapsed% mid-year).
           revenue_pct:
             plannedRevenue > 0
               ? Math.round((actualRevenue / plannedRevenue) * 1000) / 10
               : 0,
           planned_cost: Math.round(plannedCost),
           actual_cost: Math.round(actualCost),
-          cost_variance: Math.round(actualCost - plannedCost),
+          cost_variance: Math.round(actualCost - expectedCost),
           target_utilization: Math.round(avgTargetUtil * 10) / 10,
           actual_utilization: Math.round(actualUtilization * 10) / 10,
           profit_margin: Math.round(profitMargin * 10) / 10,
         };
       })
       .sort((a, b) => b.actual_revenue - a.actual_revenue);
-  }, [yearEntries, actuals, allAreas, professionalCounts]);
+  }, [yearEntries, actuals, allAreas, professionalCounts, monthsElapsed]);
 
   // KPIs
   const kpis: BudgetKPIs = useMemo(() => {
@@ -323,14 +371,19 @@ export function useBudgetData(year: number) {
       totalPlannedCost,
       totalActualCost,
       costBudgetRemaining: totalPlannedCost - totalActualCost,
-      overallVariancePct:
-        totalPlannedRevenue > 0
+      // Variance vs the pro-rated plan (annual plan × fraction of year elapsed),
+      // so a partial year reads as pace-vs-target rather than YTD-vs-full-year.
+      overallVariancePct: (() => {
+        const expectedRevenueToDate =
+          totalPlannedRevenue * (monthsElapsed / 12);
+        return expectedRevenueToDate > 0
           ? Math.round(
-              ((totalActualRevenue - totalPlannedRevenue) /
-                totalPlannedRevenue) *
+              ((totalActualRevenue - expectedRevenueToDate) /
+                expectedRevenueToDate) *
                 1000,
             ) / 10
-          : 0,
+          : 0;
+      })(),
       targetUtilization: Math.round(avgTargetUtil * 10) / 10,
       actualUtilization:
         totalHours > 0
@@ -344,7 +397,7 @@ export function useBudgetData(year: number) {
             ) / 10
           : 0,
     };
-  }, [breakdownData, actuals]);
+  }, [breakdownData, actuals, monthsElapsed]);
 
   // Update budget entries for a given area
   const updateBudgetForArea = useCallback(
@@ -409,6 +462,7 @@ export function useBudgetData(year: number) {
     allAreas,
     professionalCounts,
     actuals,
+    monthsElapsed,
     updateBudgetForArea,
     setAnnualTargets,
   };

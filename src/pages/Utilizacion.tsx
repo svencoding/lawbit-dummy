@@ -98,9 +98,7 @@ function getMonthNameShort(month: number): string {
 
 // Helper function to get billable hours from time entry (handles both field names)
 function getBillableHours(entry: RelationalTimeEntry): number {
-  // Handle both billable_hours (plural) and billable_hour (singular) field names
-  const entryAny = entry as RelationalTimeEntry & { billable_hours?: number };
-  return entryAny.billable_hours ?? entry.billable_hour ?? 0;
+  return entry.billable_hours ?? 0;
 }
 
 const UtilizacionContent = () => {
@@ -477,8 +475,7 @@ const UtilizacionContent = () => {
     let totalNonBillable = 0;
     filteredTimeEntries.forEach((entry) => {
       totalHours += entry.hours / 60;
-      const entryAny = entry as RelationalTimeEntry & { non_billable_hours?: number };
-      totalNonBillable += (entryAny.non_billable_hours ?? entry.non_billable ?? 0) / 60;
+      totalNonBillable += (entry.non_billable_hours ?? 0) / 60;
     });
     const nonBillableRatio =
       totalHours > 0
