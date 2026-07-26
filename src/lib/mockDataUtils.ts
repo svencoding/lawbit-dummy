@@ -2091,6 +2091,12 @@ export interface BudgetVsActualRow {
   status: "completed" | "in_progress";
   budgetedRate: number;
   actualRate: number;
+  /**
+   * Hours logged valued at internal cost — the work in progress. Matches the
+   * "costo en curso" on the asunto profile. It is a cost, never revenue, and
+   * matters most on asuntos that have not been invoiced yet.
+   */
+  accruedCost: number;
   team: BudgetVsActualTeamRow[];
   lastActivity: number;
 }
@@ -2119,222 +2125,253 @@ const CATEGORY_TO_LEVEL: Record<string, { level: string; label: string; order: n
 };
 
 /**
- * Build budgeted-vs-actual rows from real asuntos.
- * - budgetedPrice  = asunto.amount (real quoted contract value)
- * - actualPrice    = sum of payments for the asunto, falling back to actual cost
- * - actualHours    = sum of time entries
- * - budgetedHours  = budgetedPrice / blended actual rate
- * - status         = "completed" if billed >= 85% of amount, else "in_progress"
- * - team breakdown = real time entries aggregated by usuario.category;
- *                    budgeted hours per level distributed proportionally
+ * Pricing baseline — shared by every budget-vs-actual view.
+ *
+ * The Facturación screen is the source of truth: it reports revenue as the sum
+ * of `facturacion.amount_charged` and its effective rate as revenue / billable
+ * hours (~$290/h). Anything shown as money on the pricing screens has to live
+ * on that same scale, so the two pages reconcile.
+ *
+ * `asunto.amount` is NOT usable as a budget on its own: it totals ~6x the
+ * firm's billing, its unit changes per charge_type (a RETAINER quote is a
+ * monthly figure, a HITOS quote is inflated ~4x) and it correlates only 0.39
+ * with what the asunto actually billed. It is therefore used solely as the
+ * *relative* signal for how far a quote missed — the absolute scale always
+ * comes from facturación.
  */
-export function getBudgetVsActualComparison(limit = 10): BudgetVsActualRow[] {
+
+/** Log-space spread of the quote error. 0.20 => typical deviation ~±22%. */
+const QUOTE_VARIANCE_SIGMA = 0.2;
+/** Clamp the quote signal to ±2 sd so outlier `amount` values stay believable. */
+const QUOTE_VARIANCE_CLAMP = 2;
+/** No time entries for this long => the engagement is treated as closed. */
+const IDLE_DAYS_UNTIL_CLOSED = 45;
+
+interface AsuntoActuals {
+  /** All logged hours. */
+  hours: number;
+  /** Hours that map to revenue: billable when present, total otherwise. */
+  valueHours: number;
+  cost: number;
+  lastEntry: number;
+  byCategory: Map<string, { hours: number; valueHours: number; cost: number }>;
+}
+
+interface PricingBaseline {
+  actualsByAsunto: Map<number, AsuntoActuals>;
+  billedByAsunto: Map<number, number>;
+  /** Standard hourly rate per usuario.category (400 / 300 / 250). */
+  listRateByCategory: Map<string, number>;
+  /** Firm-wide effective rate: total billed / total billable hours. */
+  firmBillingRate: number;
+  globalMaxEntry: number;
+  quoteLogMean: number;
+  quoteLogSd: number;
+}
+
+let pricingBaselineCache: PricingBaseline | null = null;
+
+function getPricingBaseline(): PricingBaseline {
+  if (pricingBaselineCache) return pricingBaselineCache;
+
   const entries = getTransformedTimeEntries();
-  const payments = getFacturacion();
-  const users = getUsuarios();
-  const clientsById = new Map(getClientes().map((c) => [c.id, c]));
+  const usersById = new Map(getUsuarios().map((u) => [u.id, u]));
 
-  const usersById = new Map(users.map((u) => [u.id, u]));
-  const avgRateByCategory = new Map<string, number>();
-  const grouped = new Map<string, { rateSum: number; n: number }>();
-  users.forEach((u) => {
-    const g = grouped.get(u.category) || { rateSum: 0, n: 0 };
-    g.rateSum += u.rate || 0;
+  const listRateByCategory = new Map<string, number>();
+  const rateAcc = new Map<string, { sum: number; n: number }>();
+  getUsuarios().forEach((u) => {
+    const g = rateAcc.get(u.category) || { sum: 0, n: 0 };
+    g.sum += u.rate || 0;
     g.n += 1;
-    grouped.set(u.category, g);
+    rateAcc.set(u.category, g);
   });
-  grouped.forEach((g, cat) => avgRateByCategory.set(cat, g.n > 0 ? g.rateSum / g.n : 0));
+  rateAcc.forEach((g, cat) => listRateByCategory.set(cat, g.n > 0 ? g.sum / g.n : 0));
 
-  const paymentsByAsunto = new Map<number, number>();
-  payments.forEach((p) => {
-    if (p.asunto_id == null) return;
-    paymentsByAsunto.set(p.asunto_id, (paymentsByAsunto.get(p.asunto_id) || 0) + (p.amount_charged || 0));
-  });
-
-  type Acc = {
-    totalHours: number;
-    totalCost: number;
-    lastEntry: number;
-    byCategory: Map<string, { hours: number; cost: number }>;
-  };
-  const accByAsunto = new Map<number, Acc>();
+  const actualsByAsunto = new Map<number, AsuntoActuals>();
   let globalMaxEntry = 0;
+  let firmBillableHours = 0;
   entries.forEach((e) => {
     const u = usersById.get(e.user_id);
     if (!u) return;
-    const cost = e.duration * HOURLY_COST_USD;
+    const hours = e.duration || 0;
+    const billable = e.billable_duration || 0;
+    const valueHours = billable > 0 ? billable : hours;
+    firmBillableHours += billable;
+
     const ts = e.date ? new Date(e.date).getTime() : 0;
     if (ts > globalMaxEntry) globalMaxEntry = ts;
-    let acc = accByAsunto.get(e.project_id);
+
+    let acc = actualsByAsunto.get(e.project_id);
     if (!acc) {
-      acc = { totalHours: 0, totalCost: 0, lastEntry: 0, byCategory: new Map() };
-      accByAsunto.set(e.project_id, acc);
+      acc = { hours: 0, valueHours: 0, cost: 0, lastEntry: 0, byCategory: new Map() };
+      actualsByAsunto.set(e.project_id, acc);
     }
-    acc.totalHours += e.duration;
-    acc.totalCost += cost;
+    acc.hours += hours;
+    acc.valueHours += valueHours;
+    acc.cost += hours * HOURLY_COST_USD;
     if (ts > acc.lastEntry) acc.lastEntry = ts;
-    const c = acc.byCategory.get(u.category) || { hours: 0, cost: 0 };
-    c.hours += e.duration;
-    c.cost += cost;
+
+    const c = acc.byCategory.get(u.category) ||
+      { hours: 0, valueHours: 0, cost: 0 };
+    c.hours += hours;
+    c.valueHours += valueHours;
+    c.cost += hours * HOURLY_COST_USD;
     acc.byCategory.set(u.category, c);
   });
 
-  const rows: BudgetVsActualRow[] = [];
-  for (const a of getAsuntos()) {
-    const amount = a.amount || 0;
-    if (amount < 1000) continue;
-    const acc = accByAsunto.get(a.id);
-    if (!acc || acc.totalHours <= 0) continue;
-
-    const billed = paymentsByAsunto.get(a.id) || 0;
-    const actualPrice = billed > 0 ? billed : acc.totalCost;
-    const actualHours = acc.totalHours;
-    const blendedActualRate = actualHours > 0 ? acc.totalCost / actualHours : 0;
-    const budgetedRate = blendedActualRate > 0 ? blendedActualRate : 1500;
-    const budgetedHours = Math.max(1, Math.round(amount / budgetedRate));
-    const idleDays = globalMaxEntry > 0 && acc.lastEntry > 0
-      ? (globalMaxEntry - acc.lastEntry) / (1000 * 60 * 60 * 24)
-      : 0;
-    const status: "completed" | "in_progress" =
-      billed >= amount * 0.5 || idleDays >= 45 ? "completed" : "in_progress";
-
-    const cliente = a.cliente_id != null ? clientsById.get(a.cliente_id) : null;
-    const projectLabel = buildProjectLabel(a, cliente?.name);
-
-    const team: BudgetVsActualTeamRow[] = [];
-    Object.entries(CATEGORY_TO_LEVEL).forEach(([cat, info]) => {
-      const c = acc.byCategory.get(cat);
-      if (!c || c.hours <= 0) return;
-      const proportion = c.hours / actualHours;
-      const tBudgetedHours = Math.round(budgetedHours * proportion);
-      const actualRate = c.hours > 0 ? c.cost / c.hours : 0;
-      const tBudgetedRate = avgRateByCategory.get(cat) || actualRate;
-      team.push({
-        level: info.level,
-        label: info.label,
-        budgetedHours: tBudgetedHours,
-        actualHours: Math.round(c.hours),
-        budgetedRate: Math.round(tBudgetedRate),
-        actualRate: Math.round(actualRate),
-        actualCost: Math.round(c.cost),
-        budgetedCost: Math.round(tBudgetedHours * tBudgetedRate),
-      });
-    });
-    team.sort((x, y) => {
-      const ox = Object.values(CATEGORY_TO_LEVEL).find((v) => v.level === x.level)?.order ?? 99;
-      const oy = Object.values(CATEGORY_TO_LEVEL).find((v) => v.level === y.level)?.order ?? 99;
-      return ox - oy;
-    });
-
-    rows.push({
-      asuntoId: a.id,
-      displayId: `AS-${a.id}`,
-      project: projectLabel,
-      area: a.practice_area || "—",
-      date: normalizeDate(a.created_date || "") || a.created_date || "",
-      budgetedPrice: Math.round(amount),
-      actualPrice: Math.round(actualPrice),
-      budgetedHours,
-      actualHours: Math.round(actualHours),
-      status,
-      budgetedRate: Math.round(budgetedRate),
-      actualRate: Math.round(blendedActualRate),
-      team,
-      lastActivity: acc.lastEntry,
-    });
-  }
-
-  rows.sort((a, b) => {
-    if (b.lastActivity !== a.lastActivity) return b.lastActivity - a.lastActivity;
-    return b.budgetedPrice - a.budgetedPrice;
+  // A client-level charge (a monthly retainer, typically) is written once per
+  // asunto of that client, so charging each asunto the full amount attributes
+  // the client's whole retainer to every one of its matters — QuantumNest's
+  // $90.269/month lands on 5 asuntos, making each look like it billed
+  // $902.690. Charges that repeat across asuntos are split between them, which
+  // keeps the client and firm totals intact while the per-asunto figure stops
+  // being a multiple of reality.
+  const chargeGroups = new Map<string, Payment[]>();
+  let firmBilled = 0;
+  getFacturacion().forEach((p) => {
+    firmBilled += p.amount_charged || 0;
+    if (p.asunto_id == null) return;
+    const key = `${p.cliente_id}|${p.month}|${p.amount_charged}`;
+    const group = chargeGroups.get(key) || [];
+    group.push(p);
+    chargeGroups.set(key, group);
   });
-  return rows.slice(0, limit);
+
+  const billedByAsunto = new Map<number, number>();
+  chargeGroups.forEach((rows) => {
+    const sharedBy = new Set(rows.map((r) => r.asunto_id)).size || 1;
+    rows.forEach((r) => {
+      if (r.asunto_id == null) return;
+      const share = (r.amount_charged || 0) / sharedBy;
+      billedByAsunto.set(r.asunto_id, (billedByAsunto.get(r.asunto_id) || 0) + share);
+    });
+  });
+  const firmBillingRate = firmBillableHours > 0 ? firmBilled / firmBillableHours : 0;
+
+  // Quote spread is measured over comparable engagements only: worked and billed.
+  const quoteLogs: number[] = [];
+  getAsuntos().forEach((a) => {
+    const acc = actualsByAsunto.get(a.id);
+    if (!acc || acc.valueHours <= 0) return;
+    if (!((billedByAsunto.get(a.id) || 0) > 0)) return;
+    if ((a.amount || 0) > 0) quoteLogs.push(Math.log(a.amount));
+  });
+
+  const quoteLogMean = quoteLogs.length > 0
+    ? quoteLogs.reduce((s, x) => s + x, 0) / quoteLogs.length
+    : 0;
+  const quoteLogSd = quoteLogs.length > 1
+    ? Math.sqrt(
+      quoteLogs.reduce((s, x) => s + (x - quoteLogMean) ** 2, 0) / quoteLogs.length,
+    )
+    : 0;
+
+  pricingBaselineCache = {
+    actualsByAsunto,
+    billedByAsunto,
+    listRateByCategory,
+    firmBillingRate,
+    globalMaxEntry,
+    quoteLogMean,
+    quoteLogSd,
+  };
+  return pricingBaselineCache;
 }
 
 /**
- * Build the same budget-vs-actual breakdown for a single asunto.
- * Returns null if the asunto has no quoted amount or no time entries.
+ * How far this asunto's quote sat from a normal quote, as a multiplier.
+ * Derived from the z-score of log(amount): a quote that was high relative to
+ * its peers still reads as "came in under budget", exactly as before — only
+ * the magnitude is capped to a realistic band instead of ±1500%.
  */
-export function getBudgetVsActualForAsunto(asuntoId: number): BudgetVsActualRow | null {
-  const asunto = getAsuntos().find((a) => a.id === asuntoId);
-  if (!asunto) return null;
+function quoteBiasFor(asunto: Asunto, baseline: PricingBaseline): number {
   const amount = asunto.amount || 0;
-  if (amount <= 0) return null;
+  if (amount <= 0 || baseline.quoteLogSd <= 0) return 1;
+  const z = (Math.log(amount) - baseline.quoteLogMean) / baseline.quoteLogSd;
+  const clamped = Math.max(-QUOTE_VARIANCE_CLAMP, Math.min(QUOTE_VARIANCE_CLAMP, z));
+  return Math.exp(QUOTE_VARIANCE_SIGMA * clamped);
+}
 
-  const entries = getTransformedTimeEntries().filter((e) => e.project_id === asuntoId);
-  if (entries.length === 0) return null;
+/**
+ * Build one budget-vs-actual row on the facturación scale.
+ * - actualPrice   = what the asunto actually invoiced (facturacion.amount_charged)
+ * - budgetedPrice = that revenue (plus the projected tail for open matters),
+ *                   shifted by the asunto's quote bias
+ * - budgetedHours = budgetedPrice / the team's blended standard rate
+ * - actualRate    = revenue / billable hours — a billing rate, never the cost rate
+ * - status        = closed once the matter has been idle for 45+ days
+ *
+ * Returns null unless the asunto has a quoted amount and logged hours. Matters
+ * with no registered billing are kept, with actualPrice at 0 — that is the
+ * truthful reading of an asunto that has been worked but never invoiced, and it
+ * is worth surfacing. Their revenue is never inferred from cost.
+ */
+function buildBudgetVsActualRow(
+  asunto: Asunto,
+  baseline: PricingBaseline,
+  clienteName: string | null | undefined,
+): BudgetVsActualRow | null {
+  if ((asunto.amount || 0) <= 0) return null;
 
-  const users = getUsuarios();
-  const usersById = new Map(users.map((u) => [u.id, u]));
-  const avgRateByCategory = new Map<string, number>();
-  const grouped = new Map<string, { rateSum: number; n: number }>();
-  users.forEach((u) => {
-    const g = grouped.get(u.category) || { rateSum: 0, n: 0 };
-    g.rateSum += u.rate || 0;
-    g.n += 1;
-    grouped.set(u.category, g);
+  const acc = baseline.actualsByAsunto.get(asunto.id);
+  if (!acc || acc.valueHours <= 0) return null;
+
+  const billed = baseline.billedByAsunto.get(asunto.id) || 0;
+
+  // Blended standard rate of the team that actually worked the matter.
+  let rateWeighted = 0;
+  let rateHours = 0;
+  acc.byCategory.forEach((c, cat) => {
+    rateWeighted += c.valueHours * (baseline.listRateByCategory.get(cat) || 0);
+    rateHours += c.valueHours;
   });
-  grouped.forEach((g, cat) => avgRateByCategory.set(cat, g.n > 0 ? g.rateSum / g.n : 0));
+  const listRate = rateHours > 0 && rateWeighted > 0
+    ? rateWeighted / rateHours
+    : baseline.firmBillingRate;
 
-  let totalHours = 0;
-  let totalCost = 0;
-  let lastEntry = 0;
-  const byCategory = new Map<string, { hours: number; cost: number }>();
-  // Find global max entry timestamp so idle-day status is consistent with the comparison list
-  let globalMaxEntry = 0;
-  getTransformedTimeEntries().forEach((e) => {
-    const ts = e.date ? new Date(e.date).getTime() : 0;
-    if (ts > globalMaxEntry) globalMaxEntry = ts;
-  });
-  entries.forEach((e) => {
-    const u = usersById.get(e.user_id);
-    if (!u) return;
-    const cost = e.duration * HOURLY_COST_USD;
-    totalHours += e.duration;
-    totalCost += cost;
-    const ts = e.date ? new Date(e.date).getTime() : 0;
-    if (ts > lastEntry) lastEntry = ts;
-    const c = byCategory.get(u.category) || { hours: 0, cost: 0 };
-    c.hours += e.duration;
-    c.cost += cost;
-    byCategory.set(u.category, c);
-  });
-  if (totalHours <= 0) return null;
-
-  const billed = getFacturacion()
-    .filter((p) => p.asunto_id === asuntoId)
-    .reduce((s, p) => s + (p.amount_charged || 0), 0);
-
-  const actualPrice = billed > 0 ? billed : totalCost;
-  const blendedActualRate = totalCost / totalHours;
-  const budgetedRate = blendedActualRate > 0 ? blendedActualRate : 1500;
-  const budgetedHours = Math.max(1, Math.round(amount / budgetedRate));
-  const idleDays = globalMaxEntry > 0 && lastEntry > 0
-    ? (globalMaxEntry - lastEntry) / (1000 * 60 * 60 * 24)
+  const idleDays = baseline.globalMaxEntry > 0 && acc.lastEntry > 0
+    ? (baseline.globalMaxEntry - acc.lastEntry) / (1000 * 60 * 60 * 24)
     : 0;
-  const status: "completed" | "in_progress" =
-    billed >= amount * 0.5 || idleDays >= 45 ? "completed" : "in_progress";
+  const status: "completed" | "in_progress" = idleDays >= IDLE_DAYS_UNTIL_CLOSED
+    ? "completed"
+    : "in_progress";
 
-  const clientes = getClientes();
-  const cliente = asunto.cliente_id != null ? clientes.find((c) => c.id === asunto.cliente_id) : null;
+  const bias = quoteBiasFor(asunto, baseline);
+  const actualRate = acc.valueHours > 0 ? billed / acc.valueHours : 0;
+
+  // Anchored on facturación for open and closed alike. Pricing the logged hours
+  // at standard rates was tried and discarded: hours per asunto and invoiced
+  // amounts move independently in this data, so the matters carrying thousands
+  // of hours came out with multi-million budgets no engagement of that size
+  // would ever be quoted at. Only the never-invoiced matters have no anchor to
+  // sit on, and those are small (35 median billable hours), so valuing their
+  // hours at the firm's effective rate stays in a sane range.
+  const budgetedPrice = billed > 0
+    ? billed * bias
+    : acc.valueHours * baseline.firmBillingRate * bias;
+  const budgetedHours = Math.max(1, Math.round(budgetedPrice / listRate));
 
   const team: BudgetVsActualTeamRow[] = [];
   Object.entries(CATEGORY_TO_LEVEL).forEach(([cat, info]) => {
-    const c = byCategory.get(cat);
-    if (!c || c.hours <= 0) return;
-    const proportion = c.hours / totalHours;
+    const c = acc.byCategory.get(cat);
+    if (!c || c.valueHours <= 0) return;
+    const proportion = c.valueHours / acc.valueHours;
     const tBudgetedHours = Math.round(budgetedHours * proportion);
-    const actualRate = c.hours > 0 ? c.cost / c.hours : 0;
-    const tBudgetedRate = avgRateByCategory.get(cat) || actualRate;
+    const tListRate = baseline.listRateByCategory.get(cat) || listRate;
+    // Revenue attributed to the level in proportion to the value it carried.
+    const valueShare = rateWeighted > 0
+      ? (c.valueHours * tListRate) / rateWeighted
+      : proportion;
+    const levelRevenue = billed * valueShare;
     team.push({
       level: info.level,
       label: info.label,
       budgetedHours: tBudgetedHours,
-      actualHours: Math.round(c.hours),
-      budgetedRate: Math.round(tBudgetedRate),
-      actualRate: Math.round(actualRate),
+      actualHours: Math.round(c.valueHours),
+      budgetedRate: Math.round(tListRate),
+      actualRate: Math.round(c.valueHours > 0 ? levelRevenue / c.valueHours : 0),
       actualCost: Math.round(c.cost),
-      budgetedCost: Math.round(tBudgetedHours * tBudgetedRate),
+      budgetedCost: Math.round(tBudgetedHours * tListRate),
     });
   });
   team.sort((x, y) => {
@@ -2346,19 +2383,95 @@ export function getBudgetVsActualForAsunto(asuntoId: number): BudgetVsActualRow 
   return {
     asuntoId: asunto.id,
     displayId: `AS-${asunto.id}`,
-    project: buildProjectLabel(asunto, cliente?.name),
+    project: buildProjectLabel(asunto, clienteName),
     area: asunto.practice_area || "—",
     date: normalizeDate(asunto.created_date || "") || asunto.created_date || "",
-    budgetedPrice: Math.round(amount),
-    actualPrice: Math.round(actualPrice),
+    budgetedPrice: Math.round(budgetedPrice),
+    actualPrice: Math.round(billed),
     budgetedHours,
-    actualHours: Math.round(totalHours),
+    actualHours: Math.round(acc.valueHours),
     status,
-    budgetedRate: Math.round(budgetedRate),
-    actualRate: Math.round(blendedActualRate),
+    budgetedRate: Math.round(listRate),
+    actualRate: Math.round(actualRate),
+    accruedCost: Math.round(acc.cost),
     team,
-    lastActivity: lastEntry,
+    lastActivity: acc.lastEntry,
   };
+}
+
+/**
+ * Every asunto that can be compared quote-vs-billing, most recently active first.
+ */
+
+/**
+ * How far a matter's invoicing sits from its budget, in percent.
+ */
+export function budgetDeviationPct(row: BudgetVsActualRow): number {
+  return row.budgetedPrice > 0
+    ? ((row.actualPrice - row.budgetedPrice) / row.budgetedPrice) * 100
+    : 0;
+}
+
+/**
+ * Hours burned against the hours the fees cover.
+ */
+export function hoursDeviationPct(row: BudgetVsActualRow): number {
+  return row.budgetedHours > 0
+    ? ((row.actualHours - row.budgetedHours) / row.budgetedHours) * 100
+    : 0;
+}
+
+/** Above this hours overrun, an open matter is flagged as under-recovering. */
+export const HOURS_OVERRUN_THRESHOLD_PCT = 70;
+
+/**
+ * An open matter that has delivered far more hours than its fees cover. Money
+ * is not the signal here — an engagement invoices progressively, so the amount
+ * tracks the budget by construction while the effort behind it does not.
+ */
+export function isUnderRecovery(row: BudgetVsActualRow): boolean {
+  return row.status === "in_progress" &&
+    row.actualPrice > 0 &&
+    hoursDeviationPct(row) > HOURS_OVERRUN_THRESHOLD_PCT;
+}
+
+/**
+ * Value of the delivered work that the fees do not cover: every logged hour
+ * priced at the team's standard rate, less what was actually invoiced.
+ */
+export function uncoveredWorkValue(row: BudgetVsActualRow): number {
+  return Math.max(0, row.actualHours * row.budgetedRate - row.actualPrice);
+}
+
+export function getBudgetVsActualComparison(limit = 10): BudgetVsActualRow[] {
+  const baseline = getPricingBaseline();
+  const clientsById = new Map(getClientes().map((c) => [c.id, c]));
+
+  const rows: BudgetVsActualRow[] = [];
+  for (const a of getAsuntos()) {
+    const cliente = a.cliente_id != null ? clientsById.get(a.cliente_id) : null;
+    const row = buildBudgetVsActualRow(a, baseline, cliente?.name);
+    if (row) rows.push(row);
+  }
+
+  rows.sort((a, b) => {
+    if (b.lastActivity !== a.lastActivity) return b.lastActivity - a.lastActivity;
+    return b.budgetedPrice - a.budgetedPrice;
+  });
+  return rows.slice(0, limit);
+}
+
+/**
+ * Same breakdown for a single asunto. Returns null when the asunto has no time
+ * entries or no registered billing.
+ */
+export function getBudgetVsActualForAsunto(asuntoId: number): BudgetVsActualRow | null {
+  const asunto = getAsuntos().find((a) => a.id === asuntoId);
+  if (!asunto) return null;
+  const cliente = asunto.cliente_id != null
+    ? getClientes().find((c) => c.id === asunto.cliente_id)
+    : null;
+  return buildBudgetVsActualRow(asunto, getPricingBaseline(), cliente?.name);
 }
 
 // ============================================================================

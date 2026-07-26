@@ -15,7 +15,8 @@ import Clientes from "./pages/Clientes";
 import Top20Clientes from "./pages/Top20Clientes";
 import Comparacion from "./pages/Comparacion";
 import Alertas from "./pages/Alertas";
-import Pricing from "./pages/Pricing";
+import PricingSwitch from "./pages/PricingSwitch";
+import PricingHistorico from "./pages/PricingHistorico";
 import Settings from "./pages/Settings";
 import UserProfile from "./pages/UserProfile";
 import ReportesPDF from "./pages/ReportesPDF";
@@ -26,6 +27,7 @@ import InformacionExterna from "./pages/InformacionExterna";
 import ClientProfile from "./pages/ClientProfile";
 import ProjectProfile from "./pages/ProjectProfile";
 import NotFound from "./pages/NotFound";
+import { AIAssistantWidget } from "@/components/AIAssistantWidget";
 
 const queryClient = new QueryClient();
 
@@ -51,7 +53,11 @@ const App = () => (
             />
             <Route path="/dashboard/comparacion" element={<Comparacion />} />
             <Route path="/dashboard/alertas" element={<Alertas />} />
-            <Route path="/dashboard/pricing" element={<Pricing />} />
+            <Route path="/dashboard/pricing" element={<PricingSwitch />} />
+            <Route
+              path="/dashboard/pricing/historico"
+              element={<PricingHistorico />}
+            />
             <Route path="/dashboard/settings" element={<Settings />} />
             <Route path="/user/:userCode" element={<UserProfile />} />
             <Route path="/dashboard/reportes" element={<ReportesPDF />} />
@@ -64,6 +70,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <AIAssistantWidget />
         </BrowserRouter>
       </TooltipProvider>
       </DateFilterProvider>

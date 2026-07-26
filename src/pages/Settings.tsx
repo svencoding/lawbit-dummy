@@ -15,7 +15,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Building2, Save, Palette, Check } from "lucide-react";
+import { Upload, Building2, Save, Palette, Check, Sparkles } from "lucide-react";
+import {
+  PRICING_VARIANTS,
+  usePricingVariant,
+} from "@/hooks/usePricingVariant";
 import { usePrimaryColor } from "@/hooks/usePrimaryColor";
 import { COLOR_PRESETS } from "@/lib/chartColors";
 
@@ -69,6 +73,8 @@ const Settings = () => {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
+  const { variant: pricingVariant, setVariant: setPricingVariant } =
+    usePricingVariant();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -314,6 +320,47 @@ const Settings = () => {
             Administra la información de tu firma
           </p>
         </div>
+
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle className="text-foreground flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Experiencia de Pricing
+            </CardTitle>
+            <CardDescription>
+              Elige cómo se presenta la herramienta de pricing
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2.5">
+            {PRICING_VARIANTS.map((v) => {
+              const selected = pricingVariant === v.value;
+              return (
+                <button
+                  key={v.value}
+                  type="button"
+                  onClick={() => setPricingVariant(v.value)}
+                  className={`w-full text-left rounded-lg border-2 p-4 transition-all ${
+                    selected
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border/60 hover:border-primary/40 hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <span className="text-sm font-semibold text-foreground">
+                      {v.label}
+                    </span>
+                    {selected && (
+                      <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {v.description}
+                  </span>
+                </button>
+              );
+            })}
+          </CardContent>
+        </Card>
 
         <Card className="border-border/50">
           <CardHeader>

@@ -62,6 +62,24 @@ import {
   MessageSquare,
   Sparkles,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Cell,
+  LabelList,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
+  Legend,
+  PieChart,
+  Pie,
+} from "recharts";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
@@ -129,6 +147,31 @@ function formatDelta(
   return { percent, direction: dir };
 }
 
+// Validated chart palette (navy/gold brand — passes CVD + contrast checks)
+const CHART_NAVY = "#2f5f96";
+const CHART_GOLD = "#b8860b";
+const CHART_TRACK = "#e8edf3";
+const CHART_MUTED = "#94a3b8";
+
+/** Random pick — makes the AI phrasing vary on every generation/download. */
+function pick<T>(...opts: T[]): T {
+  return opts[Math.floor(Math.random() * opts.length)];
+}
+
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthLabelLong(key: string): string {
+  const [y, mo] = key.split("-").map(Number);
+  return format(new Date(y, mo - 1, 1), "MMMM yyyy", { locale: es });
+}
+
+function monthLabelShort(key: string): string {
+  const [y, mo] = key.split("-").map(Number);
+  return format(new Date(y, mo - 1, 1), "MMM", { locale: es });
+}
+
 // ===================== TYPES =====================
 
 interface PeriodMetrics {
@@ -140,8 +183,28 @@ interface PeriodMetrics {
   totalCost: number;
 }
 
+/** Benchmark of a professional against the rest of the firm. */
+interface PeerBenchmark {
+  userMonthlyAvg: number;
+  firmMonthlyAvg: number;
+  pctVsFirm: number;
+  rank: number;
+  totalPeers: number;
+  recentTrendPct: number | null;
+  bestMonth: { label: string; hours: number } | null;
+  monthly: Array<{ month: string; user: number; firm: number }>;
+}
+
+/** Firm-wide professional stats used for gerencial insights. */
+interface FirmProStats {
+  firmMonthlyAvg: number;
+  belowAvg: Array<{ name: string; pct: number }>;
+  topPerformer: { name: string; pct: number } | null;
+}
+
 interface IndividualReportData extends PeriodMetrics {
   usuario: Usuario;
+  benchmark: PeerBenchmark;
   clients: Array<{
     clientName: string;
     hours: number;
@@ -207,6 +270,7 @@ interface GerencialReportData {
     costo: number;
     margin: number;
   }>;
+  proStats: FirmProStats;
   prevPeriod: {
     totalFacturado: number;
     totalHorasFacturables: number;
@@ -277,6 +341,149 @@ function getPreviousPeriodRange(
   const prevEnd = new Date(start.getTime() - 1);
   const prevStart = new Date(prevEnd.getTime() - dur);
   return { prevStart, prevEnd };
+}
+
+/** Buckets billable hours per user per month within an optional date range. */
+function bucketBillableByUserMonth(
+  start?: Date,
+  end?: Date,
+): { byUser: Map<string, Map<string, number>>; months: string[] } {
+  const byUser = new Map<string, Map<string, number>>();
+  getRawTimeEntries().forEach((e) => {
+    const d = normalizeDate(e.date);
+    if (!d) return;
+    if (start && d < start) return;
+    if (end && d > end) return;
+    const k = monthKey(d);
+    let map = byUser.get(e.user_name);
+    if (!map) {
+      map = new Map();
+      byUser.set(e.user_name, map);
+    }
+    map.set(k, (map.get(k) || 0) + getBillableHours(e) / 60);
+  });
+  const months = new Set<string>();
+  byUser.forEach((m) => m.forEach((_, k) => months.add(k)));
+  return { byUser, months: [...months].sort() };
+}
+
+function computePeerBenchmark(
+  userCode: string,
+  start?: Date,
+  end?: Date,
+): PeerBenchmark {
+  const { byUser, months } = bucketBillableByUserMonth(start, end);
+
+  // Firm average billable hours per active professional, per month
+  const firmPerMonth = months.map((k) => {
+    let total = 0;
+    let n = 0;
+    byUser.forEach((m) => {
+      const v = m.get(k);
+      if (v && v > 0) {
+        total += v;
+        n++;
+      }
+    });
+    return { k, avg: n > 0 ? total / n : 0 };
+  });
+
+  const userMap = byUser.get(userCode) || new Map<string, number>();
+  const activeUserMonths = [...userMap.values()].filter((v) => v > 0);
+  const userMonthlyAvg =
+    activeUserMonths.length > 0
+      ? activeUserMonths.reduce((a, b) => a + b, 0) / activeUserMonths.length
+      : 0;
+  const firmMonthlyAvg =
+    firmPerMonth.length > 0
+      ? firmPerMonth.reduce((s, f) => s + f.avg, 0) / firmPerMonth.length
+      : 0;
+
+  const totals = [...byUser.entries()]
+    .map(([u, m]) => ({
+      u,
+      t: [...m.values()].reduce((a, b) => a + b, 0),
+    }))
+    .sort((a, b) => b.t - a.t);
+  const rank = totals.findIndex((t) => t.u === userCode) + 1;
+
+  // Last 3 months vs prior 3 months (user's own pace)
+  let recentTrendPct: number | null = null;
+  if (months.length >= 4) {
+    const recent = months.slice(-3).map((k) => userMap.get(k) || 0);
+    const prior = months.slice(-6, -3).map((k) => userMap.get(k) || 0);
+    const rAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+    const pAvg =
+      prior.length > 0 ? prior.reduce((a, b) => a + b, 0) / prior.length : 0;
+    if (pAvg > 0) recentTrendPct = ((rAvg - pAvg) / pAvg) * 100;
+  }
+
+  let bestMonth: PeerBenchmark["bestMonth"] = null;
+  userMap.forEach((v, k) => {
+    if (!bestMonth || v > bestMonth.hours)
+      bestMonth = { label: monthLabelLong(k), hours: v };
+  });
+
+  const monthly = months.slice(-12).map((k) => ({
+    month: monthLabelShort(k),
+    user: Math.round((userMap.get(k) || 0) * 10) / 10,
+    firm:
+      Math.round((firmPerMonth.find((f) => f.k === k)?.avg || 0) * 10) / 10,
+  }));
+
+  return {
+    userMonthlyAvg,
+    firmMonthlyAvg,
+    pctVsFirm:
+      firmMonthlyAvg > 0
+        ? ((userMonthlyAvg - firmMonthlyAvg) / firmMonthlyAvg) * 100
+        : 0,
+    rank,
+    totalPeers: totals.length,
+    recentTrendPct,
+    bestMonth,
+    monthly,
+  };
+}
+
+function computeFirmProStats(start?: Date, end?: Date): FirmProStats {
+  const { byUser, months } = bucketBillableByUserMonth(start, end);
+  const usuarioMap = new Map(getUsuarios().map((u) => [u.code, u]));
+
+  const perUserAvg: Array<{ name: string; avg: number }> = [];
+  byUser.forEach((m, code) => {
+    const vals = [...m.values()].filter((v) => v > 0);
+    if (vals.length === 0) return;
+    perUserAvg.push({
+      name: usuarioMap.get(code)?.name || code,
+      avg: vals.reduce((a, b) => a + b, 0) / vals.length,
+    });
+  });
+
+  const firmMonthlyAvg =
+    perUserAvg.length > 0
+      ? perUserAvg.reduce((s, u) => s + u.avg, 0) / perUserAvg.length
+      : 0;
+
+  const belowAvg = perUserAvg
+    .filter((u) => firmMonthlyAvg > 0 && u.avg < firmMonthlyAvg * 0.8)
+    .map((u) => ({
+      name: u.name,
+      pct: ((firmMonthlyAvg - u.avg) / firmMonthlyAvg) * 100,
+    }))
+    .sort((a, b) => b.pct - a.pct);
+
+  const top = [...perUserAvg].sort((a, b) => b.avg - a.avg)[0];
+  const topPerformer =
+    top && firmMonthlyAvg > 0
+      ? {
+          name: top.name,
+          pct: ((top.avg - firmMonthlyAvg) / firmMonthlyAvg) * 100,
+        }
+      : null;
+
+  void months;
+  return { firmMonthlyAvg, belowAvg, topPerformer };
 }
 
 function computeGerencialData(
@@ -400,6 +607,7 @@ function computeGerencialData(
     categoryBreakdown,
     monthlyRevenue,
     clientProfitability,
+    proStats: computeFirmProStats(start, end),
     prevPeriod,
   };
 }
@@ -451,6 +659,48 @@ function computeGerencialAnalytics(data: GerencialReportData): GerencialAnalytic
   };
 }
 
+/** Executive summary paragraph — regenerated (with fresh phrasing) on every download. */
+function generateGerencialSummary(data: GerencialReportData): string {
+  const a = computeGerencialAnalytics(data);
+  const parts: string[] = [];
+
+  parts.push(
+    pick(
+      `Durante el periodo analizado, la firma facturó ${formatCurrency(data.totalFacturado)} a través de ${data.clientesUnicos} clientes activos y ${data.totalProjects} proyectos en curso.`,
+      `El periodo cierra con una facturación de ${formatCurrency(data.totalFacturado)}, distribuida entre ${data.clientesUnicos} clientes y ${data.totalProjects} proyectos activos.`,
+      `La operación del periodo generó ${formatCurrency(data.totalFacturado)} en facturación, con una base de ${data.clientesUnicos} clientes activos y ${data.totalProjects} proyectos abiertos.`,
+    ),
+  );
+
+  if (data.metaFacturacion > 0) {
+    parts.push(
+      a.metaAttainment >= 100
+        ? pick(
+            `Con un cumplimiento del ${a.metaAttainment.toFixed(0)}% de la meta, el desempeño comercial se sitúa por encima de lo planificado.`,
+            `El objetivo de facturación quedó superado (${a.metaAttainment.toFixed(0)}% de cumplimiento), una señal clara de tracción comercial.`,
+          )
+        : pick(
+            `El cumplimiento de la meta se ubica en ${a.metaAttainment.toFixed(0)}%, con una brecha de ${formatCurrency(data.metaFacturacion - data.totalFacturado)} aún por cerrar.`,
+            `Restan ${formatCurrency(data.metaFacturacion - data.totalFacturado)} para alcanzar la meta del periodo (avance del ${a.metaAttainment.toFixed(0)}%).`,
+          ),
+    );
+  }
+
+  parts.push(
+    data.avgMarginPercent >= 30
+      ? pick(
+          `La rentabilidad se mantiene sana, con un margen promedio de ${data.avgMarginPercent.toFixed(1)}% sobre los costos de operación.`,
+          `El margen promedio de ${data.avgMarginPercent.toFixed(1)}% confirma una estructura de costos bien controlada.`,
+        )
+      : pick(
+          `El margen promedio de ${data.avgMarginPercent.toFixed(1)}% sugiere revisar tarifas y mezcla de proyectos para proteger la rentabilidad.`,
+          `Con un margen promedio de ${data.avgMarginPercent.toFixed(1)}%, hay espacio para optimizar la relación entre tarifas y costos.`,
+        ),
+  );
+
+  return parts.join(" ");
+}
+
 function generateGerencialInsights(data: GerencialReportData): Insight[] {
   const a = computeGerencialAnalytics(data);
   const out: Insight[] = [];
@@ -460,19 +710,72 @@ function generateGerencialInsights(data: GerencialReportData): Insight[] {
     if (a.metaAttainment >= 100) {
       out.push({
         tone: "positive",
-        text: `La firma superó su meta de facturación, alcanzando el ${a.metaAttainment.toFixed(0)}% del objetivo (${formatCurrency(data.totalFacturado)} frente a una meta de ${formatCurrency(data.metaFacturacion)}).`,
+        text: pick(
+          `La firma superó su meta de facturación, alcanzando el ${a.metaAttainment.toFixed(0)}% del objetivo (${formatCurrency(data.totalFacturado)} frente a una meta de ${formatCurrency(data.metaFacturacion)}).`,
+          `Meta cumplida y superada: la facturación llegó al ${a.metaAttainment.toFixed(0)}% del objetivo, con ${formatCurrency(data.totalFacturado)} generados contra una meta de ${formatCurrency(data.metaFacturacion)}.`,
+        ),
       });
     } else if (a.metaAttainment >= 80) {
       out.push({
         tone: "neutral",
-        text: `La facturación alcanzó el ${a.metaAttainment.toFixed(0)}% de la meta; un cierre adicional de ${formatCurrency(data.metaFacturacion - data.totalFacturado)} completaría el objetivo del periodo.`,
+        text: pick(
+          `La facturación alcanzó el ${a.metaAttainment.toFixed(0)}% de la meta; un cierre adicional de ${formatCurrency(data.metaFacturacion - data.totalFacturado)} completaría el objetivo del periodo.`,
+          `Con un ${a.metaAttainment.toFixed(0)}% de avance sobre la meta, bastaría cerrar ${formatCurrency(data.metaFacturacion - data.totalFacturado)} adicionales para completar el objetivo.`,
+        ),
       });
     } else {
       out.push({
         tone: "warning",
-        text: `La facturación se ubicó en ${a.metaAttainment.toFixed(0)}% de la meta, ${formatCurrency(data.metaFacturacion - data.totalFacturado)} por debajo del objetivo. Conviene revisar la asignación de horas facturables.`,
+        text: pick(
+          `La facturación se ubicó en ${a.metaAttainment.toFixed(0)}% de la meta, ${formatCurrency(data.metaFacturacion - data.totalFacturado)} por debajo del objetivo. Conviene revisar la asignación de horas facturables.`,
+          `El avance sobre la meta es de solo ${a.metaAttainment.toFixed(0)}%: faltan ${formatCurrency(data.metaFacturacion - data.totalFacturado)}. Priorizar el trabajo facturable ayudaría a cerrar la brecha.`,
+        ),
       });
     }
+  }
+
+  // Monthly momentum — last month vs previous month
+  if (data.monthlyRevenue.length >= 2) {
+    const last = data.monthlyRevenue[data.monthlyRevenue.length - 1];
+    const prev = data.monthlyRevenue[data.monthlyRevenue.length - 2];
+    if (prev.revenue > 0) {
+      const mom = ((last.revenue - prev.revenue) / prev.revenue) * 100;
+      if (mom <= -15) {
+        out.push({
+          tone: "warning",
+          text: pick(
+            `El último mes muestra una desaceleración: los ingresos cayeron ${Math.abs(mom).toFixed(0)}% respecto al mes anterior (${formatCurrency(last.revenue)} vs ${formatCurrency(prev.revenue)}). Vale la pena anticipar el pipeline del próximo mes.`,
+            `Los ingresos del último mes (${formatCurrency(last.revenue)}) retrocedieron ${Math.abs(mom).toFixed(0)}% frente al mes previo, una señal temprana que conviene monitorear de cerca.`,
+          ),
+        });
+      } else if (mom >= 15) {
+        out.push({
+          tone: "positive",
+          text: pick(
+            `El cierre del periodo llega con impulso: el último mes creció ${mom.toFixed(0)}% frente al anterior, alcanzando ${formatCurrency(last.revenue)}.`,
+            `Los ingresos aceleraron un ${mom.toFixed(0)}% en el último mes (${formatCurrency(last.revenue)}), el mejor ritmo reciente de la firma.`,
+          ),
+        });
+      }
+    }
+  }
+
+  // Professionals below firm average — the "people analytics" insight
+  if (data.proStats.belowAvg.length > 0) {
+    const worst = data.proStats.belowAvg[0];
+    const n = data.proStats.belowAvg.length;
+    out.push({
+      tone: "warning",
+      text: pick(
+        `${n === 1 ? "Un profesional registra" : `${n} profesionales registran`} horas facturables por debajo del promedio de la firma (${Math.round(data.proStats.firmMonthlyAvg)}h/mes); el caso más marcado es ${worst.name}, un ${worst.pct.toFixed(0)}% bajo el promedio en los últimos meses.`,
+        `${worst.name} ha venido trabajando un ${worst.pct.toFixed(0)}% menos que el promedio de la firma en los últimos meses${n > 1 ? `, y otros ${n - 1} profesionales muestran un patrón similar` : ""}. Una conversación de carga de trabajo podría destrabar capacidad.`,
+      ),
+    });
+  } else if (data.proStats.topPerformer) {
+    out.push({
+      tone: "positive",
+      text: `El equipo trabaja de forma pareja: ningún profesional está significativamente por debajo del promedio de ${Math.round(data.proStats.firmMonthlyAvg)}h facturables mensuales, y ${data.proStats.topPerformer.name} lidera con un ${data.proStats.topPerformer.pct.toFixed(0)}% sobre el promedio.`,
+    });
   }
 
   // Growth vs previous period
@@ -481,12 +784,18 @@ function generateGerencialInsights(data: GerencialReportData): Insight[] {
     if (d.direction === "up") {
       out.push({
         tone: "positive",
-        text: `Los ingresos crecieron ${Math.abs(d.percent).toFixed(1)}% respecto al periodo anterior${data.topClients[0] ? `, con ${data.topClients[0].name} como principal motor de actividad` : ""}.`,
+        text: pick(
+          `Los ingresos crecieron ${Math.abs(d.percent).toFixed(1)}% respecto al periodo anterior${data.topClients[0] ? `, con ${data.topClients[0].name} como principal motor de actividad` : ""}.`,
+          `Comparado con el periodo anterior, la facturación avanzó ${Math.abs(d.percent).toFixed(1)}%${data.topClients[0] ? `; ${data.topClients[0].name} concentró buena parte de ese crecimiento` : ""}.`,
+        ),
       });
     } else if (d.direction === "down") {
       out.push({
         tone: "warning",
-        text: `Los ingresos cayeron ${Math.abs(d.percent).toFixed(1)}% frente al periodo anterior. Se sugiere analizar los clientes con menor actividad para revertir la tendencia.`,
+        text: pick(
+          `Los ingresos cayeron ${Math.abs(d.percent).toFixed(1)}% frente al periodo anterior. Se sugiere analizar los clientes con menor actividad para revertir la tendencia.`,
+          `Frente al periodo previo, la facturación retrocedió ${Math.abs(d.percent).toFixed(1)}%; revisar la actividad de los clientes menos dinámicos ayudaría a explicar la caída.`,
+        ),
       });
     }
   }
@@ -496,12 +805,18 @@ function generateGerencialInsights(data: GerencialReportData): Insight[] {
     if (a.clientConcentration >= 60) {
       out.push({
         tone: "warning",
-        text: `Existe una alta concentración de cartera: los 3 clientes principales representan el ${a.clientConcentration.toFixed(0)}% de las horas facturables. Diversificar la base de clientes reduciría el riesgo de dependencia.`,
+        text: pick(
+          `Existe una alta concentración de cartera: los 3 clientes principales representan el ${a.clientConcentration.toFixed(0)}% de las horas facturables. Diversificar la base de clientes reduciría el riesgo de dependencia.`,
+          `Los 3 clientes más grandes absorben el ${a.clientConcentration.toFixed(0)}% de las horas facturables — un nivel de dependencia que expone los ingresos a la salida de un solo cliente.`,
+        ),
       });
     } else {
       out.push({
         tone: "positive",
-        text: `La cartera está sanamente distribuida: los 3 clientes principales concentran solo el ${a.clientConcentration.toFixed(0)}% de las horas facturables.`,
+        text: pick(
+          `La cartera está sanamente distribuida: los 3 clientes principales concentran solo el ${a.clientConcentration.toFixed(0)}% de las horas facturables.`,
+          `El riesgo de concentración es bajo: los 3 mayores clientes suman apenas el ${a.clientConcentration.toFixed(0)}% de las horas facturables, con el resto bien repartido.`,
+        ),
       });
     }
   }
@@ -510,12 +825,18 @@ function generateGerencialInsights(data: GerencialReportData): Insight[] {
   if (data.avgMarginPercent >= 40) {
     out.push({
       tone: "positive",
-      text: `El margen promedio de ${data.avgMarginPercent.toFixed(1)}% supera el estándar del sector legal (~35%), lo que refleja una operación eficiente en costos.`,
+      text: pick(
+        `El margen promedio de ${data.avgMarginPercent.toFixed(1)}% supera el estándar del sector legal (~35%), lo que refleja una operación eficiente en costos.`,
+        `Con ${data.avgMarginPercent.toFixed(1)}% de margen promedio, la firma opera por encima del benchmark del sector legal (~35%).`,
+      ),
     });
   } else if (data.avgMarginPercent > 0 && data.avgMarginPercent < 20) {
     out.push({
       tone: "warning",
-      text: `El margen promedio de ${data.avgMarginPercent.toFixed(1)}% es ajustado; revisar tarifas por hora y la mezcla de proyectos podría mejorar la rentabilidad.`,
+      text: pick(
+        `El margen promedio de ${data.avgMarginPercent.toFixed(1)}% es ajustado; revisar tarifas por hora y la mezcla de proyectos podría mejorar la rentabilidad.`,
+        `La rentabilidad opera con poco colchón (${data.avgMarginPercent.toFixed(1)}% de margen promedio); un ajuste de tarifas o de mezcla de trabajo daría más holgura.`,
+      ),
     });
   }
 
@@ -523,7 +844,10 @@ function generateGerencialInsights(data: GerencialReportData): Insight[] {
   if (data.utilizationRate > 0 && data.utilizationRate < 60) {
     out.push({
       tone: "warning",
-      text: `La utilización de ${data.utilizationRate.toFixed(1)}% indica capacidad ociosa. Reorientar horas no facturables hacia trabajo facturable elevaría los ingresos sin sumar personal.`,
+      text: pick(
+        `La utilización de ${data.utilizationRate.toFixed(1)}% indica capacidad ociosa. Reorientar horas no facturables hacia trabajo facturable elevaría los ingresos sin sumar personal.`,
+        `Con una utilización de ${data.utilizationRate.toFixed(1)}%, la firma tiene capacidad instalada sin monetizar: convertir parte de las horas internas en facturables elevaría ingresos sin contratar.`,
+      ),
     });
   } else if (data.utilizationRate >= 80) {
     out.push({
@@ -536,40 +860,145 @@ function generateGerencialInsights(data: GerencialReportData): Insight[] {
   if (a.topArea && a.topArea.facturacion > 0) {
     out.push({
       tone: "neutral",
-      text: `El área de ${a.topArea.area} lidera la facturación con ${formatCurrency(a.topArea.facturacion)}, posicionándose como la práctica más rentable del periodo.`,
+      text: pick(
+        `El área de ${a.topArea.area} lidera la facturación con ${formatCurrency(a.topArea.facturacion)}, posicionándose como la práctica más rentable del periodo.`,
+        `${a.topArea.area} se consolida como el motor de la firma: aporta ${formatCurrency(a.topArea.facturacion)} de facturación, más que cualquier otra práctica.`,
+      ),
     });
   }
 
-  return out.slice(0, 5);
+  return out.slice(0, 6);
+}
+
+/** Executive summary paragraph for the individual report. */
+function generateIndividualSummary(data: IndividualReportData): string {
+  const firstName = data.usuario.name.split(" ")[0];
+  const b = data.benchmark;
+  const parts: string[] = [];
+
+  parts.push(
+    pick(
+      `${firstName} registró ${Math.round(data.totalHours)}h en el periodo, de las cuales ${data.billableHours.toFixed(0)}h fueron facturables, generando ${formatCurrency(data.totalRevenue)} en ingresos para la firma.`,
+      `Durante el periodo, ${firstName} acumuló ${Math.round(data.totalHours)}h de trabajo (${data.billableHours.toFixed(0)}h facturables) con una contribución de ${formatCurrency(data.totalRevenue)} en ingresos.`,
+    ),
+  );
+
+  if (b.firmMonthlyAvg > 0) {
+    if (b.pctVsFirm <= -10) {
+      parts.push(
+        pick(
+          `Su ritmo promedio de ${Math.round(b.userMonthlyAvg)}h facturables al mes se ubica un ${Math.abs(b.pctVsFirm).toFixed(0)}% por debajo del promedio de la firma (${Math.round(b.firmMonthlyAvg)}h), un punto a conversar en la próxima revisión.`,
+          `En los últimos meses ha trabajado por debajo del promedio de sus pares: ${Math.round(b.userMonthlyAvg)}h facturables mensuales frente a las ${Math.round(b.firmMonthlyAvg)}h del promedio de la firma (${Math.abs(b.pctVsFirm).toFixed(0)}% menos).`,
+        ),
+      );
+    } else if (b.pctVsFirm >= 10) {
+      parts.push(
+        pick(
+          `Su promedio de ${Math.round(b.userMonthlyAvg)}h facturables mensuales supera en ${b.pctVsFirm.toFixed(0)}% al promedio de la firma, ubicándolo entre los perfiles de mayor carga.`,
+          `Mantiene un ritmo superior al de sus pares: ${Math.round(b.userMonthlyAvg)}h facturables al mes, un ${b.pctVsFirm.toFixed(0)}% sobre el promedio de la firma.`,
+        ),
+      );
+    } else {
+      parts.push(
+        `Su ritmo mensual de ${Math.round(b.userMonthlyAvg)}h facturables está en línea con el promedio de la firma (${Math.round(b.firmMonthlyAvg)}h).`,
+      );
+    }
+  }
+
+  return parts.join(" ");
 }
 
 function generateIndividualInsights(data: IndividualReportData): Insight[] {
   const out: Insight[] = [];
   const billableRatio = data.totalHours > 0 ? (data.billableHours / data.totalHours) * 100 : 0;
   const firstName = data.usuario.name.split(" ")[0];
+  const b = data.benchmark;
 
+  // Peer comparison — the headline people-analytics insight
+  if (b.firmMonthlyAvg > 0) {
+    if (b.pctVsFirm <= -12) {
+      out.push({
+        tone: "warning",
+        text: pick(
+          `${firstName} ha estado trabajando un ${Math.abs(b.pctVsFirm).toFixed(0)}% menos que el promedio de la firma en los últimos meses (${Math.round(b.userMonthlyAvg)}h facturables/mes vs ${Math.round(b.firmMonthlyAvg)}h del promedio).`,
+          `El ritmo de ${firstName} está por debajo de sus pares: promedia ${Math.round(b.userMonthlyAvg)}h facturables al mes, un ${Math.abs(b.pctVsFirm).toFixed(0)}% menos que el promedio de la firma. Puede indicar baja asignación de trabajo más que bajo desempeño.`,
+        ),
+      });
+    } else if (b.pctVsFirm >= 12) {
+      out.push({
+        tone: "positive",
+        text: pick(
+          `${firstName} sostiene un ritmo un ${b.pctVsFirm.toFixed(0)}% superior al promedio de la firma (${Math.round(b.userMonthlyAvg)}h facturables/mes vs ${Math.round(b.firmMonthlyAvg)}h) — conviene vigilar señales de sobrecarga.`,
+          `Con ${Math.round(b.userMonthlyAvg)}h facturables mensuales, ${firstName} trabaja un ${b.pctVsFirm.toFixed(0)}% por encima del promedio de sus pares, uno de los ritmos más altos de la firma.`,
+        ),
+      });
+    } else {
+      out.push({
+        tone: "neutral",
+        text: `El ritmo de ${firstName} (${Math.round(b.userMonthlyAvg)}h facturables/mes) está alineado con el promedio de la firma de ${Math.round(b.firmMonthlyAvg)}h mensuales.`,
+      });
+    }
+  }
+
+  // Own-pace trend: last 3 months vs prior 3
+  if (b.recentTrendPct != null) {
+    if (b.recentTrendPct <= -15) {
+      out.push({
+        tone: "warning",
+        text: pick(
+          `Su actividad viene desacelerando: en los últimos 3 meses registró un ${Math.abs(b.recentTrendPct).toFixed(0)}% menos de horas facturables que en el trimestre anterior.`,
+          `Se observa una caída de ritmo del ${Math.abs(b.recentTrendPct).toFixed(0)}% en el último trimestre frente al anterior — un patrón que vale la pena conversar antes de que se consolide.`,
+        ),
+      });
+    } else if (b.recentTrendPct >= 15) {
+      out.push({
+        tone: "positive",
+        text: pick(
+          `Su actividad va en ascenso: las horas facturables de los últimos 3 meses crecieron ${b.recentTrendPct.toFixed(0)}% frente al trimestre anterior.`,
+          `El último trimestre marca su mejor racha reciente, con un ${b.recentTrendPct.toFixed(0)}% más de horas facturables que el trimestre previo.`,
+        ),
+      });
+    }
+  }
+
+  // Ranking within the firm
+  if (b.totalPeers >= 3 && b.rank > 0) {
+    const topThird = b.rank <= Math.ceil(b.totalPeers / 3);
+    out.push({
+      tone: topThird ? "positive" : "neutral",
+      text: pick(
+        `Se ubica en la posición ${b.rank} de ${b.totalPeers} profesionales por horas facturables acumuladas${topThird ? ", dentro del tercio superior de la firma" : ""}.`,
+        `En el ranking interno de horas facturables ocupa el puesto ${b.rank} de ${b.totalPeers}${topThird ? " — parte del grupo que sostiene la producción de la firma" : ""}.`,
+      ),
+    });
+  }
+
+  // Utilization
   if (data.utilizationRate >= 100) {
     out.push({
       tone: "positive",
-      text: `${firstName} superó su meta de utilización alcanzando ${data.utilizationRate.toFixed(0)}%, un desempeño sobresaliente para el periodo.`,
+      text: pick(
+        `${firstName} superó su meta de utilización alcanzando ${data.utilizationRate.toFixed(0)}%, un desempeño sobresaliente para el periodo.`,
+        `La utilización de ${data.utilizationRate.toFixed(0)}% supera la meta personal — un periodo de alto rendimiento para ${firstName}.`,
+      ),
     });
   } else if (data.utilizationRate > 0 && data.utilizationRate < 70) {
     out.push({
       tone: "warning",
-      text: `La utilización de ${data.utilizationRate.toFixed(0)}% está por debajo del objetivo; incrementar las horas facturables mejoraría la contribución a la firma.`,
-    });
-  } else {
-    out.push({
-      tone: "neutral",
-      text: `La utilización se ubicó en ${data.utilizationRate.toFixed(0)}%, dentro del rango esperado para su categoría.`,
+      text: pick(
+        `La utilización de ${data.utilizationRate.toFixed(0)}% está por debajo del objetivo; incrementar las horas facturables mejoraría la contribución a la firma.`,
+        `Con ${data.utilizationRate.toFixed(0)}% de utilización, existe margen para convertir más horas registradas en trabajo facturable.`,
+      ),
     });
   }
 
+  // Billable ratio
   out.push({
     tone: billableRatio >= 70 ? "positive" : "neutral",
     text: `El ${billableRatio.toFixed(0)}% de las horas registradas fueron facturables (${data.billableHours.toFixed(0)}h de ${Math.round(data.totalHours)}h totales).`,
   });
 
+  // Client concentration
   if (data.clients.length > 0) {
     const totalH = data.clients.reduce((s, c) => s + c.hours, 0);
     const top = data.clients[0];
@@ -582,6 +1011,18 @@ function generateIndividualInsights(data: IndividualReportData): Insight[] {
     }
   }
 
+  // Best month flair
+  if (b.bestMonth && b.bestMonth.hours > 0) {
+    out.push({
+      tone: "neutral",
+      text: pick(
+        `Su mejor mes fue ${b.bestMonth.label}, con ${Math.round(b.bestMonth.hours)}h facturables — un buen punto de referencia de su capacidad máxima.`,
+        `El pico de actividad se dio en ${b.bestMonth.label} (${Math.round(b.bestMonth.hours)}h facturables), útil como referencia de capacidad para la planificación.`,
+      ),
+    });
+  }
+
+  // Period-over-period
   if (data.prevPeriod) {
     const d = formatDelta(data.billableHours, data.prevPeriod.billableHours);
     if (d.direction === "up") {
@@ -597,7 +1038,7 @@ function generateIndividualInsights(data: IndividualReportData): Insight[] {
     }
   }
 
-  return out.slice(0, 4);
+  return out.slice(0, 6);
 }
 
 // ===================== SUB-COMPONENTS =====================
@@ -605,34 +1046,82 @@ function generateIndividualInsights(data: IndividualReportData): Insight[] {
 /* SchedulePanel removed — feature not yet implemented */
 
 /** Renders the AI insights block in the on-screen preview. */
-function AIInsightsPanel({ insights }: { insights: Insight[] }) {
-  if (insights.length === 0) return null;
+function AIInsightsPanel({
+  insights,
+  summary,
+}: {
+  insights: Insight[];
+  summary?: string;
+}) {
+  if (insights.length === 0 && !summary) return null;
   const toneStyles: Record<Insight["tone"], string> = {
     positive: "bg-emerald-500",
-    warning: "bg-orange-500",
+    warning: "bg-amber-500",
     neutral: "bg-slate-400",
   };
   return (
-    <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50/40 p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-sm">
-          <Sparkles className="h-4 w-4 text-white" />
+    <div className="rounded-xl overflow-hidden border border-[hsl(210,40%,88%)] shadow-sm">
+      <div className="flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-[hsl(210,55%,16%)] to-[hsl(210,52%,26%)]">
+        <div className="h-7 w-7 rounded-lg bg-[hsl(43,74%,52%)]/20 ring-1 ring-[hsl(43,74%,52%)]/50 flex items-center justify-center">
+          <Sparkles className="h-4 w-4 text-[hsl(43,80%,62%)]" />
         </div>
-        <h4 className="text-sm font-semibold text-slate-800">Análisis Inteligente</h4>
-        <span className="text-[9px] font-semibold uppercase tracking-wider text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">
+        <h4 className="text-sm font-semibold text-white tracking-wide">
+          Análisis Inteligente
+        </h4>
+        <span className="ml-auto text-[9px] font-bold uppercase tracking-[0.14em] text-[hsl(43,80%,65%)] border border-[hsl(43,74%,52%)]/50 px-2 py-0.5 rounded-full">
           Generado por IA
         </span>
       </div>
-      <ul className="space-y-2.5">
-        {insights.map((ins, i) => (
-          <li key={i} className="flex items-start gap-2.5">
-            <span
-              className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${toneStyles[ins.tone]}`}
-            />
-            <span className="text-xs leading-relaxed text-slate-700">{ins.text}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="bg-gradient-to-br from-white to-[hsl(210,40%,97%)] p-4 space-y-3">
+        {summary && (
+          <p className="text-xs leading-relaxed text-slate-700 border-l-2 border-[hsl(43,74%,52%)] pl-3 italic">
+            {summary}
+          </p>
+        )}
+        <ul className="space-y-2.5">
+          {insights.map((ins, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span
+                className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${toneStyles[ins.tone]}`}
+              />
+              <span className="text-xs leading-relaxed text-slate-700">{ins.text}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/** Navy letterhead used at the top of both preview dialogs. */
+function PreviewLetterhead({
+  title,
+  firmName,
+  periodLabel,
+}: {
+  title: string;
+  firmName: string;
+  periodLabel: string;
+}) {
+  return (
+    <div className="rounded-xl overflow-hidden border border-border/60 shadow-sm">
+      <div className="bg-gradient-to-r from-[hsl(210,55%,14%)] via-[hsl(210,55%,19%)] to-[hsl(210,50%,26%)] px-5 py-4 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[hsl(43,74%,58%)]">
+            {title}
+          </p>
+          <p className="text-white font-bold text-lg truncate">
+            {firmName || "Tu Firma Legal"}
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-white/70 text-xs">{periodLabel}</p>
+          <p className="text-white/50 text-[11px]">
+            {format(new Date(), "d 'de' MMMM yyyy", { locale: es })}
+          </p>
+        </div>
+      </div>
+      <div className="h-1 bg-gradient-to-r from-[hsl(43,74%,52%)] via-[hsl(43,74%,45%)] to-[hsl(43,60%,38%)]" />
     </div>
   );
 }
@@ -808,6 +1297,8 @@ function GerencialPreviewContent({
   gerData,
   gerStats,
   hasPeriodGer,
+  firmName,
+  periodLabel,
 }: {
   gerData: GerencialReportData;
   gerStats: Array<{
@@ -819,14 +1310,34 @@ function GerencialPreviewContent({
     delta: { percent: number; direction: "up" | "down" | "neutral" } | null;
   }>;
   hasPeriodGer: boolean;
+  firmName: string;
+  periodLabel: string;
 }) {
-  const maxAreaRevenue = Math.max(...gerData.areaBreakdown.map((a) => a.facturacion), 1);
-  const maxCategoryHours = Math.max(...gerData.categoryBreakdown.map((c) => c.billableHours), 1);
   const analytics = computeGerencialAnalytics(gerData);
-  const insights = generateGerencialInsights(gerData);
+  const insights = useMemo(() => generateGerencialInsights(gerData), [gerData]);
+  const summary = useMemo(() => generateGerencialSummary(gerData), [gerData]);
+  const areaData = useMemo(
+    () =>
+      [...gerData.areaBreakdown]
+        .filter((a) => a.facturacion > 0)
+        .sort((a, b) => b.facturacion - a.facturacion),
+    [gerData.areaBreakdown],
+  );
+  const categoryData = useMemo(
+    () =>
+      [...gerData.categoryBreakdown].sort(
+        (a, b) => b.billableHours - a.billableHours,
+      ),
+    [gerData.categoryBreakdown],
+  );
 
   return (
     <div className="space-y-6">
+      <PreviewLetterhead
+        title="Reporte Gerencial"
+        firmName={firmName}
+        periodLabel={periodLabel}
+      />
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {gerStats.map((stat) => (
@@ -945,34 +1456,123 @@ function GerencialPreviewContent({
       </div>
 
       {/* AI Insights */}
-      <AIInsightsPanel insights={insights} />
+      <AIInsightsPanel insights={insights} summary={summary} />
 
-      {/* Revenue by Practice Area */}
-      {gerData.areaBreakdown.length > 0 && (
+      {/* Monthly Revenue Trend */}
+      {gerData.monthlyRevenue.length > 1 && (
         <div>
-          <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" /> Facturacion por Area
+          <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" /> Evolución Mensual de Ingresos
           </h4>
-          <div className="space-y-2.5">
-            {gerData.areaBreakdown
-              .sort((a, b) => b.facturacion - a.facturacion)
-              .map((area) => (
-                <div key={area.area}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium text-foreground">{area.area}</span>
-                    <span className="text-muted-foreground font-medium">
-                      {formatCurrency(area.facturacion)}
-                    </span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full bg-primary/80 transition-all"
-                      style={{ width: `${(area.facturacion / maxAreaRevenue) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-          </div>
+          <ResponsiveContainer width="100%" height={190}>
+            <AreaChart
+              data={gerData.monthlyRevenue}
+              margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CHART_NAVY} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={CHART_NAVY} stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis
+                dataKey="month"
+                tickFormatter={(v: string) => v.split("-")[1] || v}
+                tick={{ fontSize: 10, fill: "#64748b" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tickFormatter={(v: number) => formatCurrency(v)}
+                tick={{ fontSize: 10, fill: "#64748b" }}
+                width={56}
+                axisLine={false}
+                tickLine={false}
+              />
+              <RechartsTooltip
+                formatter={(v: number) => [formatCurrency(v), "Ingresos"]}
+                labelStyle={{ fontSize: 11, fontWeight: 600 }}
+                contentStyle={{ fontSize: 11, borderRadius: 8 }}
+              />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke={CHART_NAVY}
+                strokeWidth={2}
+                fill="url(#revGrad)"
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Revenue by Practice Area — facturación vs meta */}
+      {areaData.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" /> Facturación por Área
+          </h4>
+          <ResponsiveContainer
+            width="100%"
+            height={Math.max(areaData.length * 52, 140)}
+          >
+            <BarChart
+              data={areaData}
+              layout="vertical"
+              margin={{ top: 0, right: 64, left: 8, bottom: 0 }}
+              barCategoryGap="24%"
+            >
+              <XAxis type="number" hide />
+              <YAxis
+                type="category"
+                dataKey="area"
+                width={140}
+                tick={{ fontSize: 11, fill: "#334155" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <RechartsTooltip
+                formatter={(v: number, name: string) => [formatCurrency(v), name]}
+                contentStyle={{ fontSize: 11, borderRadius: 8 }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: 11 }}
+                iconType="circle"
+                iconSize={8}
+              />
+              <Bar
+                dataKey="facturacion"
+                name="Facturación"
+                fill={CHART_NAVY}
+                radius={[0, 4, 4, 0]}
+                barSize={12}
+              >
+                <LabelList
+                  dataKey="facturacion"
+                  position="right"
+                  formatter={(v: number) => formatCurrency(v)}
+                  style={{ fontSize: 10, fill: "#475569", fontWeight: 600 }}
+                />
+              </Bar>
+              <Bar
+                dataKey="meta"
+                name="Meta"
+                fill={CHART_GOLD}
+                radius={[0, 4, 4, 0]}
+                barSize={12}
+              >
+                <LabelList
+                  dataKey="meta"
+                  position="right"
+                  formatter={(v: number) => formatCurrency(v)}
+                  style={{ fontSize: 10, fill: "#475569" }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
 
@@ -1081,29 +1681,52 @@ function GerencialPreviewContent({
         </div>
 
         {/* Hours by Seniority */}
-        {gerData.categoryBreakdown.length > 0 && (
+        {categoryData.length > 0 && (
           <div>
-            <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <Activity className="h-4 w-4" /> Horas por Categoria
+            <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+              <Activity className="h-4 w-4" /> Horas por Categoría
             </h4>
-            <div className="space-y-3">
-              {gerData.categoryBreakdown.map((cat) => (
-                <div key={cat.category}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium text-foreground">{cat.category}</span>
-                    <span className="text-muted-foreground">
-                      {Math.round(cat.billableHours).toLocaleString()}h · {cat.userCount} prof.
-                    </span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full bg-blue-500/80 transition-all"
-                      style={{ width: `${(cat.billableHours / maxCategoryHours) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ResponsiveContainer
+              width="100%"
+              height={Math.max(categoryData.length * 40, 120)}
+            >
+              <BarChart
+                data={categoryData}
+                layout="vertical"
+                margin={{ top: 0, right: 56, left: 4, bottom: 0 }}
+                barCategoryGap="30%"
+              >
+                <XAxis type="number" hide />
+                <YAxis
+                  type="category"
+                  dataKey="category"
+                  width={104}
+                  tick={{ fontSize: 11, fill: "#334155" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <RechartsTooltip
+                  formatter={(v: number, _n: string, entry) => [
+                    `${Math.round(v).toLocaleString()}h · ${(entry?.payload as { userCount?: number })?.userCount ?? 0} prof.`,
+                    "Horas facturables",
+                  ]}
+                  contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                />
+                <Bar
+                  dataKey="billableHours"
+                  fill={CHART_NAVY}
+                  radius={[0, 4, 4, 0]}
+                  barSize={14}
+                >
+                  <LabelList
+                    dataKey="billableHours"
+                    position="right"
+                    formatter={(v: number) => `${Math.round(v).toLocaleString()}h`}
+                    style={{ fontSize: 10, fill: "#475569", fontWeight: 600 }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         )}
       </div>
@@ -1139,35 +1762,6 @@ function GerencialPreviewContent({
         </div>
       )}
 
-      {/* Monthly Revenue Trend */}
-      {gerData.monthlyRevenue.length > 1 && (
-        <div>
-          <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" /> Tendencia Mensual de Ingresos
-          </h4>
-          <div className="flex items-end gap-1 h-24">
-            {(() => {
-              const maxRev = Math.max(...gerData.monthlyRevenue.map((m) => m.revenue), 1);
-              return gerData.monthlyRevenue.map((m, i) => (
-                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
-                  <div
-                    className={`w-full rounded-t transition-all ${i === gerData.monthlyRevenue.length - 1 ? "bg-primary" : "bg-primary/40"}`}
-                    style={{ height: `${Math.max((m.revenue / maxRev) * 80, 4)}px` }}
-                    title={`${m.month}: ${formatCurrency(m.revenue)}`}
-                  />
-                  <span className="text-[9px] text-muted-foreground leading-none">
-                    {m.month.split("-")[1]}
-                  </span>
-                </div>
-              ));
-            })()}
-          </div>
-          <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
-            <span>{gerData.monthlyRevenue[0]?.month}</span>
-            <span>{gerData.monthlyRevenue[gerData.monthlyRevenue.length - 1]?.month}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1176,6 +1770,8 @@ function IndividualPreviewContent({
   indData,
   indStats,
   hasPeriodInd,
+  firmName,
+  periodLabel,
 }: {
   indData: IndividualReportData;
   indStats: Array<{
@@ -1187,23 +1783,63 @@ function IndividualPreviewContent({
     delta: { percent: number; direction: "up" | "down" | "neutral" } | null;
   }>;
   hasPeriodInd: boolean;
+  firmName: string;
+  periodLabel: string;
 }) {
+  const insights = useMemo(() => generateIndividualInsights(indData), [indData]);
+  const summary = useMemo(() => generateIndividualSummary(indData), [indData]);
+  const b = indData.benchmark;
+  const nonBillable = Math.max(indData.totalHours - indData.billableHours, 0);
+  const billablePct =
+    indData.totalHours > 0
+      ? (indData.billableHours / indData.totalHours) * 100
+      : 0;
+  const donutData = [
+    { name: "Facturables", value: Math.round(indData.billableHours) },
+    { name: "No facturables", value: Math.round(nonBillable) },
+  ];
+  const firstName = indData.usuario.name.split(" ")[0];
+
   return (
     <div className="space-y-6">
+      <PreviewLetterhead
+        title="Reporte de Productividad"
+        firmName={firmName}
+        periodLabel={periodLabel}
+      />
+
       {/* Professional header */}
-      <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <span className="text-lg font-bold text-primary">
-            {indData.usuario.name.charAt(0)}
+      <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/60 bg-gradient-to-r from-[hsl(210,40%,97%)] to-white">
+        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[hsl(210,55%,20%)] to-[hsl(210,50%,32%)] ring-2 ring-[hsl(43,74%,52%)]/40 flex items-center justify-center flex-shrink-0">
+          <span className="text-base font-bold text-white">
+            {indData.usuario.name
+              .split(" ")
+              .map((w) => w[0])
+              .join("")
+              .substring(0, 2)
+              .toUpperCase()}
           </span>
         </div>
-        <div>
-          <h3 className="font-bold text-foreground">{indData.usuario.name}</h3>
+        <div className="min-w-0">
+          <h3 className="font-bold text-foreground truncate">{indData.usuario.name}</h3>
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="text-xs">{indData.usuario.category}</Badge>
             <span className="text-xs text-muted-foreground">{indData.usuario.practice_area}</span>
           </div>
         </div>
+        {b.totalPeers >= 3 && b.rank > 0 && (
+          <div className="ml-auto text-right shrink-0">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Ranking firma
+            </p>
+            <p className="text-lg font-bold text-foreground">
+              #{b.rank}
+              <span className="text-xs font-medium text-muted-foreground">
+                {" "}de {b.totalPeers}
+              </span>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -1227,7 +1863,109 @@ function IndividualPreviewContent({
       </div>
 
       {/* AI Insights */}
-      <AIInsightsPanel insights={generateIndividualInsights(indData)} />
+      <AIInsightsPanel insights={insights} summary={summary} />
+
+      {/* Charts: donut + pace vs firm */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-2">
+          <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+            <Clock className="h-4 w-4" /> Composición de Horas
+          </h4>
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie
+                  data={donutData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={52}
+                  outerRadius={72}
+                  startAngle={90}
+                  endAngle={-270}
+                  paddingAngle={2}
+                  strokeWidth={2}
+                  stroke="#fff"
+                >
+                  <Cell fill={CHART_NAVY} />
+                  <Cell fill="#cbd5e1" />
+                </Pie>
+                <RechartsTooltip
+                  formatter={(v: number, name: string) => [`${v.toLocaleString()}h`, name]}
+                  contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-2xl font-bold text-foreground">
+                {billablePct.toFixed(0)}%
+              </span>
+              <span className="text-[10px] text-muted-foreground">facturable</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: CHART_NAVY }} />
+              Facturables
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-slate-300" />
+              No facturables
+            </span>
+          </div>
+        </div>
+
+        {b.monthly.length > 1 && (
+          <div className="lg:col-span-3">
+            <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Ritmo Mensual vs Promedio de la Firma
+            </h4>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart
+                data={b.monthly}
+                margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  width={36}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v: number) => `${v}h`}
+                />
+                <RechartsTooltip
+                  formatter={(v: number, name: string) => [`${v}h`, name]}
+                  contentStyle={{ fontSize: 11, borderRadius: 8 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="plainline" />
+                <Line
+                  type="monotone"
+                  dataKey="user"
+                  name={firstName}
+                  stroke={CHART_NAVY}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="firm"
+                  name="Promedio firma"
+                  stroke={CHART_GOLD}
+                  strokeWidth={2}
+                  strokeDasharray="6 4"
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
 
       {/* Client breakdown */}
       {indData.clients.length > 0 && (
@@ -1312,26 +2050,67 @@ async function generatePDFDoc(opts: {
   const m = 18;
   let y = 0;
 
-  // Professional corporate palette — deep navy + a single clean blue accent.
-  // (Replaces the previous navy + tan/gold scheme.)
-  const navy = { r: 22, g: 35, b: 56 }; // primary — deep navy
-  const gold = { r: 45, g: 106, b: 197 }; // accent — clean blue (kept name for existing refs)
-  const accent = gold;
+  // Brand palette — deep navy + gold (matches the app's legal identity)
+  const navy = { r: 21, g: 42, b: 66 }; // headings / header band
+  const navyDeep = { r: 13, g: 26, b: 42 }; // header band base
+  const gold = { r: 197, g: 154, b: 54 }; // decorative gold accent
+  const chartNavy = { r: 47, g: 95, b: 150 }; // validated data-mark blue
+  const chartGold = { r: 184, g: 134, b: 11 }; // validated data-mark gold
+  const chartTrack = { r: 233, g: 238, b: 244 };
   const ink = { r: 15, g: 23, b: 42 }; // slate-900 headings
   const lightBg = { r: 247, g: 249, b: 252 };
   const midGray = { r: 100, g: 116, b: 139 }; // slate-500
   const hairline = { r: 226, g: 232, b: 240 }; // slate-200
 
-  // Top accent — slim navy band with a thin accent line beneath
-  doc.setFillColor(navy.r, navy.g, navy.b);
-  doc.rect(0, 0, pw, 3, "F");
-  doc.setFillColor(accent.r, accent.g, accent.b);
-  doc.rect(0, 3, pw, 0.8, "F");
-  y = 14;
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("es-CL", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
-  // Logo — constrained to max 22mm wide, 14mm tall so it doesn't crowd the title
-  let logoW = 0;
-  let logoH = 0;
+  // ── HEADER — full navy band with gold rule ──
+  const headerH = 34;
+  doc.setFillColor(navyDeep.r, navyDeep.g, navyDeep.b);
+  doc.rect(0, 0, pw, headerH, "F");
+  // subtle inner panel for depth
+  doc.setFillColor(navy.r, navy.g, navy.b);
+  doc.rect(0, 0, pw, headerH - 10, "F");
+  // gold rule under the band
+  doc.setFillColor(gold.r, gold.g, gold.b);
+  doc.rect(0, headerH, pw, 1.1, "F");
+
+  // Eyebrow
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(gold.r, gold.g, gold.b);
+  doc.text("INTELIGENCIA DE LA FIRMA  ·  CONFIDENCIAL", m, 11, {
+    charSpace: 0.7,
+  });
+
+  // Title
+  const title =
+    opts.type === "gerencial"
+      ? "Reporte Gerencial"
+      : "Reporte de Productividad";
+  doc.setFontSize(19);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(255, 255, 255);
+  doc.text(title, m, 21);
+
+  // Firm + date + period line
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(168, 185, 202);
+  const metaBits = [opts.firmName || "", dateStr];
+  if (opts.startDate && opts.endDate) {
+    metaBits.push(
+      `Periodo: ${format(opts.startDate, "dd MMM yyyy", { locale: es })} — ${format(opts.endDate, "dd MMM yyyy", { locale: es })}`,
+    );
+  }
+  doc.text(metaBits.filter(Boolean).join("   ·   "), m, 29);
+
+  // Logo — white chip at top-right inside the band
   if (opts.logoUrl) {
     try {
       const img = new Image();
@@ -1341,67 +2120,33 @@ async function generatePDFDoc(opts: {
         img.onerror = () => reject(new Error("fail"));
         img.src = opts.logoUrl;
       });
+      const chipW = 32;
+      const chipH = 20;
+      const chipX = pw - m - chipW;
+      const chipY = 6;
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(chipX, chipY, chipW, chipH, 2, 2, "F");
       const ratio = img.width / img.height;
-      const maxW = 22;
-      const maxH = 14;
-      logoW = maxW;
-      logoH = logoW / ratio;
-      if (logoH > maxH) {
-        logoH = maxH;
+      let logoW = chipW - 6;
+      let logoH = logoW / ratio;
+      if (logoH > chipH - 6) {
+        logoH = chipH - 6;
         logoW = logoH * ratio;
       }
-      // Place logo at top-right corner of the header area
-      doc.addImage(img, "PNG", pw - m - logoW, y, logoW, logoH);
+      doc.addImage(
+        img,
+        "PNG",
+        chipX + (chipW - logoW) / 2,
+        chipY + (chipH - logoH) / 2,
+        logoW,
+        logoH,
+      );
     } catch {
       /* skip */
     }
   }
 
-  // Title (left side, independent of logo)
-  const title =
-    opts.type === "gerencial"
-      ? "Reporte Gerencial"
-      : "Reporte de Productividad";
-  doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(navy.r, navy.g, navy.b);
-  doc.text(title, m, y + 6);
-
-  if (opts.firmName) {
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(midGray.r, midGray.g, midGray.b);
-    doc.text(opts.firmName, m, y + 13);
-  }
-
-  const today = new Date();
-  const dateStr = today.toLocaleDateString("es-CL", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  // Date info below firm name
-  doc.setFontSize(9);
-  doc.setTextColor(midGray.r, midGray.g, midGray.b);
-  let dateY = y + 19;
-  doc.text(dateStr, m, dateY);
-  if (opts.startDate && opts.endDate) {
-    dateY += 5;
-    doc.text(
-      `${format(opts.startDate, "dd MMM yyyy", { locale: es })} — ${format(opts.endDate, "dd MMM yyyy", { locale: es })}`,
-      m,
-      dateY,
-    );
-  }
-
-  // Move y past both the logo and the text block
-  y = Math.max(y + logoH, dateY) + 8;
-
-  doc.setDrawColor(navy.r, navy.g, navy.b);
-  doc.setLineWidth(0.4);
-  doc.line(m, y, pw - m, y);
-  y += 10;
+  y = headerH + 12;
 
   const tableWidth = pw - 2 * m;
 
@@ -1415,11 +2160,7 @@ async function generatePDFDoc(opts: {
       doc.addPage();
       y = m;
     }
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(navy.r, navy.g, navy.b);
-    doc.text(tTitle, m, y);
-    y += 7;
+    drawSectionTitle(tTitle);
 
     doc.setFillColor(navy.r, navy.g, navy.b);
     doc.roundedRect(m, y - 4, tableWidth, 9, 1.5, 1.5, "F");
@@ -1452,57 +2193,190 @@ async function generatePDFDoc(opts: {
       label: string;
       value: string;
       delta?: { percent: number; direction: string } | null;
-      accent: { r: number; g: number; b: number };
+      sublabel?: string;
     }>,
   ) {
-    const gap = 5;
+    const gap = 4;
     const boxW = (pw - 2 * m - gap * (kpis.length - 1)) / kpis.length;
-    const boxH = 32;
+    const hasFooter = kpis.some(
+      (k) => (k.delta && k.delta.direction !== "neutral") || k.sublabel,
+    );
+    const boxH = hasFooter ? 25 : 20;
+    if (y + boxH > ph - 16) {
+      doc.addPage();
+      y = m;
+    }
+    const padX = 4.5;
 
     kpis.forEach((kpi, idx) => {
       const x = m + idx * (boxW + gap);
+      // card
       doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(230, 232, 240);
-      doc.roundedRect(x, y, boxW, boxH, 2, 2, "FD");
-      doc.setFillColor(kpi.accent.r, kpi.accent.g, kpi.accent.b);
-      doc.rect(x + 0.5, y + 0.5, boxW - 1, 2, "F");
-
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
+      doc.setDrawColor(hairline.r, hairline.g, hairline.b);
+      doc.setLineWidth(0.25);
+      doc.roundedRect(x, y, boxW, boxH, 1.8, 1.8, "FD");
+      // gold tick above the label — same motif as section titles
+      doc.setFillColor(gold.r, gold.g, gold.b);
+      doc.rect(x + padX, y + 4.2, 5, 0.8, "F");
+      // label — small caps, left-aligned
+      doc.setFontSize(5.8);
+      doc.setFont("helvetica", "bold");
       doc.setTextColor(midGray.r, midGray.g, midGray.b);
-      doc.text(kpi.label, x + boxW / 2, y + 11, { align: "center" });
-
-      doc.setFontSize(14);
+      doc.text(kpi.label.toUpperCase(), x + padX, y + 8.6, { charSpace: 0.35 });
+      // value — bold navy, left-aligned
+      doc.setFontSize(13);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(navy.r, navy.g, navy.b);
-      doc.text(kpi.value, x + boxW / 2, y + 20, { align: "center" });
+      doc.text(kpi.value, x + padX, y + 15.4);
 
+      // footer: delta pill or muted sublabel
       if (kpi.delta && kpi.delta.direction !== "neutral") {
         const isUp = kpi.delta.direction === "up";
         const clr = isUp
-          ? { r: 16, g: 185, b: 129 }
-          : { r: 239, g: 68, b: 68 };
-        const pctText = `${isUp ? "+" : "-"}${Math.abs(kpi.delta.percent).toFixed(1)}%`;
-        // Draw a small colored pill background
-        const pillW = doc.getTextWidth(pctText) * 0.75 + 6;
-        const pillX = x + (boxW - pillW) / 2;
-        doc.setFillColor(
-          isUp ? 236 : 254,
-          isUp ? 253 : 226,
-          isUp ? 245 : 226,
-        );
-        doc.roundedRect(pillX, y + 23, pillW, 5.5, 1.5, 1.5, "F");
-        doc.setFontSize(6.5);
+          ? { r: 5, g: 122, b: 85 }
+          : { r: 190, g: 60, b: 45 };
+        const pctText = `${isUp ? "+" : "-"}${Math.abs(kpi.delta.percent).toFixed(1)}%  vs periodo ant.`;
+        doc.setFontSize(6);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(clr.r, clr.g, clr.b);
-        doc.text(pctText, x + boxW / 2, y + 27, { align: "center" });
+        doc.text(pctText, x + padX, y + 21);
+      } else if (kpi.sublabel) {
+        doc.setFontSize(6);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(midGray.r, midGray.g, midGray.b);
+        doc.text(kpi.sublabel, x + padX, y + 21);
       }
     });
-    y += boxH + 14;
+    y += boxH + 6;
   }
 
-  function drawInsights(insights: Insight[]) {
-    if (insights.length === 0) return;
+  function drawSectionTitle(tTitle: string) {
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(navy.r, navy.g, navy.b);
+    doc.text(tTitle, m, y);
+    // small gold tick under the title
+    doc.setFillColor(gold.r, gold.g, gold.b);
+    doc.rect(m, y + 1.4, 9, 0.9, "F");
+    y += 8;
+  }
+
+  /** Horizontal bar chart with value labels (navy bars, gold highlight for #1). */
+  function drawBarChartH(
+    tTitle: string,
+    items: Array<{ label: string; value: number; highlight?: boolean }>,
+    fmt: (n: number) => string,
+  ) {
+    if (items.length === 0) return;
+    const rowH = 8.4;
+    const labelW = 54;
+    const valW = 24;
+    const chartW = tableWidth - labelW - valW;
+    const needed = 12 + items.length * rowH + 6;
+    if (y + needed > ph - 16) {
+      doc.addPage();
+      y = m;
+    }
+    drawSectionTitle(tTitle);
+    const maxV = Math.max(...items.map((i) => i.value), 1);
+    items.forEach((it, idx) => {
+      const by = y + idx * rowH;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(51, 65, 85);
+      const lbl =
+        it.label.length > 30 ? it.label.substring(0, 27) + "..." : it.label;
+      doc.text(lbl, m, by + 3.6);
+      // track
+      doc.setFillColor(chartTrack.r, chartTrack.g, chartTrack.b);
+      doc.roundedRect(m + labelW, by, chartW, 4.8, 1.3, 1.3, "F");
+      // bar
+      const w = Math.max((it.value / maxV) * chartW, 1.6);
+      const c = it.highlight ? chartGold : chartNavy;
+      doc.setFillColor(c.r, c.g, c.b);
+      doc.roundedRect(m + labelW, by, w, 4.8, 1.3, 1.3, "F");
+      // value
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(midGray.r, midGray.g, midGray.b);
+      doc.text(fmt(it.value), m + labelW + chartW + 2.5, by + 3.6);
+    });
+    y += items.length * rowH + 10;
+  }
+
+  /** Column chart (e.g. monthly series) with optional dashed reference line. */
+  function drawColumnChart(
+    tTitle: string,
+    points: Array<{ label: string; value: number }>,
+    fmt: (n: number) => string,
+    ref?: { value: number; label: string },
+  ) {
+    if (points.length < 2) return;
+    const chartH = 36;
+    if (y + chartH + 26 > ph - 16) {
+      doc.addPage();
+      y = m;
+    }
+    drawSectionTitle(tTitle);
+    const maxV = Math.max(...points.map((p) => p.value), ref?.value || 0, 1);
+    const gap = 2.2;
+    let colW = (tableWidth - gap * (points.length - 1)) / points.length;
+    colW = Math.min(colW, 16);
+    const totalW = colW * points.length + gap * (points.length - 1);
+    const x0 = m;
+    const baseY = y + chartH;
+    const maxIdx = points.reduce(
+      (best, p, i) => (p.value > points[best].value ? i : best),
+      0,
+    );
+
+    // baseline
+    doc.setDrawColor(hairline.r, hairline.g, hairline.b);
+    doc.setLineWidth(0.3);
+    doc.line(m, baseY, m + tableWidth, baseY);
+
+    points.forEach((p, i) => {
+      const h = Math.max((p.value / maxV) * (chartH - 8), 0.8);
+      const x = x0 + i * (colW + gap);
+      const isLast = i === points.length - 1;
+      const c = isLast ? chartGold : chartNavy;
+      doc.setFillColor(c.r, c.g, c.b);
+      doc.roundedRect(x, baseY - h, colW, h, 1, 1, "F");
+      // month label
+      doc.setFontSize(6);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(midGray.r, midGray.g, midGray.b);
+      doc.text(p.label, x + colW / 2, baseY + 3.6, { align: "center" });
+      // value labels on peak + last column only (selective direct labels)
+      if (i === maxIdx || isLast) {
+        doc.setFontSize(6.5);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(ink.r, ink.g, ink.b);
+        doc.text(fmt(p.value), x + colW / 2, baseY - h - 1.6, {
+          align: "center",
+        });
+      }
+    });
+
+    // dashed reference line (e.g. firm average)
+    if (ref && ref.value > 0) {
+      const ry = baseY - (ref.value / maxV) * (chartH - 8);
+      doc.setDrawColor(chartGold.r, chartGold.g, chartGold.b);
+      doc.setLineWidth(0.5);
+      doc.setLineDashPattern([1.6, 1.3], 0);
+      doc.line(x0, ry, x0 + totalW, ry);
+      doc.setLineDashPattern([], 0);
+      doc.setFontSize(6.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(chartGold.r, chartGold.g, chartGold.b);
+      doc.text(ref.label, x0 + totalW + 2, ry + 1, { align: "left" });
+    }
+
+    y += chartH + 16;
+  }
+
+  function drawInsights(insights: Insight[], summary?: string) {
+    if (insights.length === 0 && !summary) return;
     if (y > ph - 45) {
       doc.addPage();
       y = m;
@@ -1519,9 +2393,9 @@ async function generatePDFDoc(opts: {
     doc.setFont("helvetica", "bold");
     const badge = "GENERADO POR IA";
     const badgeW = doc.getTextWidth(badge) + 5;
-    doc.setFillColor(accent.r, accent.g, accent.b);
+    doc.setFillColor(navy.r, navy.g, navy.b);
     doc.roundedRect(m + headingW + 4, y - 3.4, badgeW, 5, 1, 1, "F");
-    doc.setTextColor(255, 255, 255);
+    doc.setTextColor(gold.r, gold.g, gold.b);
     doc.text(badge, m + headingW + 4 + badgeW / 2, y + 0.2, { align: "center" });
     y += 6;
 
@@ -1529,12 +2403,19 @@ async function generatePDFDoc(opts: {
     const textW = tableWidth - 16;
     const lineH = 4.4;
     const blockGap = 3.2;
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "italic");
+    const summaryLines = summary
+      ? (doc.splitTextToSize(summary, textW) as string[])
+      : [];
     const blocks = insights.map((ins) => {
       doc.setFontSize(8.5);
       doc.setFont("helvetica", "normal");
       return { ins, lines: doc.splitTextToSize(ins.text, textW) as string[] };
     });
     let contentH = 6;
+    if (summaryLines.length > 0)
+      contentH += summaryLines.length * lineH + blockGap + 2;
     blocks.forEach((b) => {
       contentH += b.lines.length * lineH + blockGap;
     });
@@ -1549,16 +2430,32 @@ async function generatePDFDoc(opts: {
     doc.setFillColor(lightBg.r, lightBg.g, lightBg.b);
     doc.setDrawColor(hairline.r, hairline.g, hairline.b);
     doc.roundedRect(m, y, tableWidth, contentH, 2.5, 2.5, "FD");
-    doc.setFillColor(accent.r, accent.g, accent.b);
+    doc.setFillColor(gold.r, gold.g, gold.b);
     doc.rect(m, y, 1.5, contentH, "F");
 
     let iy = y + 7;
+
+    // Executive summary paragraph (italic, before the bullet insights)
+    if (summaryLines.length > 0) {
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(navy.r, navy.g, navy.b);
+      summaryLines.forEach((ln, i) => {
+        doc.text(ln, m + 6, iy + i * lineH);
+      });
+      iy += summaryLines.length * lineH + blockGap;
+      doc.setDrawColor(hairline.r, hairline.g, hairline.b);
+      doc.setLineWidth(0.25);
+      doc.line(m + 6, iy - 2.2, m + tableWidth - 6, iy - 2.2);
+      iy += 2;
+    }
+
     blocks.forEach(({ ins, lines }) => {
       const tone =
         ins.tone === "positive"
           ? { r: 16, g: 185, b: 129 }
           : ins.tone === "warning"
-            ? { r: 234, g: 88, b: 12 }
+            ? { r: 217, g: 119, b: 6 }
             : { r: 100, g: 116, b: 139 };
       doc.setFillColor(tone.r, tone.g, tone.b);
       doc.circle(m + 6, iy - 1.4, 1.1, "F");
@@ -1610,37 +2507,62 @@ async function generatePDFDoc(opts: {
     y += 35;
 
     const prev = data.prevPeriod;
+    const bench = data.benchmark;
     drawKPIBoxes([
       {
         label: "Horas Totales",
         value: `${Math.round(data.totalHours).toLocaleString()}h`,
         delta: prev ? formatDelta(data.totalHours, prev.totalHours) : null,
-        accent: { r: 59, g: 130, b: 246 },
+        sublabel: `${data.billableHours.toFixed(0)}h facturables`,
       },
       {
         label: "Horas Facturables",
         value: `${data.billableHours.toFixed(1)}h`,
         delta: prev ? formatDelta(data.billableHours, prev.billableHours) : null,
-        accent: { r: 16, g: 185, b: 129 },
+        sublabel:
+          bench.firmMonthlyAvg > 0
+            ? `prom. firma: ${Math.round(bench.firmMonthlyAvg)}h/mes`
+            : undefined,
       },
       {
         label: "Utilizacion",
         value: `${data.utilizationRate.toFixed(1)}%`,
         delta: prev ? formatDelta(data.utilizationRate, prev.utilizationRate) : null,
-        accent:
-          data.utilizationRate >= 100
-            ? { r: 16, g: 185, b: 129 }
-            : { r: 245, g: 158, b: 11 },
+        sublabel: "sobre meta personal",
       },
       {
         label: "Ingresos",
         value: formatCurrency(data.totalRevenue),
         delta: prev ? formatDelta(data.totalRevenue, prev.totalRevenue) : null,
-        accent: { r: 16, g: 185, b: 129 },
+        sublabel:
+          bench.totalPeers >= 3 && bench.rank > 0
+            ? `puesto ${bench.rank} de ${bench.totalPeers}`
+            : undefined,
       },
     ]);
 
-    drawInsights(generateIndividualInsights(data));
+    drawInsights(
+      generateIndividualInsights(data),
+      generateIndividualSummary(data),
+    );
+
+    // Monthly pace vs firm average
+    if (data.benchmark.monthly.length >= 2) {
+      drawColumnChart(
+        "Horas Facturables por Mes",
+        data.benchmark.monthly.map((mo) => ({
+          label: mo.month,
+          value: mo.user,
+        })),
+        (n) => `${Math.round(n)}h`,
+        data.benchmark.firmMonthlyAvg > 0
+          ? {
+              value: data.benchmark.firmMonthlyAvg,
+              label: "Prom. firma",
+            }
+          : undefined,
+      );
+    }
 
     drawTable(
       "Desglose por Cliente",
@@ -1670,12 +2592,16 @@ async function generatePDFDoc(opts: {
     const prev = data.prevPeriod;
 
     // Primary KPIs
+    const analytics = computeGerencialAnalytics(data);
     drawKPIBoxes([
       {
         label: "Total Facturado",
         value: formatCurrency(data.totalFacturado),
         delta: prev ? formatDelta(data.totalFacturado, prev.totalFacturado) : null,
-        accent: { r: 16, g: 185, b: 129 },
+        sublabel:
+          data.metaFacturacion > 0
+            ? `${analytics.metaAttainment.toFixed(0)}% de la meta`
+            : undefined,
       },
       {
         label: "Horas Facturables",
@@ -1683,18 +2609,21 @@ async function generatePDFDoc(opts: {
         delta: prev
           ? formatDelta(data.totalHorasFacturables, prev.totalHorasFacturables)
           : null,
-        accent: { r: 59, g: 130, b: 246 },
+        sublabel: `de ${Math.round(data.totalHours).toLocaleString()}h registradas`,
       },
       {
         label: "Clientes Activos",
         value: data.clientesUnicos.toString(),
         delta: prev ? formatDelta(data.clientesUnicos, prev.clientesUnicos) : null,
-        accent: { r: 168, g: 85, b: 247 },
+        sublabel: `${data.totalProjects} proyectos activos`,
       },
       {
         label: "Meta Facturacion",
         value: formatCurrency(data.metaFacturacion),
-        accent: { r: 245, g: 158, b: 11 },
+        sublabel:
+          data.metaFacturacion > data.totalFacturado
+            ? `faltan ${formatCurrency(data.metaFacturacion - data.totalFacturado)}`
+            : "meta superada",
       },
     ]);
 
@@ -1703,63 +2632,91 @@ async function generatePDFDoc(opts: {
       {
         label: "Utilizacion",
         value: `${data.utilizationRate.toFixed(1)}%`,
-        accent: data.utilizationRate >= 80
-          ? { r: 16, g: 185, b: 129 }
-          : { r: 245, g: 158, b: 11 },
+        sublabel: "horas facturables / totales",
       },
       {
         label: "Margen Promedio",
         value: `${data.avgMarginPercent.toFixed(1)}%`,
-        accent: data.avgMarginPercent >= 30
-          ? { r: 16, g: 185, b: 129 }
-          : { r: 239, g: 68, b: 68 },
-      },
-      {
-        label: "Horas Totales",
-        value: `${Math.round(data.totalHours).toLocaleString()}h`,
-        accent: { r: 59, g: 130, b: 246 },
-      },
-      {
-        label: "Proyectos Activos",
-        value: data.totalProjects.toString(),
-        accent: { r: 168, g: 85, b: 247 },
-      },
-    ]);
-
-    // Derived analytics — key ratios beyond headline KPIs
-    const analytics = computeGerencialAnalytics(data);
-    drawKPIBoxes([
-      {
-        label: "Cumplim. de Meta",
-        value: data.metaFacturacion > 0 ? `${analytics.metaAttainment.toFixed(0)}%` : "—",
-        accent: analytics.metaAttainment >= 100
-          ? { r: 16, g: 185, b: 129 }
-          : { r: 245, g: 158, b: 11 },
-      },
-      {
-        label: "Concentr. Top 3",
-        value: `${analytics.clientConcentration.toFixed(0)}%`,
-        accent: analytics.clientConcentration >= 60
-          ? { r: 239, g: 68, b: 68 }
-          : { r: 16, g: 185, b: 129 },
+        sublabel: "facturacion vs costo",
       },
       {
         label: "Ingreso / Cliente",
         value: formatCurrency(analytics.avgRevenuePerClient),
-        accent: { r: 45, g: 106, b: 197 },
+        sublabel: "promedio por cliente activo",
       },
       {
         label: "Momentum Ingresos",
-        value: data.monthlyRevenue.length >= 2
-          ? `${analytics.revenueMomentum >= 0 ? "+" : ""}${analytics.revenueMomentum.toFixed(0)}%`
-          : "—",
-        accent: analytics.revenueMomentum >= 0
-          ? { r: 16, g: 185, b: 129 }
-          : { r: 239, g: 68, b: 68 },
+        value:
+          data.monthlyRevenue.length >= 2
+            ? `${analytics.revenueMomentum >= 0 ? "+" : ""}${analytics.revenueMomentum.toFixed(0)}%`
+            : "—",
+        sublabel: "primer vs ultimo mes",
       },
     ]);
 
-    drawInsights(generateGerencialInsights(data));
+    // Derived analytics — key ratios beyond headline KPIs
+    drawKPIBoxes([
+      {
+        label: "Cumplim. de Meta",
+        value: data.metaFacturacion > 0 ? `${analytics.metaAttainment.toFixed(0)}%` : "—",
+        sublabel: "sobre meta de facturacion",
+      },
+      {
+        label: "Concentr. Top 3",
+        value: `${analytics.clientConcentration.toFixed(0)}%`,
+        sublabel:
+          analytics.clientConcentration >= 60
+            ? "riesgo de dependencia"
+            : "cartera diversificada",
+      },
+      {
+        label: "Prom. Facturable / Prof.",
+        value:
+          data.proStats.firmMonthlyAvg > 0
+            ? `${Math.round(data.proStats.firmMonthlyAvg)}h/mes`
+            : "—",
+        sublabel:
+          data.proStats.belowAvg.length > 0
+            ? `${data.proStats.belowAvg.length} prof. bajo promedio`
+            : "equipo parejo",
+      },
+      {
+        label: "Proyectos Activos",
+        value: data.totalProjects.toString(),
+        sublabel: `${data.clientesUnicos} clientes`,
+      },
+    ]);
+
+    drawInsights(
+      generateGerencialInsights(data),
+      generateGerencialSummary(data),
+    );
+
+    // Monthly revenue trend
+    if (data.monthlyRevenue.length >= 2) {
+      drawColumnChart(
+        "Evolucion Mensual de Ingresos",
+        data.monthlyRevenue.map((mo) => ({
+          label: mo.month.split("-")[1] || mo.month,
+          value: mo.revenue,
+        })),
+        formatCurrency,
+      );
+    }
+
+    // Revenue by practice area — gold highlight on the leading area
+    drawBarChartH(
+      "Facturacion por Area de Practica",
+      data.areaBreakdown
+        .filter((a) => a.facturacion > 0)
+        .sort((a, b) => b.facturacion - a.facturacion)
+        .map((a, i) => ({
+          label: a.area,
+          value: a.facturacion,
+          highlight: i === 0,
+        })),
+      formatCurrency,
+    );
 
     // Top Clients with margin
     drawTable(
@@ -1801,36 +2758,17 @@ async function generatePDFDoc(opts: {
       ]),
     );
 
-    // Area Breakdown
-    if (data.areaBreakdown.length > 0) {
-      drawTable(
-        "Facturacion por Area de Practica",
-        ["Area", "Facturado", "Meta"],
-        [3, 100, 145],
-        data.areaBreakdown
-          .filter((a) => a.facturacion > 0)
-          .sort((a, b) => b.facturacion - a.facturacion)
-          .map((a) => [
-            a.area.length > 40 ? a.area.substring(0, 37) + "..." : a.area,
-            formatCurrency(a.facturacion),
-            formatCurrency(a.meta),
-          ]),
-      );
-    }
-
-    // Hours by Category
-    if (data.categoryBreakdown.length > 0) {
-      drawTable(
-        "Horas Facturables por Categoria",
-        ["Categoria", "Horas", "Profesionales"],
-        [3, 100, 145],
-        data.categoryBreakdown.map((c) => [
-          c.category,
-          `${Math.round(c.billableHours).toLocaleString()}h`,
-          c.userCount.toString(),
-        ]),
-      );
-    }
+    // Hours by Category — horizontal bars
+    drawBarChartH(
+      "Horas Facturables por Categoria",
+      [...data.categoryBreakdown]
+        .sort((a, b) => b.billableHours - a.billableHours)
+        .map((c) => ({
+          label: `${c.category} (${c.userCount} prof.)`,
+          value: c.billableHours,
+        })),
+      (n) => `${Math.round(n).toLocaleString()}h`,
+    );
 
     // Top Projects
     if (data.topProjects.length > 0) {
@@ -1978,6 +2916,7 @@ const ReportesPDF = () => {
         setIndData({
           ...metrics,
           usuario,
+          benchmark: computePeerBenchmark(selectedProfessional, indStart, indEnd),
           clients: profileData.clients.map((c) => ({
             clientName: c.client_name,
             hours: c.total_hours,
@@ -2162,12 +3101,37 @@ const ReportesPDF = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6 w-full min-w-0 max-w-full">
-        {/* Page header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Reportes PDF</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Genera y descarga reportes de la firma
-          </p>
+        {/* Page hero */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[hsl(210,58%,13%)] via-[hsl(210,55%,19%)] to-[hsl(210,48%,28%)] px-6 py-7 sm:px-8 shadow-[0_10px_30px_-10px_hsl(210,55%,23%,0.45)]">
+          {/* decorative geometry */}
+          <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full border border-white/[0.07]" />
+          <div className="pointer-events-none absolute -right-8 -top-12 h-48 w-48 rounded-full border border-[hsl(43,74%,52%)]/20" />
+          <div className="pointer-events-none absolute right-24 top-6 h-1.5 w-1.5 rounded-full bg-[hsl(43,74%,52%)]/70" />
+          <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[hsl(43,74%,58%)]">
+                Inteligencia de la Firma
+              </p>
+              <h1 className="mt-1.5 text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                Centro de Reportes
+              </h1>
+              <p className="mt-1.5 text-sm text-white/65 max-w-xl">
+                Reportes ejecutivos con análisis generado por IA — benchmarks entre
+                profesionales, tendencias y alertas, listos para presentar.
+              </p>
+            </div>
+            <div className="shrink-0 flex items-center gap-2.5 rounded-xl border border-[hsl(43,74%,52%)]/30 bg-white/[0.06] px-4 py-3 backdrop-blur-sm">
+              <div className="h-9 w-9 rounded-lg bg-[hsl(43,74%,52%)]/15 ring-1 ring-[hsl(43,74%,52%)]/50 flex items-center justify-center">
+                <Sparkles className="h-[18px] w-[18px] text-[hsl(43,80%,62%)]" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-white">Insights de IA</p>
+                <p className="text-[11px] text-white/60">
+                  Nuevos en cada descarga
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ================== GERENCIAL CARD ================== */}
@@ -2175,13 +3139,18 @@ const ReportesPDF = () => {
           <CardContent className="p-0">
             {/* Main row */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 p-5">
-              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-md">
-                <Building2 className="h-7 w-7 text-white" />
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[hsl(210,58%,16%)] to-[hsl(210,48%,32%)] ring-1 ring-[hsl(43,74%,52%)]/40 flex items-center justify-center shrink-0 shadow-md">
+                <Building2 className="h-7 w-7 text-[hsl(43,74%,62%)]" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-foreground">Reporte Gerencial</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg font-semibold text-foreground">Reporte Gerencial</h3>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[hsl(43,74%,52%)]/10 border border-[hsl(43,74%,52%)]/30 px-2 py-0.5 text-[10px] font-semibold text-[hsl(43,65%,32%)]">
+                    <Sparkles className="h-3 w-3" /> Insights IA
+                  </span>
+                </div>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Resumen ejecutivo de facturacion, clientes y desempeno de la firma
+                  Resumen ejecutivo con facturación, rentabilidad y benchmarks del equipo
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -2299,13 +3268,18 @@ const ReportesPDF = () => {
           <CardContent className="p-0">
             {/* Main row */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 p-5">
-              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-md">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[hsl(210,30%,30%)] to-[hsl(210,25%,48%)] ring-1 ring-white/20 flex items-center justify-center shrink-0 shadow-md">
                 <User className="h-7 w-7 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-foreground">Reporte Individual</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg font-semibold text-foreground">Reporte Individual</h3>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[hsl(43,74%,52%)]/10 border border-[hsl(43,74%,52%)]/30 px-2 py-0.5 text-[10px] font-semibold text-[hsl(43,65%,32%)]">
+                    <Sparkles className="h-3 w-3" /> Insights IA
+                  </span>
+                </div>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Reporte detallado de productividad por profesional
+                  Productividad por profesional comparada con el promedio de la firma
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -2437,7 +3411,7 @@ const ReportesPDF = () => {
         <Card className="border-border/50 overflow-hidden">
           <CardContent className="p-0">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 p-5">
-              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shrink-0 shadow-md">
+              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-[hsl(43,74%,42%)] to-[hsl(36,70%,38%)] ring-1 ring-[hsl(43,74%,70%)]/50 flex items-center justify-center shrink-0 shadow-md">
                 <Sparkles className="h-7 w-7 text-white" />
               </div>
               <div className="flex-1 min-w-0">
@@ -2482,7 +3456,7 @@ const ReportesPDF = () => {
 
         {/* ================== GERENCIAL PREVIEW DIALOG ================== */}
         <Dialog open={gerPreviewOpen} onOpenChange={setGerPreviewOpen}>
-          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[88vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Building2 className="h-5 w-5" />
@@ -2497,6 +3471,8 @@ const ReportesPDF = () => {
                 gerData={gerData}
                 gerStats={gerStats}
                 hasPeriodGer={hasPeriodGer}
+                firmName={firmName}
+                periodLabel={gerPeriodLabel}
               />
             )}
           </DialogContent>
@@ -2504,7 +3480,7 @@ const ReportesPDF = () => {
 
         {/* ================== INDIVIDUAL PREVIEW DIALOG ================== */}
         <Dialog open={indPreviewOpen} onOpenChange={setIndPreviewOpen}>
-          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[88vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
@@ -2519,6 +3495,8 @@ const ReportesPDF = () => {
                 indData={indData}
                 indStats={indStats}
                 hasPeriodInd={hasPeriodInd}
+                firmName={firmName}
+                periodLabel={indPeriodLabel}
               />
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">

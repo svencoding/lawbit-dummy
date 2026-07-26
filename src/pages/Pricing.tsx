@@ -73,6 +73,7 @@ import {
   getFullPricingData,
   getAsuntos,
   getBudgetVsActualComparison,
+  isUnderRecovery,
 } from "@/lib/mockDataUtils";
 import type { HistoricalProject, BudgetVsActualRow } from "@/lib/mockDataUtils";
 import CasosPrecedentes from "@/components/CasosPrecedentes";
@@ -219,7 +220,16 @@ const Pricing = () => {
   const [showCostBreakdown, setShowCostBreakdown] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>("parametros");
   const [showComparison, setShowComparison] = useState<boolean>(false);
-  const comparisonData = useMemo<BudgetVsActualRow[]>(() => getBudgetVsActualComparison(10), []);
+  // KPIs summarise the whole book so they match Pricing histórico; the table
+  // below only lists the most recently active ones.
+  const allComparisonRows = useMemo<BudgetVsActualRow[]>(
+    () => getBudgetVsActualComparison(Number.MAX_SAFE_INTEGER),
+    [],
+  );
+  const comparisonData = useMemo<BudgetVsActualRow[]>(
+    () => allComparisonRows.slice(0, 10),
+    [allComparisonRows],
+  );
 
   // State for historical data
   const [pricingData, setPricingData] = useState<PricingData | null>(null);
@@ -1083,11 +1093,15 @@ const Pricing = () => {
               <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                  {comparisonData.filter(d => d.status === "completed").length} completados
+                  {allComparisonRows.filter(d => d.status === "completed" && d.actualPrice > 0).length} completados
                 </span>
                 <span className="flex items-center gap-1">
                   <Circle className="h-3 w-3 text-blue-500" />
-                  {comparisonData.filter(d => d.status === "in_progress").length} en curso
+                  {allComparisonRows.filter(d => d.status === "in_progress" && d.actualPrice > 0).length} en curso
+                </span>
+                <span className="flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 text-amber-500" />
+                  {allComparisonRows.filter(d => d.actualPrice <= 0).length} sin facturar
                 </span>
               </div>
             </div>
@@ -1095,7 +1109,9 @@ const Pricing = () => {
           <CardContent className="pt-0">
             {/* Summary KPIs */}
             {(() => {
-              const completed = comparisonData.filter(d => d.status === "completed");
+              // Never-invoiced matters have no real to compare against; including
+              // them would pull every average toward -100%.
+              const completed = allComparisonRows.filter(d => d.status === "completed" && d.actualPrice > 0);
               const totalBudgeted = completed.reduce((s, d) => s + d.budgetedPrice, 0);
               const totalActual = completed.reduce((s, d) => s + d.actualPrice, 0);
               const avgDeviation = totalBudgeted > 0 ? ((totalActual - totalBudgeted) / totalBudgeted) * 100 : 0;
@@ -1121,7 +1137,7 @@ const Pricing = () => {
                   </div>
                   <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/50">
                     <p className="text-[11px] text-purple-600 dark:text-purple-400 font-medium mb-0.5">Horas: Ppto vs Real</p>
-                    <p className="text-lg font-bold text-purple-900 dark:text-purple-100">{totalBudgetedHours} / {totalActualHours}</p>
+                    <p className="text-lg font-bold text-purple-900 dark:text-purple-100">{totalBudgetedHours.toLocaleString()} / {totalActualHours.toLocaleString()}</p>
                   </div>
                 </div>
               );
@@ -1132,7 +1148,7 @@ const Pricing = () => {
               <CollapsibleTrigger className="w-full">
                 <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors text-xs text-muted-foreground">
                   <span className="font-medium">
-                    {showComparison ? "Ocultar" : "Ver"} detalle por proyecto ({comparisonData.length})
+                    {showComparison ? "Ocultar" : "Ver"} detalle por proyecto (últimos {comparisonData.length} de {allComparisonRows.length})
                   </span>
                   {showComparison ? (
                     <ChevronUp className="h-4 w-4" />
@@ -1163,7 +1179,8 @@ const Pricing = () => {
                           const progressPct = item.status === "in_progress"
                             ? Math.min(100, (item.actualPrice / item.budgetedPrice) * 100)
                             : 100;
-                          const isAlert = item.status === "in_progress" && deviation > 100;
+                          const isAlert = isUnderRecovery(item);
+                          const isUnbilled = item.actualPrice <= 0;
                           const dateObj = item.date ? new Date(item.date) : null;
                           const dateLabel = dateObj && !isNaN(dateObj.getTime())
                             ? dateObj.toLocaleDateString("es-ES", { month: "short", year: "numeric" })
@@ -1185,7 +1202,7 @@ const Pricing = () => {
                                             <AlertTriangle className="h-3 w-3 text-red-600 dark:text-red-400 shrink-0" />
                                           </TooltipTrigger>
                                           <TooltipContent>
-                                            <p className="text-xs">Alerta: desviación supera el 100% y el asunto sigue abierto</p>
+                                            <p className="text-xs">Alerta: el asunto sigue abierto y acumula más de 70% de horas sobre las que cubren sus honorarios</p>
                                           </TooltipContent>
                                         </Tooltip>
                                       </TooltipProvider>
@@ -1204,11 +1221,17 @@ const Pricing = () => {
                                   <p className="text-[11px] text-muted-foreground">{item.budgetedHours}h</p>
                                 </td>
                                 <td className="p-3 text-right">
-                                  <p className="font-medium text-xs">${item.actualPrice.toLocaleString()}</p>
-                                  <p className="text-[11px] text-muted-foreground">{item.actualHours}h</p>
+                                  <p className={`font-medium text-xs ${isUnbilled ? "text-muted-foreground" : ""}`}>
+                                    ${(isUnbilled ? item.accruedCost : item.actualPrice).toLocaleString()}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    {isUnbilled ? "costo en curso" : `${item.actualHours}h`}
+                                  </p>
                                 </td>
                                 <td className="p-3 text-right">
-                                  {item.status === "completed" || deviation > 0 ? (
+                                  {isUnbilled ? (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  ) : item.status === "completed" || deviation > 0 ? (
                                     <span className={`text-xs font-semibold ${deviation > 5 ? "text-red-600" : deviation < -5 ? "text-emerald-600" : "text-foreground"}`}>
                                       {deviation > 0 ? "+" : ""}{deviation.toFixed(1)}%
                                     </span>
@@ -1225,7 +1248,12 @@ const Pricing = () => {
                                   )}
                                 </td>
                                 <td className="p-3 text-center">
-                                  {item.status === "completed" ? (
+                                  {isUnbilled ? (
+                                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
+                                      <AlertTriangle className="h-3 w-3 mr-1" />
+                                      Sin facturar
+                                    </Badge>
+                                  ) : item.status === "completed" ? (
                                     <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
                                       <CheckCircle2 className="h-3 w-3 mr-1" />
                                       Cerrado
@@ -1251,7 +1279,7 @@ const Pricing = () => {
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-3 text-center italic">
-                  Datos derivados de los asuntos reales (presupuesto = monto cotizado; real = horas y facturación registradas). Haz clic en una fila para abrir el asunto.
+                  Real = facturación registrada del asunto, la misma fuente que alimenta Facturación; las horas son horas facturables. Haz clic en una fila para abrir el asunto.
                 </p>
               </CollapsibleContent>
             </Collapsible>

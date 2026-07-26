@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, Fragment } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,35 +9,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Clock,
   ArrowLeft,
   ArrowUpDown,
   FolderOpen,
   Building2,
-  Users,
-  GitCompare,
-  CheckCircle2,
-  Circle,
-  Timer,
-  TimerReset,
-  Gauge,
-  Scale,
-  ChevronDown,
-  ChevronRight,
-  Wallet,
-  Receipt,
-  TrendingUp,
-  TrendingDown,
-  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -46,6 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ProjectEjecucion } from "@/components/ProjectEjecucion";
 import {
   getClientes,
   getAsuntos,
@@ -53,9 +33,6 @@ import {
   getFacturacion,
   getUsuarios,
   getBudgetVsActualForAsunto,
-  getTaskDistributionForAsunto,
-  getTaskTypeBreakdownForAsunto,
-  getTaskTypeEntrySamplesForAsunto,
 } from "@/lib/mockDataUtils";
 
 function formatCurrency(value: number): string {
@@ -85,6 +62,8 @@ const CATEGORY_TO_LEVEL_LABEL: Record<string, string> = {
 };
 type SortOrder = "asc" | "desc";
 
+const HOURLY_COST_2026 = 170;
+
 const categoryColors: Record<string, string> = {
   Socio: "bg-amber-100 text-amber-800 border-amber-200",
   "Asociado Sr": "bg-blue-100 text-blue-800 border-blue-200",
@@ -101,7 +80,6 @@ const ProjectProfile = () => {
 
   const [profSortField, setProfSortField] = useState<ProfSortField>("total_hours");
   const [profSortOrder, setProfSortOrder] = useState<SortOrder>("desc");
-  const [expandedTaskType, setExpandedTaskType] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -201,9 +179,46 @@ const ProjectProfile = () => {
     return getBudgetVsActualForAsunto(parseInt(asuntoId, 10));
   }, [asuntoId]);
 
-  const taskDistribution = useMemo(() => {
+  // Serie acumulada mes a mes para el burn-up: costo interno
+  // (horas × tarifa costo) y valor trabajado (horas × tarifa cliente).
+  const burnSeries = useMemo(() => {
     if (!asuntoId) return [];
-    return getTaskDistributionForAsunto(parseInt(asuntoId, 10));
+    const id = parseInt(asuntoId, 10);
+    const entries = getTransformedTimeEntries().filter((e) => e.project_id === id);
+    if (entries.length === 0) return [];
+
+    const rateByUser = new Map(getUsuarios().map((u) => [u.id, u.rate || 0]));
+    const byMonth = new Map<string, { hours: number; valor: number }>();
+    entries.forEach((e) => {
+      if (!e.date) return;
+      const key = e.date.slice(0, 7); // YYYY-MM
+      const b = byMonth.get(key) || { hours: 0, valor: 0 };
+      b.hours += e.duration;
+      b.valor += e.duration * (rateByUser.get(e.user_id) || 0);
+      byMonth.set(key, b);
+    });
+
+    const MONTHS = [
+      "ene", "feb", "mar", "abr", "may", "jun",
+      "jul", "ago", "sep", "oct", "nov", "dic",
+    ];
+    let accHours = 0;
+    let accValor = 0;
+    return Array.from(byMonth.keys())
+      .sort()
+      .map((key) => {
+        const b = byMonth.get(key)!;
+        accHours += b.hours;
+        accValor += b.valor;
+        const [y, m] = key.split("-");
+        return {
+          key,
+          label: `${MONTHS[parseInt(m, 10) - 1]} ${y.slice(2)}`,
+          horas: accHours,
+          costo: accHours * HOURLY_COST_2026,
+          valor: accValor,
+        };
+      });
   }, [asuntoId]);
 
   useEffect(() => {
@@ -342,24 +357,13 @@ const ProjectProfile = () => {
     (s, p) => s + p.total_hours * p.rate,
     0,
   );
-  const HOURLY_COST_2026 = 170;
   const costoInternoReal = totalHours * HOURLY_COST_2026;
-  const tarifaCostoPromedio = HOURLY_COST_2026;
   const isInProgress = budgetVsActual?.status !== "completed";
   // Costo en curso: lo ya gastado (horas reales × tarifa de costo). Es lo que
   // refleja la situación financiera actual del proyecto.
   const costoEnCurso = costoInternoReal;
   const margenReal = budgetedPrice - costoEnCurso;
   const margenPct = budgetedPrice > 0 ? (margenReal / budgetedPrice) * 100 : 0;
-  const pctBudgetConsumido =
-    budgetedHours > 0 ? Math.min(100, (totalHours / budgetedHours) * 100) : 0;
-  // Sólo mostramos margen cuando es informativo: proyecto cerrado o ya se
-  // excedieron las horas presupuestadas. En cualquier otro caso "en curso" el
-  // margen sería una proyección worst-case que confunde más que ayuda.
-  const showMargen = true;
-  const horasExcedidas = totalHours - budgetedHours;
-  const horasRestantes = budgetedHours - totalHours;
-  const tarifaPromedioPonderada = totalHours > 0 ? valorTrabajado / totalHours : 0;
   const areasInvolucradas = new Set<string>();
   const allUsuariosForAreas = getUsuarios();
   professionals.forEach((p) => {
@@ -367,53 +371,7 @@ const ProjectProfile = () => {
     if (u?.practice_area) areasInvolucradas.add(u.practice_area);
   });
 
-  const fmtMoney = (v: number) =>
-    v < 0 ? `−${formatCurrency(Math.abs(v))}` : formatCurrency(v);
   const areasList = Array.from(areasInvolucradas);
-
-  const secondaryKpis = [
-    {
-      title: "Horas trabajadas",
-      value: Math.round(totalHours).toString(),
-      icon: Clock,
-    },
-    {
-      title: "Horas en budget",
-      value: budgetedHours > 0 ? budgetedHours.toString() : "—",
-      icon: Timer,
-    },
-    {
-      // Cuando aún no se supera el budget mostramos "Horas restantes" en vez
-      // de "Horas excedidas" con signo negativo, que se lee como un error.
-      title: horasExcedidas > 0 ? "Horas excedidas" : "Horas restantes",
-      value:
-        budgetedHours > 0
-          ? horasExcedidas > 0
-            ? `+${Math.round(horasExcedidas)}h`
-            : `${Math.round(horasRestantes)}h`
-          : "—",
-      icon: TimerReset,
-      tone:
-        horasExcedidas > 0
-          ? "text-red-600 dark:text-red-400"
-          : "text-emerald-600 dark:text-emerald-400",
-    },
-    {
-      title: "Valor Hora Costo 2026",
-      value:
-        tarifaCostoPromedio > 0
-          ? `$${Math.round(tarifaCostoPromedio).toLocaleString()}/h`
-          : "—",
-      icon: Gauge,
-      info: "Costo interno por hora trabajada en 2026 ($170/h). Refleja lo que le cuesta a la firma cada hora de trabajo, sin importar la tarifa cobrada al cliente.",
-    },
-    {
-      title: "Tarifa prom.",
-      value: `$${Math.round(tarifaPromedioPonderada).toLocaleString()}/h`,
-      icon: Scale,
-      info: "Tarifa promedio ponderada por horas: Valor trabajado (Σ horas × tarifa cliente) ÷ horas trabajadas. Indica cuánto se le cobra al cliente por hora en promedio.",
-    },
-  ];
 
   return (
     <DashboardLayout>
@@ -465,519 +423,28 @@ const ProjectProfile = () => {
           </div>
         </div>
 
-        {/* Resumen Financiero — unified compact card */}
-        <Card className="border-border/50 overflow-hidden">
-          <div className="border-b bg-muted/30 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <h2 className="text-sm font-semibold">Resumen Financiero</h2>
-              <p className="text-[11px] text-muted-foreground">
-                Honorarios, costo interno y margen real
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {areasList.length > 0 && (
-                <div className="flex items-center gap-1 flex-wrap">
-                  {areasList.map((a) => (
-                    <Badge key={a} variant="secondary" className="text-[10px] px-1.5 py-0">
-                      {a}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Primary financial cards — Ingreso / Costo en curso / Valor trabajado / Margen */}
-          <div className={`p-4 grid grid-cols-1 gap-3 ${
-            isInProgress
-              ? showMargen
-                ? "md:grid-cols-2 xl:grid-cols-4"
-                : "md:grid-cols-3"
-              : "md:grid-cols-3"
-          }`}>
-            {/* Ingreso */}
-            <div className="rounded-xl border border-emerald-200/60 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50 to-emerald-50/40 dark:from-emerald-950/30 dark:to-emerald-950/10 p-4 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-emerald-500/15 flex items-center justify-center">
-                    <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                    Ingreso
-                  </p>
-                </div>
-              </div>
-              <p className="text-2xl font-bold tabular-nums text-emerald-900 dark:text-emerald-100">
-                {budgetedPrice > 0 ? fmtMoney(budgetedPrice) : "—"}
-              </p>
-              <p className="text-[11px] text-emerald-700/70 dark:text-emerald-300/70">
-                Honorarios · Budget cliente
-              </p>
-            </div>
-
-            {/* Costo en curso — sólo en proyectos en curso */}
-            {isInProgress && (
-              <div className="rounded-xl border border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-br from-amber-50 to-amber-50/40 dark:from-amber-950/30 dark:to-amber-950/10 p-4 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
-                      <Receipt className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                      Costo en curso
-                    </p>
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button className="text-amber-600/70 hover:text-amber-700 dark:text-amber-400/70">
-                        <Info className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-xs text-xs">
-                      Costo interno ya incurrido: horas reales trabajadas × tarifa de costo por hora 2026 ($170). Refleja lo que llevamos gastado hasta hoy.
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-                <p className="text-2xl font-bold tabular-nums text-amber-900 dark:text-amber-100">
-                  {fmtMoney(costoEnCurso)}
-                </p>
-                <p className="text-[11px] text-amber-700/70 dark:text-amber-300/70 tabular-nums">
-                  {Math.round(totalHours)}h × ${HOURLY_COST_2026}/h · {pctBudgetConsumido.toFixed(0)}% del budget
-                </p>
-              </div>
-            )}
-
-            {/* Valor trabajado (Producción) — horas reales × tarifa cliente */}
-            <div className="rounded-xl border border-sky-200/60 dark:border-sky-900/40 bg-gradient-to-br from-sky-50 to-sky-50/40 dark:from-sky-950/30 dark:to-sky-950/10 p-4 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-sky-500/15 flex items-center justify-center">
-                    <TrendingUp className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-                  </div>
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
-                    Valor trabajado
-                  </p>
-                </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button className="text-sky-600/70 hover:text-sky-700 dark:text-sky-400/70">
-                      <Info className="h-3.5 w-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs text-xs">
-                    Valor trabajado: horas reales trabajadas × tarifa cliente por profesional. Indica el valor económico generado a tarifa lista, independiente de lo facturado al cliente.
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <p className="text-2xl font-bold tabular-nums text-sky-900 dark:text-sky-100">
-                {fmtMoney(valorTrabajado)}
-              </p>
-              <p className="text-[11px] text-sky-700/70 dark:text-sky-300/70 tabular-nums">
-                {Math.round(totalHours)}h × ${Math.round(tarifaPromedioPonderada).toLocaleString()}/h prom.
-              </p>
-            </div>
-
-            {/* Margen — sólo si está cerrado o ya se excedieron las horas budget */}
-            {showMargen && (
-            <div
-              className={`rounded-xl border p-4 flex flex-col gap-2 ${
-                margenReal >= 0
-                  ? "border-emerald-200/60 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50 to-emerald-50/40 dark:from-emerald-950/30 dark:to-emerald-950/10"
-                  : "border-red-200/60 dark:border-red-900/40 bg-gradient-to-br from-red-50 to-red-50/40 dark:from-red-950/30 dark:to-red-950/10"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`h-8 w-8 rounded-lg flex items-center justify-center ${
-                      margenReal >= 0 ? "bg-emerald-500/15" : "bg-red-500/15"
-                    }`}
-                  >
-                    {margenReal >= 0 ? (
-                      <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
-                    )}
-                  </div>
-                  <p
-                    className={`text-[11px] font-medium uppercase tracking-wide ${
-                      margenReal >= 0
-                        ? "text-emerald-700 dark:text-emerald-300"
-                        : "text-red-700 dark:text-red-300"
-                    }`}
-                  >
-                    Margen
-                  </p>
-                </div>
-                {budgetedPrice > 0 && (
-                  <Badge
-                    variant="secondary"
-                    className={`text-[10px] tabular-nums ${
-                      margenReal >= 0
-                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                        : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                    }`}
-                  >
-                    {margenPct.toFixed(1)}%
-                  </Badge>
-                )}
-              </div>
-              <p
-                className={`text-2xl font-bold tabular-nums ${
-                  margenReal >= 0
-                    ? "text-emerald-900 dark:text-emerald-100"
-                    : "text-red-900 dark:text-red-100"
-                }`}
-              >
-                {budgetedPrice > 0 ? fmtMoney(margenReal) : "—"}
-              </p>
-              <p
-                className={`text-[11px] ${
-                  margenReal >= 0
-                    ? "text-emerald-700/70 dark:text-emerald-300/70"
-                    : "text-red-700/70 dark:text-red-300/70"
-                }`}
-              >
-                Ingreso − Costo en curso
-              </p>
-            </div>
-            )}
-          </div>
-
-          {/* Secondary operational KPIs — single dense row */}
-          <div className="border-t bg-muted/10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x">
-            {secondaryKpis.map((k) => (
-              <div key={k.title} className="px-3 py-2.5">
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <k.icon className="h-3 w-3 shrink-0" />
-                  <p className="text-[10px] whitespace-nowrap">{k.title}</p>
-                  {"info" in k && k.info ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button className="text-muted-foreground/60 hover:text-foreground">
-                          <Info className="h-3 w-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs text-xs">
-                        {k.info}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                </div>
-                <p className={`text-sm font-semibold mt-0.5 tabular-nums ${k.tone || ""}`}>
-                  {k.value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Presupuestado vs Real */}
-        {budgetVsActual && (() => {
-          const bva = budgetVsActual;
-          const inProgress = bva.status !== "completed";
-          return (
-            <Card className="border-border/40 shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 shadow-sm">
-                      <GitCompare className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-sm font-medium">Presupuestado vs Real</CardTitle>
-                      <p className="text-xs text-muted-foreground">Cotización original contra ejecución real</p>
-                    </div>
-                  </div>
-                  {bva.status === "completed" ? (
-                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Cerrado
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[10px]">
-                      <Circle className="h-3 w-3 mr-1" />
-                      En curso
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-4">
-                {bva.team.length > 0 && (
-                  <div className="rounded-lg border overflow-hidden bg-background">
-                    <div className="px-3 py-2 bg-muted/40 border-b">
-                      <p className="text-xs font-semibold text-foreground flex items-center gap-2">
-                        <Users className="h-3.5 w-3.5" />
-                        Desglose por nivel de senioridad
-                      </p>
-                    </div>
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-muted/20 border-b">
-                          <th className="text-left p-2.5 font-medium text-muted-foreground">Nivel</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground">Horas Ppto</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground">Horas Real</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground">{inProgress ? "Avance" : "Desv. Horas"}</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Tarifa Costo</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground">Monto Ppto</th>
-                          <th className="text-right p-2.5 font-medium text-muted-foreground">Monto Real</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {bva.team.map((m) => {
-                          const hDev = m.budgetedHours > 0
-                            ? ((m.actualHours - m.budgetedHours) / m.budgetedHours) * 100
-                            : 0;
-                          const hProgress = m.budgetedHours > 0
-                            ? (m.actualHours / m.budgetedHours) * 100
-                            : 0;
-                          const showProgress = inProgress && hDev < 0;
-                          const bAmt = m.budgetedHours * HOURLY_COST_2026;
-                          const aAmt = m.actualHours * HOURLY_COST_2026;
-                          return (
-                            <tr key={m.level} className="border-b last:border-0 hover:bg-muted/20">
-                              <td className="p-2.5 font-medium text-foreground">{m.label}</td>
-                              <td className="p-2.5 text-right font-medium">{m.budgetedHours}h</td>
-                              <td className="p-2.5 text-right font-medium">{m.actualHours}h</td>
-                              <td className="p-2.5 text-right">
-                                <span className={`font-semibold ${hDev > 5 ? "text-red-600" : hDev < -5 ? "text-emerald-600" : "text-foreground"}`}>
-                                  {showProgress
-                                    ? `${hProgress.toFixed(0)}%`
-                                    : `${hDev > 0 ? "+" : ""}${hDev.toFixed(0)}%`}
-                                </span>
-                              </td>
-                              <td className="p-2.5 text-right text-muted-foreground hidden sm:table-cell">${HOURLY_COST_2026}/h</td>
-                              <td className="p-2.5 text-right font-medium">${Math.round(bAmt).toLocaleString()}</td>
-                              <td className="p-2.5 text-right font-medium">${Math.round(aAmt).toLocaleString()}</td>
-                            </tr>
-                          );
-                        })}
-                        <tr className="bg-muted/30 font-semibold">
-                          <td className="p-2.5 text-foreground">Total</td>
-                          <td className="p-2.5 text-right">{bva.team.reduce((s, m) => s + m.budgetedHours, 0)}h</td>
-                          <td className="p-2.5 text-right">{bva.team.reduce((s, m) => s + m.actualHours, 0)}h</td>
-                          <td className="p-2.5"></td>
-                          <td className="p-2.5 hidden sm:table-cell"></td>
-                          <td className="p-2.5 text-right">${Math.round(bva.team.reduce((s, m) => s + m.budgetedHours * HOURLY_COST_2026, 0)).toLocaleString()}</td>
-                          <td className="p-2.5 text-right">${Math.round(bva.team.reduce((s, m) => s + m.actualHours * HOURLY_COST_2026, 0)).toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })()}
-
-        {/* Distribución por Tipo de Tarea */}
-        {taskDistribution.length > 0 && (
-          <Card className="border-border/50">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-foreground">Distribución por Tipo de Tarea</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Costo calculado con tarifa costo por nivel de senioridad
-              </p>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="overflow-x-auto rounded-md">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b">
-                      <TableHead className="h-9 px-2 text-xs font-semibold">Tipo de tarea</TableHead>
-                      <TableHead className="h-9 px-2 text-xs font-semibold text-right">Horas</TableHead>
-                      <TableHead className="h-9 px-2 text-xs font-semibold text-right">%</TableHead>
-                      <TableHead className="h-9 px-2 text-xs font-semibold text-right">Costo USD</TableHead>
-                      <TableHead className="h-9 px-2 text-xs font-semibold text-center">Señal</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {taskDistribution.map((row) => {
-                      const signalConfig: Record<
-                        typeof row.signal,
-                        { label: string; className: string }
-                      > = {
-                        muy_alto: {
-                          label: "Muy alto",
-                          className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400",
-                        },
-                        alto: {
-                          label: "Alto",
-                          className: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400",
-                        },
-                        normal: {
-                          label: "Normal",
-                          className: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400",
-                        },
-                        bajo: {
-                          label: "—",
-                          className: "bg-muted text-muted-foreground border-border",
-                        },
-                      };
-                      const sig = signalConfig[row.signal];
-                      const totalRow = taskDistribution.reduce((s, r) => s + r.pct, 0);
-                      const widthPct = totalRow > 0 ? (row.pct / totalRow) * 100 : 0;
-                      const isExpanded = expandedTaskType === row.taskType;
-                      const breakdown = isExpanded && asuntoId
-                        ? getTaskTypeBreakdownForAsunto(parseInt(asuntoId, 10), row.taskType)
-                        : [];
-                      const samples = isExpanded && asuntoId
-                        ? getTaskTypeEntrySamplesForAsunto(parseInt(asuntoId, 10), row.taskType, 8)
-                        : [];
-                      return (
-                        <Fragment key={row.taskType}>
-                          <TableRow
-                            className="border-b h-8 hover:bg-muted/30 transition-colors cursor-pointer"
-                            onClick={() =>
-                              setExpandedTaskType((cur) =>
-                                cur === row.taskType ? null : row.taskType,
-                              )
-                            }
-                          >
-                            <TableCell className="px-2 py-1.5 text-xs font-medium">
-                              <div className="flex items-center gap-1">
-                                {isExpanded ? (
-                                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                                ) : (
-                                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                                )}
-                                {row.taskType}
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
-                              {row.hours.toFixed(2)}
-                            </TableCell>
-                            <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
-                              <div className="flex items-center justify-end gap-2">
-                                <div className="hidden sm:block w-16 h-1.5 rounded-full bg-muted overflow-hidden">
-                                  <div
-                                    className="h-full bg-foreground/40"
-                                    style={{ width: `${widthPct}%` }}
-                                  />
-                                </div>
-                                <span>{row.pct.toFixed(1)}%</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums font-medium">
-                              {Math.round(row.costUsd).toLocaleString()}
-                            </TableCell>
-                            <TableCell className="px-2 py-1.5 text-center">
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] px-1.5 py-0 ${sig.className}`}
-                              >
-                                {sig.label}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                          {isExpanded && (
-                            <TableRow className="bg-muted/20 hover:bg-muted/20">
-                              <TableCell colSpan={5} className="p-0">
-                                <div className="px-4 py-3">
-                                  <div className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                                    Detalle por profesional · {row.taskType}
-                                  </div>
-                                  {breakdown.length === 0 ? (
-                                    <div className="text-xs text-muted-foreground py-2">
-                                      Sin registros para esta tarea.
-                                    </div>
-                                  ) : (
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow className="border-b">
-                                          <TableHead className="h-7 px-2 text-[10px] font-semibold">Profesional</TableHead>
-                                          <TableHead className="h-7 px-2 text-[10px] font-semibold">Senioridad</TableHead>
-                                          <TableHead className="h-7 px-2 text-[10px] font-semibold text-right">Tarifa</TableHead>
-                                          <TableHead className="h-7 px-2 text-[10px] font-semibold text-right">Horas</TableHead>
-                                          <TableHead className="h-7 px-2 text-[10px] font-semibold text-right">% tarea</TableHead>
-                                          <TableHead className="h-7 px-2 text-[10px] font-semibold text-right">Costo USD</TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {breakdown.map((b) => (
-                                          <TableRow key={b.user_id} className="border-b h-7">
-                                            <TableCell className="px-2 py-1 text-xs font-medium">
-                                              {b.user_name}
-                                            </TableCell>
-                                            <TableCell className="px-2 py-1 text-xs">
-                                              <Badge
-                                                variant="outline"
-                                                className={`text-[10px] px-1.5 py-0 ${categoryColors[b.category] || ""}`}
-                                              >
-                                                {b.category}
-                                              </Badge>
-                                            </TableCell>
-                                            <TableCell className="px-2 py-1 text-xs text-right tabular-nums text-muted-foreground">
-                                              {formatCurrency(b.rate)}/h
-                                            </TableCell>
-                                            <TableCell className="px-2 py-1 text-xs text-right tabular-nums">
-                                              {b.hours.toFixed(2)}
-                                            </TableCell>
-                                            <TableCell className="px-2 py-1 text-xs text-right tabular-nums">
-                                              {b.pct.toFixed(1)}%
-                                            </TableCell>
-                                            <TableCell className="px-2 py-1 text-xs text-right tabular-nums font-medium">
-                                              {Math.round(b.costUsd).toLocaleString()}
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  )}
-                                  {samples.length > 0 && (
-                                    <div className="mt-4">
-                                      <div className="text-[11px] font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                                        Actividades recientes
-                                      </div>
-                                      <div className="rounded-md border bg-background divide-y">
-                                        {samples.map((s, i) => (
-                                          <div
-                                            key={`${s.date}-${s.user_name}-${i}`}
-                                            className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs"
-                                          >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                              <span className="text-muted-foreground tabular-nums whitespace-nowrap text-[11px] w-20">
-                                                {s.date}
-                                              </span>
-                                              <span className="text-muted-foreground whitespace-nowrap text-[11px] w-24 truncate">
-                                                {s.user_name}
-                                              </span>
-                                              <span className="truncate">{s.description}</span>
-                                            </div>
-                                            <span className="tabular-nums text-muted-foreground whitespace-nowrap">
-                                              {s.hours.toFixed(2)}h
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                    <TableRow className="bg-muted/30 font-semibold">
-                      <TableCell className="px-2 py-1.5 text-xs">Total</TableCell>
-                      <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
-                        {taskDistribution.reduce((s, r) => s + r.hours, 0).toFixed(2)}
-                      </TableCell>
-                      <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
-                        100.0%
-                      </TableCell>
-                      <TableCell className="px-2 py-1.5 text-xs text-right tabular-nums">
-                        {Math.round(taskDistribution.reduce((s, r) => s + r.costUsd, 0)).toLocaleString()}
-                      </TableCell>
-                      <TableCell />
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* ===== Ejecución vs presupuesto ===== */}
+        <ProjectEjecucion
+          ingreso={budgetedPrice}
+          costoEnCurso={costoEnCurso}
+          valorTrabajado={valorTrabajado}
+          margen={margenReal}
+          margenPct={margenPct}
+          totalHours={totalHours}
+          budgetedHours={budgetedHours}
+          hourlyCost={HOURLY_COST_2026}
+          inProgress={isInProgress}
+          areas={areasList}
+          levels={
+            budgetVsActual?.team.map((m) => ({
+              level: m.level,
+              label: m.label,
+              budgetedHours: m.budgetedHours,
+              actualHours: m.actualHours,
+            })) ?? []
+          }
+          burn={burnSeries}
+        />
 
         {/* Distribución por Abogado */}
         <Card className="border-border/50">

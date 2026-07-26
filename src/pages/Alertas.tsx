@@ -36,7 +36,13 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { getBudgetVsActualComparison, getTaskDistributionForAsunto } from "@/lib/mockDataUtils";
+import {
+  getBudgetVsActualComparison,
+  getTaskDistributionForAsunto,
+  hoursDeviationPct,
+  isUnderRecovery,
+  uncoveredWorkValue,
+} from "@/lib/mockDataUtils";
 import type { BudgetVsActualRow, TaskTypeRow } from "@/lib/mockDataUtils";
 import jsPDF from "jspdf";
 import { Download } from "lucide-react";
@@ -90,14 +96,7 @@ const Alertas = () => {
       fetchRetainers();
       fetchRetainerHours();
       const all = getBudgetVsActualComparison(50);
-      setBudgetAlerts(
-        all.filter((r) => {
-          const dev = r.budgetedPrice > 0
-            ? ((r.actualPrice - r.budgetedPrice) / r.budgetedPrice) * 100
-            : 0;
-          return r.status === "in_progress" && dev > 70;
-        }),
-      );
+      setBudgetAlerts(all.filter(isUnderRecovery));
     }
   }, [user]);
 
@@ -362,9 +361,9 @@ const Alertas = () => {
       bgColor: "bg-red-50 dark:bg-red-950/30",
     },
     {
-      title: "Sobre Presupuesto",
+      title: "Bajo Recuperación",
       value: budgetAlerts.length,
-      subtitle: "Desviación >100%",
+      subtitle: "Horas >70% sobre lo cubierto",
       icon: GitCompare,
       color: "text-orange-600",
       bgColor: "bg-orange-50 dark:bg-orange-950/30",
@@ -442,10 +441,10 @@ const Alertas = () => {
                 </div>
                 <div>
                   <CardTitle className="text-sm font-semibold text-foreground">
-                    Asuntos sobre presupuesto
+                    Asuntos bajo recuperación
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Asuntos en curso con desviación &gt; 100% sobre lo cotizado
+                    En curso: acumulan &gt; 70% de horas sobre las que cubren sus honorarios
                   </CardDescription>
                 </div>
               </div>
@@ -457,12 +456,12 @@ const Alertas = () => {
           <CardContent>
             {budgetAlerts.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-sm">
-                Sin asuntos fuera de presupuesto
+                Sin asuntos bajo recuperación
               </div>
             ) : (
               <div className="space-y-2">
                 {budgetAlerts.map((row) => {
-                  const dev = ((row.actualPrice - row.budgetedPrice) / row.budgetedPrice) * 100;
+                  const hoursDev = hoursDeviationPct(row);
                   return (
                     <div
                       key={row.asuntoId}
@@ -485,16 +484,16 @@ const Alertas = () => {
                             {row.displayId}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            Ppto: ${row.budgetedPrice.toLocaleString()} · Real: ${row.actualPrice.toLocaleString()}
+                            Ppto: ${row.budgetedPrice.toLocaleString()} · Facturado: ${row.actualPrice.toLocaleString()} · ${row.actualRate.toLocaleString()}/h
                           </span>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-sm font-bold text-red-600">
-                          +{dev.toFixed(0)}%
+                          +{hoursDev.toFixed(0)}% h
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          {row.actualHours}h / {row.budgetedHours}h
+                          {row.actualHours.toLocaleString()}h / {row.budgetedHours.toLocaleString()}h
                         </p>
                       </div>
                       <div className="flex-shrink-0 flex items-center gap-1">
@@ -1090,43 +1089,41 @@ const EmailPreviewDialog = ({ preview, userEmail, onClose }: EmailPreviewDialogP
 
     if (preview.kind === "budget") {
       const r = preview.row;
-      const dev = ((r.actualPrice - r.budgetedPrice) / r.budgetedPrice) * 100;
-      const hoursDev = r.budgetedHours > 0
-        ? ((r.actualHours - r.budgetedHours) / r.budgetedHours) * 100
-        : 0;
-      const overrunAmount = r.actualPrice - r.budgetedPrice;
+      const hoursDev = hoursDeviationPct(r);
+      const uncovered = uncoveredWorkValue(r);
       const tasks = getTaskDistributionForAsunto(r.asuntoId);
       const topTask = tasks[0];
       return {
-        subject: `Alerta de Presupuesto: ${r.project} (+${dev.toFixed(0)}% sobre cotizado)`,
+        subject: `Alerta de recuperación: ${r.project} (+${hoursDev.toFixed(0)}% de horas sobre las cubiertas)`,
         severity: "critical",
-        category: "Desviación de presupuesto",
-        intro: `El asunto ${r.displayId} — ${r.project} ha superado el presupuesto cotizado en más de un 100% y permanece en curso. La desviación acumulada asciende a $${overrunAmount.toLocaleString()} sobre los $${r.budgetedPrice.toLocaleString()} originalmente presupuestados. Se recomienda revisar el alcance del trabajo, validar nuevas tareas con el cliente y reevaluar el cronograma.`,
+        category: "Baja recuperación",
+        intro: `El asunto ${r.displayId} — ${r.project} acumula ${r.actualHours.toLocaleString()} horas trabajadas frente a las ${r.budgetedHours.toLocaleString()} que cubren sus honorarios (+${hoursDev.toFixed(0)}%), y permanece en curso. Está realizando $${r.actualRate.toLocaleString()}/h contra los $${r.budgetedRate.toLocaleString()}/h de tarifa estándar del equipo asignado: valorizadas a esa tarifa, las horas entregadas suman $${uncovered.toLocaleString()} más de lo facturado. Se recomienda revisar el alcance, la recuperabilidad de las horas y el estado de cobranza.`,
         recommendations: [
-          "Programar reunión con el socio responsable para revisar alcance.",
-          "Documentar tareas adicionales no contempladas en la cotización inicial.",
-          "Comunicar al cliente y, si procede, emitir cotización complementaria.",
+          "Revisar con el socio responsable qué horas son recuperables y cuáles se castigan.",
+          "Emitir la facturación pendiente del trabajo ya entregado.",
+          "Documentar tareas fuera del alcance original y, si procede, cotización complementaria.",
           topTask
             ? `Concentración elevada en "${topTask.taskType}" (${topTask.pct.toFixed(0)}% de horas) — validar eficiencia.`
             : "Revisar concentración por tipo de tarea.",
         ],
         highlights: [
-          { label: "Desviación monto", value: `+${dev.toFixed(0)}%`, tone: "negative" },
-          { label: "Sobrecosto", value: `$${overrunAmount.toLocaleString()}`, tone: "negative" },
-          { label: "Horas reales", value: `${r.actualHours}h`, tone: "negative" },
-          { label: "Desviación horas", value: `${hoursDev > 0 ? "+" : ""}${hoursDev.toFixed(0)}%`, tone: "negative" },
+          { label: "Horas sobre lo cubierto", value: `+${hoursDev.toFixed(0)}%`, tone: "negative" },
+          { label: "Trabajo no cubierto", value: `$${uncovered.toLocaleString()}`, tone: "negative" },
+          { label: "Horas trabajadas", value: `${r.actualHours.toLocaleString()}h`, tone: "negative" },
+          { label: "Tarifa realizada", value: `$${r.actualRate.toLocaleString()}/h`, tone: "negative" },
         ],
         rows: [
           { label: "Asunto", value: `${r.displayId} — ${r.project}` },
           { label: "Área", value: r.area },
           { label: "Estado", value: "En curso" },
           { label: "Presupuestado", value: `$${r.budgetedPrice.toLocaleString()}` },
-          { label: "Facturado / Real", value: `$${r.actualPrice.toLocaleString()}` },
-          { label: "Sobrecosto", value: `$${overrunAmount.toLocaleString()}` },
-          { label: "Desviación monto", value: `+${dev.toFixed(1)}%` },
-          { label: "Horas presupuestadas", value: `${r.budgetedHours}h` },
-          { label: "Horas reales", value: `${r.actualHours}h` },
-          { label: "Desviación horas", value: `${hoursDev > 0 ? "+" : ""}${hoursDev.toFixed(1)}%` },
+          { label: "Facturado a la fecha", value: `$${r.actualPrice.toLocaleString()}` },
+          { label: "Trabajo no cubierto", value: `$${uncovered.toLocaleString()}` },
+          { label: "Tarifa realizada", value: `$${r.actualRate.toLocaleString()}/h` },
+          { label: "Tarifa estándar del equipo", value: `$${r.budgetedRate.toLocaleString()}/h` },
+          { label: "Horas cubiertas por honorarios", value: `${r.budgetedHours.toLocaleString()}h` },
+          { label: "Horas trabajadas", value: `${r.actualHours.toLocaleString()}h` },
+          { label: "Desviación de horas", value: `+${hoursDev.toFixed(1)}%` },
           { label: "Última actividad", value: r.lastActivity ? format(new Date(r.lastActivity), "dd MMM yyyy", { locale: es }) : "—" },
         ],
         team: r.team,

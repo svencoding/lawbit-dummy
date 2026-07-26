@@ -41,7 +41,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 const getDashboardSubItems = (userEmail: string) => [
   { title: "Facturación", url: userEmail === "hernandez@lawbit.com.pe" ? "/dashboard/hernandez" : "/facturacion", icon: LayoutDashboard },
-  { title: "Clientes", url: "/dashboard/top20-clientes", icon: BarChart2 },
+  { title: "Rentabilidad", url: "/dashboard/top20-clientes", icon: BarChart2 },
   { title: "Utilización", url: "/facturacion/utilizacion", icon: Activity },
   { title: "Comparación", url: "/dashboard/comparacion", icon: GitCompare },
   { title: "Profesionales", url: "/dashboard/profesionales", icon: Users },
