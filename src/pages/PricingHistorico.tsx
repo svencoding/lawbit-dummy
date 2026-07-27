@@ -25,8 +25,10 @@ import {
   X,
 } from "lucide-react";
 import {
+  accruedMarginPct,
   budgetDeviationPct,
   getBudgetVsActualComparison,
+  isUnbilled,
   isUnderRecovery,
 } from "@/lib/mockDataUtils";
 import type { BudgetVsActualRow } from "@/lib/mockDataUtils";
@@ -406,7 +408,8 @@ export default function PricingHistorico() {
                       ? Math.min(100, (item.actualPrice / item.budgetedPrice) * 100)
                       : 0;
                   const isAlert = isUnderRecovery(item);
-                  const isUnbilled = item.actualPrice <= 0;
+                  const unbilled = isUnbilled(item);
+                  const margin = accruedMarginPct(item);
                   const dateLabel = monthLabel(item.date);
 
                   return (
@@ -425,10 +428,17 @@ export default function PricingHistorico() {
                           {isAlert && (
                             <AlertTriangle className="h-3 w-3 text-red-600 dark:text-red-400 shrink-0" />
                           )}
+                          {unbilled && (
+                            <AlertTriangle
+                              className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0"
+                              aria-label="Sin facturar"
+                            />
+                          )}
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
                           {item.displayId}
                           {dateLabel ? ` · ${dateLabel}` : ""}
+                          {unbilled ? " · sin facturar" : ""}
                         </p>
                       </td>
                       <td className="p-3 hidden md:table-cell">
@@ -452,7 +462,7 @@ export default function PricingHistorico() {
                         </p>
                       </td>
                       <td className="p-3 text-right">
-                        {isUnbilled ? (
+                        {unbilled ? (
                           <>
                             <p className="font-medium text-xs tabular-nums text-muted-foreground">
                               {money(item.accruedCost)}
@@ -476,8 +486,20 @@ export default function PricingHistorico() {
                         {item.actualHours.toLocaleString("es-CL")} h
                       </td>
                       <td className="p-3 text-right">
-                        {isUnbilled ? (
-                          <span className="text-xs text-muted-foreground">—</span>
+                        {unbilled ? (
+                          <div>
+                            <span
+                              className={`text-xs font-semibold tabular-nums ${
+                                margin < 0 ? "text-red-600" : "text-foreground"
+                              }`}
+                            >
+                              {margin > 0 ? "+" : ""}
+                              {margin.toFixed(1)}%
+                            </span>
+                            <p className="text-[11px] text-muted-foreground">
+                              margen
+                            </p>
+                          </div>
                         ) : item.status === "completed" || deviation > 0 ? (
                           <span
                             className={`text-xs font-semibold tabular-nums ${
@@ -506,7 +528,18 @@ export default function PricingHistorico() {
                         )}
                       </td>
                       <td className="p-3 text-center">
-                        {isUnbilled ? (
+                        {/* Never-invoiced matters keep their real state; the
+                            amber flag next to the project name is what marks
+                            them as unbilled. */}
+                        {unbilled && item.status === "in_progress" ? (
+                          <Badge
+                            variant="secondary"
+                            className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[10px]"
+                          >
+                            <Circle className="h-3 w-3 mr-1" />
+                            En curso
+                          </Badge>
+                        ) : unbilled ? (
                           <Badge
                             variant="secondary"
                             className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]"

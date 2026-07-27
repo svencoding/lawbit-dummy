@@ -71,6 +71,7 @@ import html2canvas from "html2canvas";
 import {
   getPricingData,
   getFullPricingData,
+  accruedMarginPct,
   getAsuntos,
   getBudgetVsActualComparison,
   isUnderRecovery,
@@ -1181,6 +1182,7 @@ const Pricing = () => {
                             : 100;
                           const isAlert = isUnderRecovery(item);
                           const isUnbilled = item.actualPrice <= 0;
+                          const margin = accruedMarginPct(item);
                           const dateObj = item.date ? new Date(item.date) : null;
                           const dateLabel = dateObj && !isNaN(dateObj.getTime())
                             ? dateObj.toLocaleDateString("es-ES", { month: "short", year: "numeric" })
@@ -1207,9 +1209,21 @@ const Pricing = () => {
                                         </Tooltip>
                                       </TooltipProvider>
                                     )}
+                                    {isUnbilled && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p className="text-xs">Sin facturación registrada: se muestra el costo acumulado contra los honorarios cotizados</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
                                   </div>
                                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                                    {item.displayId}{dateLabel ? ` · ${dateLabel}` : ""}
+                                    {item.displayId}{dateLabel ? ` · ${dateLabel}` : ""}{isUnbilled ? " · sin facturar" : ""}
                                     <span className="ml-1 text-muted-foreground/50">· clic para abrir asunto</span>
                                   </p>
                                 </td>
@@ -1230,7 +1244,12 @@ const Pricing = () => {
                                 </td>
                                 <td className="p-3 text-right">
                                   {isUnbilled ? (
-                                    <span className="text-xs text-muted-foreground">—</span>
+                                    <div>
+                                      <span className={`text-xs font-semibold ${margin < 0 ? "text-red-600" : "text-foreground"}`}>
+                                        {margin > 0 ? "+" : ""}{margin.toFixed(1)}%
+                                      </span>
+                                      <p className="text-[11px] text-muted-foreground">margen</p>
+                                    </div>
                                   ) : item.status === "completed" || deviation > 0 ? (
                                     <span className={`text-xs font-semibold ${deviation > 5 ? "text-red-600" : deviation < -5 ? "text-emerald-600" : "text-foreground"}`}>
                                       {deviation > 0 ? "+" : ""}{deviation.toFixed(1)}%
@@ -1248,7 +1267,14 @@ const Pricing = () => {
                                   )}
                                 </td>
                                 <td className="p-3 text-center">
-                                  {isUnbilled ? (
+                                  {/* Never-invoiced matters keep their real state; the amber
+                                      flag next to the project name marks them as unbilled. */}
+                                  {isUnbilled && item.status === "in_progress" ? (
+                                    <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-[10px]">
+                                      <Circle className="h-3 w-3 mr-1" />
+                                      En curso
+                                    </Badge>
+                                  ) : isUnbilled ? (
                                     <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">
                                       <AlertTriangle className="h-3 w-3 mr-1" />
                                       Sin facturar

@@ -2343,12 +2343,10 @@ function buildBudgetVsActualRow(
   // at standard rates was tried and discarded: hours per asunto and invoiced
   // amounts move independently in this data, so the matters carrying thousands
   // of hours came out with multi-million budgets no engagement of that size
-  // would ever be quoted at. Only the never-invoiced matters have no anchor to
-  // sit on, and those are small (35 median billable hours), so valuing their
-  // hours at the firm's effective rate stays in a sane range.
-  const budgetedPrice = billed > 0
-    ? billed * bias
-    : acc.valueHours * baseline.firmBillingRate * bias;
+  // would ever be quoted at. A never-invoiced matter has no facturación to sit
+  // on, so it keeps its quoted fee verbatim — that fee against the cost already
+  // accrued is exactly the margin question those matters raise.
+  const budgetedPrice = billed > 0 ? billed * bias : asunto.amount || 0;
   const budgetedHours = Math.max(1, Math.round(budgetedPrice / listRate));
 
   const team: BudgetVsActualTeamRow[] = [];
@@ -2430,9 +2428,11 @@ export const HOURS_OVERRUN_THRESHOLD_PCT = 70;
  * tracks the budget by construction while the effort behind it does not.
  */
 export function isUnderRecovery(row: BudgetVsActualRow): boolean {
-  return row.status === "in_progress" &&
-    row.actualPrice > 0 &&
-    hoursDeviationPct(row) > HOURS_OVERRUN_THRESHOLD_PCT;
+  if (row.status !== "in_progress") return false;
+  // Nothing invoiced yet: the matter is under water the moment the cost it has
+  // accrued passes the fee that was quoted for it.
+  if (isUnbilled(row)) return accruedMarginPct(row) < 0;
+  return hoursDeviationPct(row) > HOURS_OVERRUN_THRESHOLD_PCT;
 }
 
 /**
@@ -2441,6 +2441,21 @@ export function isUnderRecovery(row: BudgetVsActualRow): boolean {
  */
 export function uncoveredWorkValue(row: BudgetVsActualRow): number {
   return Math.max(0, row.actualHours * row.budgetedRate - row.actualPrice);
+}
+
+/** A matter that has been worked but never invoiced. */
+export function isUnbilled(row: BudgetVsActualRow): boolean {
+  return row.actualPrice <= 0;
+}
+
+/**
+ * Margin on an unbilled matter: the quoted fee against the cost already burned.
+ * Negative means the asunto is losing money before a single invoice goes out.
+ */
+export function accruedMarginPct(row: BudgetVsActualRow): number {
+  return row.budgetedPrice > 0
+    ? ((row.budgetedPrice - row.accruedCost) / row.budgetedPrice) * 100
+    : 0;
 }
 
 export function getBudgetVsActualComparison(limit = 10): BudgetVsActualRow[] {

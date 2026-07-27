@@ -37,9 +37,11 @@ import {
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
+  accruedMarginPct,
   getBudgetVsActualComparison,
   getTaskDistributionForAsunto,
   hoursDeviationPct,
+  isUnbilled,
   isUnderRecovery,
   uncoveredWorkValue,
 } from "@/lib/mockDataUtils";
@@ -363,7 +365,7 @@ const Alertas = () => {
     {
       title: "Bajo Recuperación",
       value: budgetAlerts.length,
-      subtitle: "Horas >70% sobre lo cubierto",
+      subtitle: "En curso sin cubrir su costo",
       icon: GitCompare,
       color: "text-orange-600",
       bgColor: "bg-orange-50 dark:bg-orange-950/30",
@@ -444,7 +446,7 @@ const Alertas = () => {
                     Asuntos bajo recuperación
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    En curso: acumulan &gt; 70% de horas sobre las que cubren sus honorarios
+                    En curso: horas muy sobre lo cubierto, o costo sobre los honorarios
                   </CardDescription>
                 </div>
               </div>
@@ -462,6 +464,8 @@ const Alertas = () => {
               <div className="space-y-2">
                 {budgetAlerts.map((row) => {
                   const hoursDev = hoursDeviationPct(row);
+                  const unbilled = isUnbilled(row);
+                  const margin = accruedMarginPct(row);
                   return (
                     <div
                       key={row.asuntoId}
@@ -484,13 +488,17 @@ const Alertas = () => {
                             {row.displayId}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            Ppto: ${row.budgetedPrice.toLocaleString()} · Facturado: ${row.actualPrice.toLocaleString()} · ${row.actualRate.toLocaleString()}/h
+                            {unbilled
+                              ? `Honorarios: $${row.budgetedPrice.toLocaleString()} · Costo en curso: $${row.accruedCost.toLocaleString()} · sin facturar`
+                              : `Ppto: $${row.budgetedPrice.toLocaleString()} · Facturado: $${row.actualPrice.toLocaleString()} · $${row.actualRate.toLocaleString()}/h`}
                           </span>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-sm font-bold text-red-600">
-                          +{hoursDev.toFixed(0)}% h
+                          {unbilled
+                            ? `${margin.toFixed(0)}% margen`
+                            : `+${hoursDev.toFixed(0)}% h`}
                         </p>
                         <p className="text-[10px] text-muted-foreground">
                           {row.actualHours.toLocaleString()}h / {row.budgetedHours.toLocaleString()}h
@@ -1091,13 +1099,19 @@ const EmailPreviewDialog = ({ preview, userEmail, onClose }: EmailPreviewDialogP
       const r = preview.row;
       const hoursDev = hoursDeviationPct(r);
       const uncovered = uncoveredWorkValue(r);
+      const unbilled = isUnbilled(r);
+      const margin = accruedMarginPct(r);
       const tasks = getTaskDistributionForAsunto(r.asuntoId);
       const topTask = tasks[0];
       return {
-        subject: `Alerta de recuperación: ${r.project} (+${hoursDev.toFixed(0)}% de horas sobre las cubiertas)`,
+        subject: unbilled
+          ? `Alerta de margen: ${r.project} (${margin.toFixed(0)}% sin haber facturado)`
+          : `Alerta de recuperación: ${r.project} (+${hoursDev.toFixed(0)}% de horas sobre las cubiertas)`,
         severity: "critical",
-        category: "Baja recuperación",
-        intro: `El asunto ${r.displayId} — ${r.project} acumula ${r.actualHours.toLocaleString()} horas trabajadas frente a las ${r.budgetedHours.toLocaleString()} que cubren sus honorarios (+${hoursDev.toFixed(0)}%), y permanece en curso. Está realizando $${r.actualRate.toLocaleString()}/h contra los $${r.budgetedRate.toLocaleString()}/h de tarifa estándar del equipo asignado: valorizadas a esa tarifa, las horas entregadas suman $${uncovered.toLocaleString()} más de lo facturado. Se recomienda revisar el alcance, la recuperabilidad de las horas y el estado de cobranza.`,
+        category: unbilled ? "Margen negativo" : "Baja recuperación",
+        intro: unbilled
+          ? `El asunto ${r.displayId} — ${r.project} lleva ${r.actualHours.toLocaleString()} horas trabajadas y un costo interno acumulado de $${r.accruedCost.toLocaleString()}, por encima de los $${r.budgetedPrice.toLocaleString()} de honorarios cotizados: el margen es de ${margin.toFixed(0)}% y todavía no se ha emitido ninguna factura. Se recomienda emitir la facturación pendiente, revisar el alcance frente a lo cotizado y evaluar una cotización complementaria.`
+          : `El asunto ${r.displayId} — ${r.project} acumula ${r.actualHours.toLocaleString()} horas trabajadas frente a las ${r.budgetedHours.toLocaleString()} que cubren sus honorarios (+${hoursDev.toFixed(0)}%), y permanece en curso. Está realizando $${r.actualRate.toLocaleString()}/h contra los $${r.budgetedRate.toLocaleString()}/h de tarifa estándar del equipo asignado: valorizadas a esa tarifa, las horas entregadas suman $${uncovered.toLocaleString()} más de lo facturado. Se recomienda revisar el alcance, la recuperabilidad de las horas y el estado de cobranza.`,
         recommendations: [
           "Revisar con el socio responsable qué horas son recuperables y cuáles se castigan.",
           "Emitir la facturación pendiente del trabajo ya entregado.",
@@ -1106,24 +1120,38 @@ const EmailPreviewDialog = ({ preview, userEmail, onClose }: EmailPreviewDialogP
             ? `Concentración elevada en "${topTask.taskType}" (${topTask.pct.toFixed(0)}% de horas) — validar eficiencia.`
             : "Revisar concentración por tipo de tarea.",
         ],
-        highlights: [
-          { label: "Horas sobre lo cubierto", value: `+${hoursDev.toFixed(0)}%`, tone: "negative" },
-          { label: "Trabajo no cubierto", value: `$${uncovered.toLocaleString()}`, tone: "negative" },
-          { label: "Horas trabajadas", value: `${r.actualHours.toLocaleString()}h`, tone: "negative" },
-          { label: "Tarifa realizada", value: `$${r.actualRate.toLocaleString()}/h`, tone: "negative" },
-        ],
+        highlights: unbilled
+          ? [
+            { label: "Margen", value: `${margin.toFixed(0)}%`, tone: "negative" },
+            { label: "Costo en curso", value: `$${r.accruedCost.toLocaleString()}`, tone: "negative" },
+            { label: "Honorarios cotizados", value: `$${r.budgetedPrice.toLocaleString()}`, tone: "negative" },
+            { label: "Horas trabajadas", value: `${r.actualHours.toLocaleString()}h`, tone: "negative" },
+          ]
+          : [
+            { label: "Horas sobre lo cubierto", value: `+${hoursDev.toFixed(0)}%`, tone: "negative" },
+            { label: "Trabajo no cubierto", value: `$${uncovered.toLocaleString()}`, tone: "negative" },
+            { label: "Horas trabajadas", value: `${r.actualHours.toLocaleString()}h`, tone: "negative" },
+            { label: "Tarifa realizada", value: `$${r.actualRate.toLocaleString()}/h`, tone: "negative" },
+          ],
         rows: [
           { label: "Asunto", value: `${r.displayId} — ${r.project}` },
           { label: "Área", value: r.area },
-          { label: "Estado", value: "En curso" },
-          { label: "Presupuestado", value: `$${r.budgetedPrice.toLocaleString()}` },
-          { label: "Facturado a la fecha", value: `$${r.actualPrice.toLocaleString()}` },
-          { label: "Trabajo no cubierto", value: `$${uncovered.toLocaleString()}` },
-          { label: "Tarifa realizada", value: `$${r.actualRate.toLocaleString()}/h` },
+          { label: "Estado", value: unbilled ? "En curso · sin facturar" : "En curso" },
+          { label: unbilled ? "Honorarios cotizados" : "Presupuestado", value: `$${r.budgetedPrice.toLocaleString()}` },
+          ...(unbilled
+            ? [
+              { label: "Costo en curso", value: `$${r.accruedCost.toLocaleString()}` },
+              { label: "Margen", value: `${margin.toFixed(1)}%` },
+            ]
+            : [
+              { label: "Facturado a la fecha", value: `$${r.actualPrice.toLocaleString()}` },
+              { label: "Trabajo no cubierto", value: `$${uncovered.toLocaleString()}` },
+              { label: "Tarifa realizada", value: `$${r.actualRate.toLocaleString()}/h` },
+              { label: "Desviación de horas", value: `+${hoursDev.toFixed(1)}%` },
+            ]),
           { label: "Tarifa estándar del equipo", value: `$${r.budgetedRate.toLocaleString()}/h` },
           { label: "Horas cubiertas por honorarios", value: `${r.budgetedHours.toLocaleString()}h` },
           { label: "Horas trabajadas", value: `${r.actualHours.toLocaleString()}h` },
-          { label: "Desviación de horas", value: `+${hoursDev.toFixed(1)}%` },
           { label: "Última actividad", value: r.lastActivity ? format(new Date(r.lastActivity), "dd MMM yyyy", { locale: es }) : "—" },
         ],
         team: r.team,

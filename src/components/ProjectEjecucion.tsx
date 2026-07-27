@@ -145,7 +145,7 @@ function BudgetGauge({
         viewBox="0 0 320 178"
         className="w-full max-w-[320px] mx-auto overflow-visible"
         role="img"
-        aria-label={`${pct.toFixed(0)}% del budget de horas consumido`}
+        aria-label={`${pct.toFixed(0)}% del presupuesto de horas consumido`}
       >
         {/* track */}
         <path
@@ -192,7 +192,7 @@ function BudgetGauge({
               textAnchor={toDeg(100) > 90 ? "end" : "start"}
               dominantBaseline="middle"
             >
-              budget
+              presupuesto
             </text>
           </>
         )}
@@ -222,10 +222,12 @@ function BudgetGauge({
           {hasBudget ? `${pct.toFixed(0)}%` : hours(worked)}
         </div>
         <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground mt-1.5">
-          {hasBudget ? "budget consumido" : "horas trabajadas"}
+          {hasBudget ? "presupuesto consumido" : "horas trabajadas"}
         </div>
         <div className="text-xs mt-1 tabular-nums">
-          {hasBudget ? `${hours(worked)} de ${hours(budget)}` : "sin budget de horas"}
+          {hasBudget
+            ? `${hours(worked)} de ${hours(budget)}`
+            : "sin horas presupuestadas"}
         </div>
       </div>
     </div>
@@ -268,7 +270,7 @@ function Waterfall({
     {
       key: "ingreso",
       label: "Ingreso",
-      sub: "Honorarios · budget cliente",
+      sub: "Honorarios acordados con el cliente",
       from: 0,
       to: ingreso,
       value: ingreso,
@@ -280,7 +282,7 @@ function Waterfall({
     {
       key: "costo",
       label: "Costo en curso",
-      sub: `${hours(worked)} trabajadas · ${pctBudget.toFixed(0)}% del budget`,
+      sub: `${hours(worked)} trabajadas · ${pctBudget.toFixed(0)}% del presupuesto`,
       from: ingreso,
       to: ingreso - costo,
       value: -costo,
@@ -539,10 +541,11 @@ export function ProjectEjecucion({
           <div>
             <div className="flex items-baseline justify-between mb-2">
               <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                Riel de horas
+                Consumo de horas
               </p>
               <p className="text-[11px] tabular-nums">
-                {hours(totalHours)} trabajadas · {hours(budgetedHours)} en budget
+                {hours(totalHours)} trabajadas · {hours(budgetedHours)}{" "}
+                presupuestadas
               </p>
             </div>
             <div className="relative h-3 rounded-full bg-muted overflow-hidden flex">
@@ -580,7 +583,7 @@ export function ProjectEjecucion({
                   className="h-2 w-2 rounded-[2px] shrink-0"
                   style={{ background: C_COSTO }}
                 />
-                <Timer className="h-3 w-3" /> En budget{" "}
+                <Timer className="h-3 w-3" /> Dentro de presupuesto{" "}
                 <span className="tabular-nums text-foreground">
                   {hours(Math.min(totalHours, budgetedHours))}
                 </span>
@@ -649,7 +652,7 @@ export function ProjectEjecucion({
                 <Zap className="h-3.5 w-3.5" style={{ color: C_COSTO }} />
               </div>
               <div>
-                <h3 className="text-sm font-semibold">Cómo se quemó el budget</h3>
+                <h3 className="text-sm font-semibold">Cómo se consumió el presupuesto</h3>
                 <p className="text-[11px] text-muted-foreground">
                   Costo y valor acumulados mes a mes contra el ingreso acordado
                 </p>
